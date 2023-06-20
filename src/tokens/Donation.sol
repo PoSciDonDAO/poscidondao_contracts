@@ -152,7 +152,7 @@ contract Donation is ReentrancyGuard {
      * @dev sets the ratio of the ETH to DON token conversion 
      */
     function ratioEth(uint256 n, uint256 d) external gov {
-        _ratioEth = 10 * n / d;
+        _ratioEth = 1000 * n / d;
     }
 
     /**
@@ -185,7 +185,7 @@ contract Donation is ReentrancyGuard {
         require(sent);
         
         //determine the amount of DON tokens issued
-        uint256 amount = (msg.value / _treshold) * _ratioEth * 1e17;
+        uint256 amount = msg.value * _ratioEth;
 
         //mint DON tokens
         _mint(user, amount);
@@ -208,7 +208,7 @@ contract Donation is ReentrancyGuard {
         IERC20(usdc).safeTransferFrom(user, donationWallet, usdcAmount);
         
         //calculate amount of don tokens 
-        uint256 amount = usdcAmount / 10 * _ratioUsdc;
+        uint256 amount = usdcAmount * _ratioUsdc / 10;
 
         //mint don tokens to function caller
         _mint(user, amount);
