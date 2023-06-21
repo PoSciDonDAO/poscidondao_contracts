@@ -2,6 +2,7 @@
 cache/
 out/
 zkout/
+cache-zk/
 
 # Ignores development broadcast logs
 !/broadcast
@@ -17,3 +18,13 @@ docs/
 zkcast
 zkforge
 rich-wallets.json
+node_modules
+.gitmodules
+src/
+
+argumentsDonation.js
+argumentsGovRes.js
+argumentsTrading.js
+broadcast/
+artifacts-zk/
+abis/
