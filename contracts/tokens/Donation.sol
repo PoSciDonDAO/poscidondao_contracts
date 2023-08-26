@@ -1,46 +1,44 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 contract Donation is ReentrancyGuard {
     using SafeERC20 for IERC20;
-
-    error Unauthorized(address user);
-    error InsufficientDonation();
-    error InsufficientDeposit();
-    error InsufficientBalance();
-    error IncorrectAddress();
+    
     error AccountBound();
+    error IncorrectAddress();
+    error InsufficientBalance();
+    error InsufficientDonation();
+    error InsufficientStake();
+    error Unauthorized(address user);
 
     string  private _name;
     string  private _symbol;
     uint16  private _decimals;
     uint256 private _totalSupply;
-    uint256 private _treshold;
+    uint256 private _donationThreshold;
     uint256 private _ratioEth;
     uint256 private _ratioUsdc;
-    address private _govRes;
-    address private _govOps;
+    address private _stakingContract;
 
     address public donationWallet;
     address public usdc;
 
     mapping(address => uint256) private _balances;
-    mapping(address => uint256) public govs;
-    mapping(address => uint256) public depositsGovRes;
-    mapping(address => uint256) public depositsGovOps;
+    mapping(address => uint256) public wards;
+    mapping(address => uint256) public stake;
 
     modifier gov() {
-        if(govs[msg.sender] != 1) revert Unauthorized(msg.sender);
+        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
         _;
     }
 
     event Rely(address indexed user);
     event Deny(address indexed user);
-    event Push(address indexed user, address gov, uint256 amount);
-    event Pull(address gov, address indexed user, uint256 amount);
+    event Push(address indexed user, uint256 amount);
+    event Pull(address indexed user, uint256 amount);
     event DonationCompleted(address indexed user, uint256 donation, uint256 tokenAmount);
     event Transfer(address indexed from, address indexed to, uint256 value);
 
@@ -54,7 +52,7 @@ contract Donation is ReentrancyGuard {
         usdc = _usdc;
         donationWallet = _donationWallet;
 
-        govs[msg.sender] = 1;
+        wards[msg.sender] = 1;
     }
     
     //external functions
@@ -96,257 +94,196 @@ contract Donation is ReentrancyGuard {
     }
 
     /**
-     * @dev returns the scientific research governance contract
+     * @dev returns the staking contract
      */
-    function govRes() external view returns (address) {
-        return _govRes;
+    function stakingContract() external view returns (address) {
+        return _stakingContract;
     }
 
     /**
-     * @dev returns the operations governance contract
+     * @dev sets the staking contract address
+     * @param stakingContract_ the address of the staking contract
      */
-    function govOps() external view returns (address) {
-        return _govOps;
-    }
-
-    /**
-     * @dev sets the scientific research governance contract address
-     * @param govRes_ the address of the scientific 
-     * research governance contract
-     */
-    function setGovRes(address govRes_) external gov {
-        _govRes = govRes_;
-    }
-
-    /**
-     * @dev sets the operations governance contract address
-     * @param govOps_ the address of the operations 
-     * governance contract
-     */
-    function setGovOps(address govOps_) external gov {
-        _govOps = govOps_;
+    function setStakingContract(address stakingContract_) external gov {
+        _stakingContract = stakingContract_;
     }
 
     /**
      * @dev adds a gov
-     * @param user the user that becomes a gov
+     * @param _user the user that becomes a gov
      */
-    function addGov(address user) external gov {
-        govs[user] = 1;
-        emit Rely(user);
+    function addGov(address _user) external gov {
+        wards[_user] = 1;
+        emit Rely(_user);
     }
 
     /**
      * @dev removes a gov
-     * @param user the user that will be removed as a gov.
+     * @param _user the user that will be removed as a gov.
      */
-    function removeGov(address user) external gov {
-        if(govs[user] != 1) {
-            revert Unauthorized(user);
+    function removeGov(address _user) external gov {
+        if(wards[_user] != 1) {
+            revert Unauthorized(_user);
         }
-        delete govs[user];
-        emit Deny(user);
+        delete wards[_user];
+        emit Deny(_user);
     }
 
     /**
      * @dev sets the ratio of the ETH to DON token conversion 
      */
-    function ratioEth(uint256 n, uint256 d) external gov {
-        _ratioEth = 1000 * n / d;
+    function ratioEth(uint256 _n, uint256 _d) external gov {
+        _ratioEth = 1000 * _n / _d;
     }
 
     /**
      * @dev sets the ratio of the USDC to DON token conversion 
      */
-    function ratioUsdc(uint256 n, uint256 d) external gov {
-        _ratioUsdc = 10 * n / d;
+    function ratioUsdc(uint256 _n, uint256 _d) external gov {
+        _ratioUsdc = 10 * _n / _d;
     }
 
     /**
-     * @dev sets the treshold to donate usdc or eth
-     * @param amount the least amount of tokens that needs be donated  
+     * @dev sets the Threshold to donate usdc or eth
+     * @param _amount the least amount of tokens that needs be donated  
      */
-    function setTreshold(uint256 amount) external gov {
-        _treshold = amount;
+    function setDonationThreshold(uint256 _amount) external gov {
+        _donationThreshold = _amount;
     }
 
     /**
      * @dev sends Eth donations to the donation wallet, 
      * donor receives DON tokens.
      * ! Per 0.001 ETH --> 1 DON Token !
-     * @param user the user that donates the Ether 
+     * @param _user the user that donates the Ether 
      */
-    function donateEth(address user) external payable nonReentrant {
-        //check if the donation treshold has been reached
-        if (msg.value < _treshold) revert InsufficientDonation();
+    function donateEth(address _user) external payable nonReentrant {
+        //check if the donation Threshold has been reached
+        if (msg.value < _donationThreshold) revert InsufficientDonation();
 
         //transfer Eth to donation wallet if successful
         (bool sent,) = donationWallet.call{value: msg.value}("");
         require(sent);
         
         //determine the amount of DON tokens issued
-        uint256 amount = msg.value * _ratioEth;
+        uint256 _amount = msg.value * _ratioEth;
 
         //mint DON tokens
-        _mint(user, amount);
+        _mint(_user, _amount);
 
         //emit event
-        emit DonationCompleted(user, msg.value, amount);
+        emit DonationCompleted(_user, msg.value, _amount);
     }
 
     /**
      * @dev sends donated USDC to the donation wallet 
      * donor receives DON tokens based on the given ratio.
-     * @param usdcAmount the amount of donated USDC
-     * @param user the user that donates the USDC  
+     * @param _usdcAmount the amount of donated USDC
+     * @param _user the user that donates the USDC  
      */
-    function donateUsdc(address user, uint256 usdcAmount) external nonReentrant {
-        //check if the donation treshold has been reached
-        if (usdcAmount < _treshold) revert InsufficientDonation();
+    function donateUsdc(address _user, uint256 _usdcAmount) external nonReentrant {
+        //check if the donation Threshold has been reached
+        if (_usdcAmount < _donationThreshold) revert InsufficientDonation();
 
         //pull usdc from wallet to donation wallet
-        IERC20(usdc).safeTransferFrom(user, donationWallet, usdcAmount);
+        IERC20(usdc).safeTransferFrom(_user, donationWallet, _usdcAmount);
         
         //calculate amount of don tokens 
-        uint256 amount = usdcAmount * _ratioUsdc / 10;
+        uint256 _amount = _usdcAmount * _ratioUsdc / 10;
 
         //mint don tokens to function caller
-        _mint(user, amount);
+        _mint(_user, _amount);
 
         //emit event
-        emit DonationCompleted(user, usdcAmount, amount);
+        emit DonationCompleted(_user, _usdcAmount, _amount);
     }
 
     /**
-     * @dev pushes tokens from user to a gov contract
-     * @param to gov contract
-     * @param amount the amount of tokens that need to be pushed
+     * @dev pushes tokens from user to the staking contract
+     * @param _amount the amount of tokens that need to be pushed
      */
     function push(
-        address user,
-        address to,
-        uint256 amount
-    ) external returns (bool) {
-        //check if governance contracts are selected
-        if (to == _govRes) {
-            //transfer from msg.sender to governance contract
-            _transfer(user, _govRes, amount);
+        address _user,
+        uint256 _amount
+    ) external nonReentrant {
 
-            //update GovRes deposits
-            depositsGovRes[user] += amount;
+        //transfer from user to governance contract
+        _transfer(_user, _stakingContract, _amount);
 
-            //emit Push event
-            emit Push(user, _govRes, amount);
-            return true; 
+        //update staked amount
+        stake[_user] += _amount;
 
-        } else if (to == _govOps) {
-            //transfer from msg.sender to governance contract
-            _transfer(user, _govOps, amount);
-
-            //update GovOps deposits
-            depositsGovOps[user] += amount;
-            
-            //emit Push event
-            emit Push(user, _govOps, amount);
-            return true;
-
-        } else {
-
-            revert AccountBound();
-        }
+        //emit Push event
+        emit Push(_user, _amount);
     }
     
     /**
      * @dev transfers tokens from gov contract to msg.sender
-     * @param from gov contract
-     * @param amount the amount of tokens that need to be pulled
+     * @param _amount the amount of tokens that need to be pulled
      */
     function pull(
-        address from,
-        address user,
-        uint256 amount
-    ) external returns (bool) {
-        //check which gov contract tokens need to be pulled from
-        if (from == _govRes) {
-            //check if enough tokens have been deposited
-            if (depositsGovRes[user] < amount) revert InsufficientDeposit();
-            
-            //transfer from gov contract to holder
-            _transfer(_govRes, user, amount);
-            
-            //subtract the pulled amount
-            depositsGovRes[user] -= amount;
-            
-            //emit Pull event
-            emit Pull(_govRes, user, amount);
-            return true; 
+        address _user,
+        uint256 _amount
+    ) external nonReentrant {
+        if (stake[_user] < _amount) revert InsufficientStake();
+        
+        //transfer from staking contract to holder
+        _transfer(_stakingContract, _user, _amount);
+        
+        //subtract the pulled amount            
+        stake[_user] -= _amount;
 
-        } else if (from == _govOps) {
-            //check which gov contract holds tokens
-            if (depositsGovOps[user] < amount) revert InsufficientDeposit();
-            
-            //transfer from gov contract to holder
-            _transfer(_govOps, user, amount);
-            
-            //subtract the pulled amount            
-            depositsGovOps[user] -= amount;
-
-            //emit Pull event
-            emit Pull(_govRes, user, amount);
-            return true;
-            
-        } else {
-            revert AccountBound();
-        }
+        //emit Pull event
+        emit Pull(_user, _amount);
     }
 
     /**
      * @dev allows you to burn your DON tokens
-     * @param amount of tokens that will be burned
+     * @param _amount of tokens that will be burned
      */
-    function burn(uint256 amount) external {
-        _burn(msg.sender, amount);
+    function burn(uint256 _amount) external {
+        _burn(msg.sender, _amount);
     } 
 
     //internal functions
     /**
      * @dev mints DON tokens
-     * @param account account of the donor
-     * @param amount amount of DON tokens that will be minted
+     * @param _account account of the donor
+     * @param _amount amount of DON tokens that will be minted
      */
-    function _mint(address account, uint256 amount) internal {
-        if (account == address(0)) revert IncorrectAddress();
+    function _mint(address _account, uint256 _amount) internal {
+        if (_account == address(0)) revert IncorrectAddress();
 
-        _beforeTokenTransfer(address(0), account, amount);
+        _beforeTokenTransfer(address(0), _account, _amount);
 
-        _totalSupply += amount;
+        _totalSupply += _amount;
         unchecked {
             // Overflow not possible: balance + amount is at most totalSupply + amount, which is checked above.
-            _balances[account] += amount;
+            _balances[_account] += _amount;
         }
-        emit Transfer(address(0), account, amount);
+        emit Transfer(address(0), _account, _amount);
     }
 
     /**
      * @dev Destroys `amount` tokens from `account`, reducing the
      * total supply.
-     * @param account account of the donor
-     * @param amount amount of DON tokens that will be burned
+     * @param _account account of the donor
+     * @param _amount amount of DON tokens that will be burned
      */
-    function _burn(address account, uint256 amount) internal virtual {
-        if (account == address(0)) revert IncorrectAddress();
+    function _burn(address _account, uint256 _amount) internal virtual {
+        if (_account == address(0)) revert IncorrectAddress();
 
-        _beforeTokenTransfer(account, address(0), amount);
+        _beforeTokenTransfer(_account, address(0), _amount);
 
-        uint256 accountBalance = _balances[account];
-        if (accountBalance < amount) revert InsufficientBalance();
+        uint256 accountBalance = _balances[_account];
+        if (accountBalance < _amount) revert InsufficientBalance();
         unchecked {
-            _balances[account] = accountBalance - amount;
+            _balances[_account] = accountBalance - _amount;
             // Overflow not possible: amount <= accountBalance <= totalSupply.
-            _totalSupply -= amount;
+            _totalSupply -= _amount;
         }
 
-        emit Transfer(account, address(0), amount);
+        emit Transfer(_account, address(0), _amount);
     }
 
     /**

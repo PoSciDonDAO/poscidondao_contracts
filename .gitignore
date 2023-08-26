@@ -3,6 +3,7 @@ cache/
 out/
 zkout/
 cache-zk/
+lib
 
 # Ignores development broadcast logs
 !/broadcast

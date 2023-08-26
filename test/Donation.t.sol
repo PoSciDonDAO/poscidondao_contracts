@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "forge-std/Test.sol";
+import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Donation.sol";
 import "contracts/test/Token.sol";
-import "contracts/governance/GovernorResearch.sol";
+import "contracts/staking/Staking.sol";
 
 contract DonationTest is Test {
 
     Donation public don;
     Token public usdc;
-    GovernorResearch public govRes;
+    Staking public staking;
 
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
     address addr3 = vm.addr(3);
     address addr4 = vm.addr(4);
     address addr5 = vm.addr(5);
-    address admin = vm.addr(6);
+    address dao = vm.addr(6);
     address donationWallet = vm.addr(7);
-    address govOps = vm.addr(9);
+    address stakingContract = vm.addr(8);
+    address po = vm.addr(9);
     address sci = vm.addr(10);
 
     event DonationCompleted(address indexed user, uint256 donation, uint256 tokenAmount);
@@ -31,14 +32,16 @@ contract DonationTest is Test {
         usdc.transfer(addr1, 100000e18);
         usdc.transfer(addr2, 100000e18);
 
-        vm.startPrank(admin);
+        vm.startPrank(dao);
             don = new Donation(
                 address(usdc),
                 donationWallet
             );
-            govRes = new GovernorResearch(
+            staking = new Staking(
+                po,
                 sci,
-                address(don)
+                address(don),
+                dao
             );
         vm.stopPrank();
 
@@ -62,53 +65,36 @@ contract DonationTest is Test {
             vm.deal(addr2, 10000000 ether);
         vm.stopPrank();
 
-        vm.startPrank(admin);
-            don.setGovRes(address(govRes));
-            don.setGovOps(govOps);
+        vm.startPrank(dao);
+            don.setStakingContract(address(staking));
             usdc.approve(address(don), 10000e18);
-            don.ratioEth(16, 10);
+            don.ratioEth(18, 10);
             don.ratioUsdc(10, 10);
-            don.setTreshold(1e15);
+            don.setDonationThreshold(1e15);
         vm.stopPrank();
     }
 
     function test_addAndRemoveGov() public {
-        vm.startPrank(admin);
+        vm.startPrank(dao);
             don.addGov(addr4);
         vm.stopPrank();
-        assertEq(don.govs(addr4), 1);
+        assertEq(don.wards(addr4), 1);
 
-        vm.startPrank(admin);
+        vm.startPrank(dao);
             don.removeGov(addr4);
         vm.stopPrank();
-        assertEq(don.govs(addr4), 0);
+        assertEq(don.wards(addr4), 0);
     }
 
-    function test_SetAndReturnGovRes() public {
-        vm.startPrank(admin);
-            don.setGovRes(address(govRes));
-        assertEq(don.govRes(), address(govRes));
-        vm.stopPrank();
+    function test_ReturnStakingContract() public {
+        assertEq(don.stakingContract(), address(staking));
     }
 
-    function test_SetAndReturnGovOps() public {
-        vm.startPrank(admin);
-            don.setGovOps(govOps);
-        vm.stopPrank();
-        assertEq(don.govOps(), govOps);
-    }
-
-    function test_RevertSettingGovOpsOrRes() public {
+    function test_Revert_If_UnauthorizedSetsStakingContract() public {
         vm.startPrank(addr1);
             bytes4 selector = bytes4(keccak256("Unauthorized(address)"));
             vm.expectRevert(abi.encodeWithSelector(selector, addr1));
-            don.setGovOps(govOps);
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
-            bytes4 selector2 = bytes4(keccak256("Unauthorized(address)"));
-            vm.expectRevert(abi.encodeWithSelector(selector2, addr1));
-            don.setGovRes(address(govRes));
+            don.setStakingContract(address(staking));
         vm.stopPrank();
     }
 
@@ -120,7 +106,7 @@ contract DonationTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertTresholdDonateUsdc() public {
+    function test_Revert_If_ThresholdDonateUsdcNotReached() public {
         vm.startPrank(addr2);
         bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
         vm.expectRevert(selector);
@@ -131,12 +117,12 @@ contract DonationTest is Test {
     function test_DonateEther() public {
         vm.startPrank(addr2);
         don.donateEth{value: 1 ether}(addr2);
-        assertEq(don.balanceOf(addr2), 1600e18);
+        assertEq(don.balanceOf(addr2), 1800e18);
         assertEq(donationWallet.balance, 1 ether);
         vm.stopPrank();
     }
     
-    function test_RevertTresholdDonateEther() public {
+    function test_Revert_If_ThresholdDonateEtherNotReached() public {
         vm.startPrank(addr2);
         bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
         vm.expectRevert(selector);
@@ -147,7 +133,7 @@ contract DonationTest is Test {
     function test_DonateHighEtherAmount() public {
         vm.startPrank(addr2);
         don.donateEth{value: 1000000 ether}(addr2);
-        assertEq(don.balanceOf(addr2), 1600000000e18);
+        assertEq(don.balanceOf(addr2), 1800000000e18);
         assertEq(donationWallet.balance, 1000000 ether);
         vm.stopPrank();
     }
@@ -155,7 +141,7 @@ contract DonationTest is Test {
     function test_DonateEtherMintEvent() public {
         vm.startPrank(addr2);
         vm.expectEmit(true, true, true, true);
-        emit DonationCompleted(addr2, 1e18, 1600e18);
+        emit DonationCompleted(addr2, 1e18, 1800e18);
         don.donateEth{value: 1 ether}(addr2);
         vm.stopPrank();
     }
@@ -168,69 +154,40 @@ contract DonationTest is Test {
         vm.stopPrank();
     }
 
-    function test_PushToGovRes() public {
+    function test_PushToStaking() public {
         vm.startPrank(addr2);
             don.donateUsdc(addr2, 100e18);
-            don.push(addr2, address(govRes), 90e18);
-            assertEq(don.balanceOf(address(govRes)), 90e18);
+            don.push(addr2, 90e18);
+            assertEq(don.balanceOf(address(staking)), 90e18);
+            assertEq(don.stake(addr2), 90e18);
         vm.stopPrank();
     }
 
-    function test_PushToGovOps() public {
+    function test_PullFromStaking() public {
         vm.startPrank(addr2);
             don.donateUsdc(addr2, 100e18);
-            don.push(addr2, govOps, 90e18);
-            assertEq(don.balanceOf(govOps), 90e18);
-        vm.stopPrank();
-    }
-
-    function test_PullFromGovOps() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            don.push(addr2, govOps, 100e18);
-            assertEq(don.balanceOf(govOps), don.depositsGovOps(addr2));
+            //lock
+            don.push(addr2, 100e18);
+            assertEq(don.balanceOf(address(staking)), don.stake(addr2));
             assertEq(don.balanceOf(addr2), 0);
-            don.pull(govOps, addr2, 100e18);
+            //free
+            don.pull(addr2, 100e18);
+            assertEq(don.balanceOf(address(staking)), 0);
             assertEq(don.balanceOf(addr2), 100e18);
         vm.stopPrank();
     }
 
-    function test_PullFromGovRes() public {
+    function test_RevertPull_If_InsufficientDONStaked() public {
         vm.startPrank(addr2);
             don.donateUsdc(addr2, 100e18);
             //lock
-            don.push(addr2, address(govRes), 100e18);
-            assertEq(don.balanceOf(address(govRes)), don.depositsGovRes(addr2));
-            assertEq(don.balanceOf(addr2), 0);
-            //free
-            don.pull(address(govRes), addr2, 100e18);
-            assertEq(don.balanceOf(addr2), 100e18);
-        vm.stopPrank();
-    }
-
-    function test_RevertPullInsufficientDonation() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            //lock
-            don.push(addr2, address(govRes), 100e18);
+            don.push(addr2, 100e18);
         vm.stopPrank();
         vm.startPrank(addr2);
             //free
-            bytes4 selector = bytes4(keccak256("InsufficientDeposit()"));
+            bytes4 selector = bytes4(keccak256("InsufficientStake()"));
             vm.expectRevert(selector);
-            don.pull(address(govRes), addr2, 1000e18);
-        vm.stopPrank();
-    }
-
-    function test_RevertPullAccountBound() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            don.push(addr2, address(govRes), 100e18);
-        vm.stopPrank();
-        vm.startPrank(addr2);
-            bytes4 selector = bytes4(keccak256("AccountBound()"));
-            vm.expectRevert(selector);
-            don.pull(addr1, addr2, 100e18);
+            don.pull(addr2, 1000e18);
         vm.stopPrank();
     }
 }

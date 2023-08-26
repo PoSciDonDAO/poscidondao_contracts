@@ -2,6 +2,7 @@ import { Wallet, utils } from "zksync-web3";
 import * as ethers from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
+import { run } from "hardhat";
 
 // load env file
 import dotenv from "dotenv";
@@ -53,4 +54,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   // Show the contract info.
   const contractAddress = donContract.address;
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
+  await run("verify:verify", {
+    address: contractAddress,
+    constructorArguments: [usdc, donationWallet],
+  });
 }

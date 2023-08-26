@@ -2,6 +2,7 @@ import { Wallet, utils } from "zksync-web3";
 import * as ethers from "ethers";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
+import { run } from "hardhat";
 
 // load env file
 import dotenv from "dotenv";
@@ -25,7 +26,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("GovernorResearch");
 
   // Estimate contract deployment fee
-  const sciToken = "0xe8175a1df8ccd9b5cfbb64c9c47bd251bdd578a7";
+  const sciToken = "0x51eB878370cD7CD4Fe11Ab99b741cab6762bDf6C";
   const donToken = "0xD2A8954564318C1144047d45A898822bCaB76b23";
   const deploymentFee = await deployer.estimateDeployFee(artifact, [sciToken, donToken]);
 
@@ -53,4 +54,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   // Show the contract info.
   const contractAddress = govResContract.address;
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
+  await run("verify:verify", {
+    address: contractAddress,
+    constructorArguments: [sciToken, donToken],
+  });
 }
