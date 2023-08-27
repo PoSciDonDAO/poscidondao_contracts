@@ -2,6 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "contracts/staking/IStaking.sol";
 
 interface AccountBoundTokenLike {
     function push(address, uint256) external;
@@ -17,7 +18,7 @@ interface NftLike {
     function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory) external ;
 }
 
-contract Staking is ReentrancyGuard {
+contract Staking is IStaking, ReentrancyGuard {
 
     ///*** ERRORS ***///
     error CannotClaim();
@@ -101,14 +102,6 @@ contract Staking is ReentrancyGuard {
         wards[dao_] = 1;
     }
 
-    function setGovRes(address _newGovRes) external dao {
-        govRes = _newGovRes;
-    }
-
-    function setGovOps(address _newGovOps) external dao {
-        govOps = _newGovOps;
-    }
-
     ///*** INTERNAL FUNCTIONS ***///
     /**
      * @dev a snaphshot of the current voting rights of a given user
@@ -121,8 +114,7 @@ contract Staking is ReentrancyGuard {
         if (index > 0 && users[_user].snapshots[index].atBlock == block.number) {
             users[_user].snapshots[index].rights = users[_user].votingRights;
         } else {
-            index += 1;
-            users[_user].amtSnapshots += index;
+            users[_user].amtSnapshots += 1;
             users[_user].snapshots[index] = Snapshot(block.number, users[_user].votingRights);
         }
     }
@@ -175,6 +167,39 @@ contract Staking is ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
+     * @dev returns snapshot information
+     * @param _user the snapshotted user
+     * @param _snapshotNum the snapshot number
+     */
+    function getSnapshot(address _user, uint256 _snapshotNum ) external view returns (uint256, uint256) {
+        return (
+            users[_user].snapshots[_snapshotNum].atBlock, 
+            users[_user].snapshots[_snapshotNum].rights
+        );
+    }
+
+    /**
+     * @dev returns the total amount of staked SCI and DON tokens
+     */
+    function getTotalStaked() external view returns (uint256) {
+        return _totStaked;
+    }
+
+    /**
+     * @dev sets the address of the governance smart contract
+     */
+    function setGovRes(address _newGovRes) external dao {
+        govRes = _newGovRes;
+    }
+
+    /**
+     * @dev sets the address of the governance smart contract
+     */
+    function setGovOps(address _newGovOps) external dao {
+        govOps = _newGovOps;
+    }
+
+    /**
      * @dev set the numerator and denominator us
      */
     function setNandD(uint256 _n, uint256 _d) external dao {
@@ -203,8 +228,6 @@ contract Staking is ReentrancyGuard {
         emit Denied(_user);
     }
 
-
-
     /**
      * @dev locks a given amount of SCI or DON tokens
      * @param _src the address of the token needs to be locked: SCI or DON
@@ -232,9 +255,6 @@ contract Staking is ReentrancyGuard {
             //in this case the amount deposited in DON tokens is equal to voting rights
             users[_user].votingRights += _amount;
 
-            //snapshot of voting rights
-            _snapshot(_user);
-
             //emit event
             emit Locked(_don, _user, _amount, _amount);
             
@@ -255,15 +275,15 @@ contract Staking is ReentrancyGuard {
             //calculated votes are added as voting rights
             users[_user].votingRights = _votes;
 
-            //snapshot of the recent deposit
-            _snapshot(_user);
-
             emit Locked(_sci, _user, _amount, _votes);
 
         } else {
             //Revert if the wrong token is chosen
             revert WrongToken();
         }
+
+        //snapshot of voting rights
+        _snapshot(_user);
     }
 
     /**
@@ -277,6 +297,7 @@ contract Staking is ReentrancyGuard {
         address _user, 
         uint256 _amount
         ) external nonReentrant {
+        if (msg.sender != _user) revert Unauthorized(msg.sender);
         if(users[_user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[_user].voteLockEnd, block.timestamp);
 
         if (_src == _don) {
@@ -294,9 +315,6 @@ contract Staking is ReentrancyGuard {
             
             //removes amount from voting rights
             users[_user].votingRights -= _amount;
-
-            //make a new snapshot
-            _snapshot(_user);
 
             //emit event
             emit Freed(_don, _user, _amount, _amount);
@@ -320,14 +338,14 @@ contract Staking is ReentrancyGuard {
             //add new amount of votes as rights
             users[_user].votingRights = _votes;
 
-            //snapshot updated deposits and voting rights
-            _snapshot(_user);
-
             emit Freed(_sci, _user, _amount, _votes);
 
         } else {
             revert WrongToken();
         }
+
+        //make a new snapshot
+        _snapshot(_user);
     }
 
     /**
@@ -354,13 +372,6 @@ contract Staking is ReentrancyGuard {
         
         //emit locked event
         emit Locked(_po, _user, _amount, 0);
-    }
-
-    /**
-     * @dev returns the total amount of staked SCI and DON tokens
-     */
-    function getTotalStaked() external view returns (uint256) {
-        return _totStaked;
     }
 
     /**

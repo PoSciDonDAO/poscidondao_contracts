@@ -87,6 +87,9 @@ contract StakingTest is Test {
         deal(address(sci), addr2, 100000000e18);
         deal(address(don), addr2, 100000000e18);
 
+        deal(address(sci), addr3, 100000000e18);
+        deal(address(don), addr3, 100000000e18);
+
         vm.startPrank(addr1);
             sci.approve(address(staking), 10000e18);
         vm.stopPrank();
@@ -106,7 +109,7 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_LockWithSciTokens() public {
+    function test_LockSciTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 500e18);
 
@@ -129,7 +132,7 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_LockWithDonTokens() public {
+    function test_LockDonTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(don), addr1, 500e18);
 
@@ -162,7 +165,7 @@ contract StakingTest is Test {
             staking.lock(address(don), addr1, 100e18);
         vm.stopPrank();
     }
-    
+
     function test_EmitLockEventWithSciTokens() public {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
@@ -179,7 +182,82 @@ contract StakingTest is Test {
             bytes4 selector = bytes4(keccak256("Unauthorized(address)"));
             vm.expectRevert(abi.encodeWithSelector(selector, addr2));
             staking.lock(address(don), addr1, 500e18);
+
+            vm.expectRevert(abi.encodeWithSelector(selector, addr2));
+            staking.lock(address(sci), addr1, 500e18);
             
         vm.stopPrank();
     }
+
+    function test_FreeSciTokens() public {
+        vm.startPrank(addr1);
+            staking.lock(address(sci), addr1, 500e18);
+        vm.stopPrank();
+
+        vm.roll(block.number + 100);
+
+        vm.startPrank(addr1);
+            staking.free(address(sci), addr1, 100e18);
+        vm.stopPrank();
+
+        vm.roll(block.number + 200);
+
+        vm.startPrank(addr1);
+            staking.free(address(sci), addr1, 100e18);
+        vm.stopPrank();
+
+        (
+        uint256 stakedPo,
+        uint256 stakedSci, 
+        uint256 stakedDon, 
+        uint256 votingRights, 
+        uint256 voteLockTime, 
+        uint256 amtSnapshots
+        ) = staking.users(addr1);
+
+        assertEq(staking.getTotalStaked(), 300e18);
+        assertEq(stakedPo, 0);
+        assertEq(stakedSci, 300e18);
+        assertEq(stakedDon, 0);
+        assertEq(votingRights, 300e18);
+        assertEq(voteLockTime, 0);
+        assertEq(amtSnapshots, 3);
+    }
+
+    function test_FreeDonTokens() public {
+        vm.startPrank(addr3);
+            staking.lock(address(don), addr3, 500e18);
+        vm.stopPrank();
+
+        vm.roll(block.number + 100);
+
+        vm.startPrank(addr3);
+            staking.free(address(don), addr3, 100e18);
+        vm.stopPrank();
+
+        vm.roll(block.number + 200);
+
+        vm.startPrank(addr3);
+            staking.free(address(don), addr3, 100e18);
+        vm.stopPrank();
+
+        (
+        uint256 stakedPo,
+        uint256 stakedSci, 
+        uint256 stakedDon, 
+        uint256 votingRights, 
+        uint256 voteLockTime, 
+        uint256 amtSnapshots
+        ) = staking.users(addr3);
+
+        assertEq(staking.getTotalStaked(), 300e18);
+        assertEq(stakedPo, 0);
+        assertEq(stakedSci, 0);
+        assertEq(stakedDon, 300e18);
+        assertEq(votingRights, 300e18);
+        assertEq(voteLockTime, 0);
+        assertEq(amtSnapshots, 3);
+    }
+
+
 }
