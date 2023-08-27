@@ -15,7 +15,9 @@ interface TokenLike {
 }
 
 interface NftLike {
-    function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory) external ;
+    function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory) external;
+    function balanceOfBatch(address[] memory accounts, uint256[] memory ids) external returns (uint256[] memory);
+    function mint(address _user) external;
 }
 
 contract Staking is IStaking, ReentrancyGuard {
@@ -24,10 +26,10 @@ contract Staking is IStaking, ReentrancyGuard {
     error CannotClaim();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
-    error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error NotGovernanceContract(address);
-    error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
-    error Unauthorized(address user);
+    error InsufficientBalance(uint256 _currentDeposit, uint256 _requestedAmount);
+    error NotGovernanceContract(address _govAddress);
+    error TokensStillLocked(uint256 _voteLockEndStamp, uint256 _currentTimeStamp);
+    error Unauthorized(address _user);
     error VoteLock();
     error WrongToken();
 
@@ -60,8 +62,8 @@ contract Staking is IStaking, ReentrancyGuard {
     uint256                                         private     _totStaked;
     mapping(address => uint8)                       public      wards;
     mapping(address => User)                        public      users;
-    uint256                                         public      n; //numerator
-    uint256                                         public      d; //denominator
+    uint256                                         public      n;          //numerator
+    uint256                                         public      d;          //denominator
     address                                         public      govRes;
     address                                         public      govOps;
 
@@ -72,15 +74,16 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     modifier gov() {
-        if(msg.sender != govRes || msg.sender != govOps) revert NotGovernanceContract(msg.sender);
+        require(msg.sender == govRes || msg.sender == govOps, "Not a gov contract");
         _;
     }
 
     /*** EVENTS ***/
-    event RelyOn(address indexed user);
-    event Denied(address indexed user);
-    event Locked(address indexed token, address indexed user, uint256 amount, uint256 votes);
-    event Freed(address indexed token, address indexed user, uint256 amount, uint256 remainingVotes);
+    event RelyOn(address indexed _user);
+    event Denied(address indexed _user);
+    event Locked(address indexed _token, address indexed _user, uint256 _amount, uint256 _votes);
+    event Freed(address indexed _token, address indexed _user, uint256 _amount, uint256 _remainingVotes);
+    event VoteLockTimeUpdated(address _user, uint256 _voteLockEndTime);
 
     constructor(
         address po_,
@@ -114,7 +117,7 @@ contract Staking is IStaking, ReentrancyGuard {
         if (index > 0 && users[_user].snapshots[index].atBlock == block.number) {
             users[_user].snapshots[index].rights = users[_user].votingRights;
         } else {
-            users[_user].amtSnapshots += 1;
+            users[_user].amtSnapshots = index += 1;
             users[_user].snapshots[index] = Snapshot(block.number, users[_user].votingRights);
         }
     }
@@ -144,8 +147,18 @@ contract Staking is IStaking, ReentrancyGuard {
         }
     }
 
-    ///*** PUBLIC FUNCTIONS ***///
+    function _turnUserIntoArray(address _user, uint256 _amountOfTokens) internal pure returns (address[] memory addressArray) {
+        addressArray = new address[](_amountOfTokens);
+        for (uint256 i = 0; i < _amountOfTokens;) {
+            addressArray[i] = _user;
+            unchecked {
+                i++;
+            }
+        }
+    }
     
+    ///*** EXTERNAL FUNCTIONS ***///
+
     /**
      * @dev Return the voting rights of a user at a certain snapshot
      * @param _user the user address 
@@ -156,7 +169,7 @@ contract Staking is IStaking, ReentrancyGuard {
         address _user, 
         uint256 _snapshotIndex, 
         uint256 _blockNum
-        ) public view returns (uint256) {
+        ) external view returns (uint256) {
         uint256 index = users[_user].amtSnapshots;
         if (_snapshotIndex > index) revert IncorrectSnapshotIndex();
         Snapshot memory snapshot = users[_user].snapshots[_snapshotIndex];
@@ -164,17 +177,34 @@ contract Staking is IStaking, ReentrancyGuard {
         return snapshot.rights;
     }
 
-    ///*** EXTERNAL FUNCTIONS ***///
-
     /**
      * @dev returns snapshot information
      * @param _user the snapshotted user
      * @param _snapshotNum the snapshot number
      */
-    function getSnapshot(address _user, uint256 _snapshotNum ) external view returns (uint256, uint256) {
+    function getSnapshot(address _user, uint256 _snapshotNum) external view returns (uint256, uint256) {
         return (
             users[_user].snapshots[_snapshotNum].atBlock, 
             users[_user].snapshots[_snapshotNum].rights
+        );
+    }
+
+    /**
+     * @dev returns the latest snapshot information
+     * @param _user the snapshotted user
+     */
+    function getLatestSnapshotIndex(address _user) external view returns (uint256) {
+        return users[_user].amtSnapshots;
+    }
+    /**
+     * @dev returns the latest snapshot information
+     * @param _user the snapshotted user
+     */
+    function getLatestSnapshot(address _user) external view returns (uint256, uint256) {
+        uint256 _latestSnapshot = users[_user].amtSnapshots;
+        return (
+            users[_user].snapshots[_latestSnapshot].atBlock, 
+            users[_user].snapshots[_latestSnapshot].rights
         );
     }
 
@@ -186,14 +216,14 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the address of the governance smart contract
+     * @dev sets the address of the research funding governance smart contract
      */
     function setGovRes(address _newGovRes) external dao {
         govRes = _newGovRes;
     }
 
     /**
-     * @dev sets the address of the governance smart contract
+     * @dev sets the address of the operations funding governance smart contract
      */
     function setGovOps(address _newGovOps) external dao {
         govOps = _newGovOps;
@@ -357,6 +387,12 @@ contract Staking is IStaking, ReentrancyGuard {
         uint256 _amount,
         uint256[] memory _ids
     ) external nonReentrant {
+        for (uint256 i = 0; i < _amount; i++) {
+            if (
+                poToken.balanceOfBatch(_turnUserIntoArray(_user, _ids.length), _ids)[i] < 1
+                && users[_user].stakedPo < _amount
+            ) revert InsufficientBalance(users[_user].stakedPo, _amount);
+        }
         //Retrieve PO token from user wallet 
         //but user needs to confirm ERC1155's approve all first
         poToken.safeBatchTransferFrom(
@@ -386,7 +422,7 @@ contract Staking is IStaking, ReentrancyGuard {
         if(users[_user].voteLockEnd < _voteLockEnd) {
             users[_user].voteLockEnd = _voteLockEnd;
         }
-
+        emit VoteLockTimeUpdated(_user, _voteLockEnd);
         return true;
     }
 }
