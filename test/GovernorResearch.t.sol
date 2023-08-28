@@ -28,7 +28,8 @@ contract GovernorResearchTest is Test {
     address dao = vm.addr(6);
     address donationWallet = vm.addr(7);
     address treasuryWallet = vm.addr(8);
-    address royaltyAddress = vm.addr(8);
+    address royaltyAddress = vm.addr(9);
+    address researchWallet = vm.addr(10);
 
     event Locked(address indexed user, address indexed gov, uint256 deposit, uint256 votes);
     event Freed(address indexed gov, address indexed user, uint256 amount, uint256 remainingVotes);
@@ -68,7 +69,10 @@ contract GovernorResearchTest is Test {
             );
                 
             govRes = new GovernorResearch(
-                address(staking), address(don)
+                address(staking), 
+                treasuryWallet,
+                address(usdc),
+                address(po)
             );
 
             staking.setGovRes(address(govRes));
@@ -139,11 +143,10 @@ contract GovernorResearchTest is Test {
 
     function test_Proposal() public {
         vm.startPrank(dao);
-            govRes.propose("IPFS");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
             (uint256 startBlockNum, 
             uint256 endTimeStamp, 
             GovernorResearch.ProposalStatus status, 
-            string memory details,
             uint256 votesFor,
             uint256 votesAgainst, 
             uint256 totalVotes
@@ -152,16 +155,27 @@ contract GovernorResearchTest is Test {
             assertEq(startBlockNum, block.number);
             assertEq(endTimeStamp, block.timestamp + govRes.proposalLifeTime());
             assertTrue(status == GovernorResearch.ProposalStatus.Active);
-            assertEq(details, "IPFS");
             assertEq(votesFor, 0);
             assertEq(votesAgainst, 0);
             assertEq(totalVotes, 0);
+
+            (
+                string memory info,
+                address wallet,
+                uint256 amountUsdc,
+                uint256 amountEth
+            ) = govRes.getProposalProjectInfo(govRes.getProposalIndex());
+
+            assertEq(info, "Introduction");
+            assertEq(wallet, researchWallet);
+            assertEq(amountUsdc, 5000000e18);
+            assertEq(amountEth, 0);
         vm.stopPrank();
     }
 
     function test_VoteFor() public {
         vm.startPrank(dao);
-            govRes.propose("IPFS");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -170,7 +184,7 @@ contract GovernorResearchTest is Test {
             assertEq(address(govRes), staking.govRes());
             govRes.vote(govRes.getProposalIndex(), addr1, GovernorResearch.Vote.Yes, 100e18);
 
-            (,,,, 
+            (,,, 
             uint256 votesFor,
             uint256 votesAgainst,   
             uint256 totalVotes
@@ -191,7 +205,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteIfUserNotMsgSender() public {
         vm.startPrank(dao);
-            govRes.propose("");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -208,7 +222,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteWithVoteLockIfAlreadyVoted() public {
         vm.startPrank(dao);
-            govRes.propose("");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -225,7 +239,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteWithInsufficientRights() public {
         vm.startPrank(dao);
-            govRes.propose("");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr2);
             don.donateEth{value: 100 ether}(addr2);
@@ -240,7 +254,7 @@ contract GovernorResearchTest is Test {
     function test_RevertVoteIfProposalInexistent() public {
 
         vm.startPrank(dao);
-            govRes.propose("");
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr1);
             don.donateEth{value: 100 ether}(addr2);
@@ -257,11 +271,10 @@ contract GovernorResearchTest is Test {
     //     don.donateEth{value: 1000 ether}(addr2);
     //     govRes.lock(address(don), addr2, 1.6e24);
     //     vm.startPrank(dao);
-    //         govRes.propose("NDV", "ADV", "REO");
+    //         govRes.propose("Introduction", researchWallet, 5000000e18, 0);
     //     vm.stopPrank();
     //     uint256 id = govRes.getProposalIndex();
-    //     (,,,,uint256 amtSnapshots) = govRes.users(addr2);
-    //     govRes.vote(id, addr2, amtSnapshots, "REO", 1.2e24);
+    //     govRes.vote(id, addr2, GovernorResearch.Vote.Yes, 1.2e24);
     //     vm.startPrank(dao);
     //         govRes.finalizeVoting(id);
     //         (,,GovernorResearch.ProposalStatus status,,,,,,, 

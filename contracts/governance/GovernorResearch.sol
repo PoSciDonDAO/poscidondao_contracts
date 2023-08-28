@@ -2,8 +2,11 @@
 pragma solidity ^0.8.19;
 
 import "./../staking/Staking.sol";
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract GovernorResearch {
+    using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
     error AlreadyActiveProposal();
@@ -27,11 +30,17 @@ contract GovernorResearch {
         uint256                     startBlockNum;
         uint256                     endTimeStamp;
         ProposalStatus              status; 
-        string                      details; 
+        ProjectInfo                 details; 
         uint256                     votesFor;
         uint256                     votesAgainst;
-        uint256                     votesAbstain;
         uint256                     totalVotes;        
+    }
+
+    struct ProjectInfo {
+        string                      info; //IPFS link
+        address                     researchWallet; //wallet address to send funds to
+        uint256                     amountUsdc; //amount of funds in Usdc
+        uint256                     amountEth; //amount of funds in Eth
     }
 
     ///*** GOVERNANCE PARAMETERS ***///
@@ -41,6 +50,8 @@ contract GovernorResearch {
 
     ///*** STORAGE & MAPPINGS ***///
     address                                         public      stakingAddress;
+    address                                         public      treasuryWallet;
+    address                                         public      usdc;
     uint256                                         private     _proposalIndex;
     address                                         public      po;
     NftLike                                         public      poToken;
@@ -67,7 +78,7 @@ contract GovernorResearch {
     /*** EVENTS ***/
     event RelyOn(address indexed _user);
     event Denied(address indexed _user);
-    event Proposed(uint256 indexed _id, string _details);
+    event Proposed(uint256 indexed _id, ProjectInfo _details);
     event Voted(uint256 indexed _id, Vote indexed _vote, uint256 _amount);
     event Scheduled(uint256 indexed _id);
     event Executed(uint256 indexed _id);
@@ -76,19 +87,17 @@ contract GovernorResearch {
 
     constructor(
         address stakingAddress_,
+        address treasuryWallet_,
+        address usdc_,
         address po_
     ) {
-        wards[msg.sender] = 1;
         stakingAddress = stakingAddress_;
+        treasuryWallet = treasuryWallet_;
+        usdc = usdc_;
         poToken = NftLike(po_);
-    }
 
-    /**
-     * @dev returns the total amount of staked SCI and DON tokens
-     */
-    function getTotalStaked() public returns (uint256) {
-        IStaking staking = IStaking(stakingAddress);
-        return staking.getTotalStaked();
+        wards[msg.sender] = 1;
+        emit RelyOn(msg.sender);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -138,7 +147,6 @@ contract GovernorResearch {
         uint256,
         uint256,
         ProposalStatus,
-        string memory,
         uint256,
         uint256,
         uint256
@@ -148,10 +156,24 @@ contract GovernorResearch {
             proposals[_id].startBlockNum,
             proposals[_id].endTimeStamp,
             proposals[_id].status,
-            proposals[_id].details,
             proposals[_id].votesFor,
             proposals[_id].votesAgainst,
             proposals[_id].totalVotes
+        );
+    }
+
+    function getProposalProjectInfo(uint256 _id) external view returns (
+        string memory,
+        address,
+        uint256,
+        uint256
+    ) {
+        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        return (
+            proposals[_id].details.info,
+            proposals[_id].details.researchWallet,
+            proposals[_id].details.amountUsdc,
+            proposals[_id].details.amountEth
         );
     }
 
@@ -198,20 +220,29 @@ contract GovernorResearch {
     /**
      * @dev creates a proposal with three different research projects
      *      at least one option needs to be proposed
-     * @param _proposalDetails #1 of the three proposed research projects
-
+     * @param _info ipfs hash of project proposal
+     * @param _wallet the address of the research group receiving funds if proposal passed
+     * @param _amountUsdc the amount of funding in usdc; should be 0 if _amountEth > 0
+     * @param _amountEth the amount of funding in Eth; should be 0 if _amountUsdc > 0
      */
     function propose(
-            string memory _proposalDetails
+            string memory _info,
+            address _wallet,
+            uint256 _amountUsdc,
+            uint256 _amountEth
         ) external dao returns (uint256) {
-
+        ProjectInfo memory _projectInfo = ProjectInfo(
+            _info,
+            _wallet,
+            _amountUsdc,
+            _amountEth
+        );
         //Initiate and specify each parameter of the proposal
-        Proposal memory proposal = Proposal(
+        Proposal memory _proposal = Proposal(
             block.number,
             block.timestamp + proposalLifeTime,
             ProposalStatus.Active,
-            _proposalDetails,
-            0,
+            _projectInfo,
             0,
             0,
             0
@@ -221,10 +252,10 @@ contract GovernorResearch {
         _proposalIndex += 1;
 
         //store proposal at the given index
-        proposals[_proposalIndex] = proposal;
+        proposals[_proposalIndex] = _proposal;
 
         //emit Proposed event
-        emit Proposed(_proposalIndex, _proposalDetails);
+        emit Proposed(_proposalIndex, _projectInfo);
 
         return _proposalIndex;
     }
@@ -296,8 +327,8 @@ contract GovernorResearch {
         uint256 _id
         ) external dao {
         if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        if (proposals[_id].totalVotes < quorum) revert QuorumNotReached();
-        if (proposals[_id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[_id].status);
+        if(proposals[_id].totalVotes < quorum) revert QuorumNotReached();
+        if(proposals[_id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[_id].status);
         proposals[_id].status = ProposalStatus.Scheduled;
         emit Scheduled(_id);
     }
@@ -309,9 +340,21 @@ contract GovernorResearch {
     function executeProposal(
         uint256 _id
         ) external dao {
+
         if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        if (proposals[_id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[_id].status);
+
+        if(proposals[_id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[_id].status);
+
+        if(proposals[_id].details.amountUsdc > 0) {
+            IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[_id].details.researchWallet, proposals[_id].details.amountUsdc);
+        
+        } else if(proposals[_id].details.amountEth > 0) {
+            (bool sent,) = proposals[_id].details.researchWallet.call{value: proposals[_id].details.amountEth}("");
+            require(sent);
+        }
+        
         proposals[_id].status = ProposalStatus.Executed;
+        
         emit Executed(_id);
     }
     
