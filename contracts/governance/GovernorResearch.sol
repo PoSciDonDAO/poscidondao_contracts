@@ -45,8 +45,8 @@ contract GovernorResearch {
     address                                         public      po;
     NftLike                                         public      poToken;
     uint8                                           public      poLive;
-    mapping(address => uint8)                       public      govs;
-    mapping(uint256 => Proposal)                    public      proposals;
+    mapping(address => uint8)                       public      wards;
+    mapping(uint256 => Proposal)                    private     proposals;
     mapping(uint256 => mapping(address => uint8))   private     voted;
 
     ///*** ENUMERATOR ***///
@@ -55,12 +55,12 @@ contract GovernorResearch {
     }
 
     enum Vote {
-        Abstain, No, Yes
+        No, Yes
     }
 
     ///*** MODIFIER ***///
     modifier dao() {
-        if(govs[msg.sender] != 1) revert Unauthorized(msg.sender);
+        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -78,7 +78,7 @@ contract GovernorResearch {
         address stakingAddress_,
         address po_
     ) {
-        govs[msg.sender] = 1;
+        wards[msg.sender] = 1;
         stakingAddress = stakingAddress_;
         poToken = NftLike(po_);
     }
@@ -131,13 +131,38 @@ contract GovernorResearch {
     }
 
     /**
+     * @dev returns proposal information
+     * @param _id the index of the proposal of interest
+     */
+    function getProposalInfo(uint256 _id) external view returns (
+        uint256,
+        uint256,
+        ProposalStatus,
+        string memory,
+        uint256,
+        uint256,
+        uint256
+    ) {
+        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        return (
+            proposals[_id].startBlockNum,
+            proposals[_id].endTimeStamp,
+            proposals[_id].status,
+            proposals[_id].details,
+            proposals[_id].votesFor,
+            proposals[_id].votesAgainst,
+            proposals[_id].totalVotes
+        );
+    }
+
+    /**
      * @dev adds a gov
      * @param _user the user that is eligible to become a gov
      */
     function addGov(
         address _user
         ) external dao {
-        govs[_user] = 1;
+        wards[_user] = 1;
         emit RelyOn(_user);
     }
 
@@ -148,10 +173,10 @@ contract GovernorResearch {
     function removeGov(
         address _user
         ) external dao {
-        if(govs[_user] != 1) {
+        if(wards[_user] != 1) {
             revert Unauthorized(msg.sender);
         }
-        delete govs[_user];
+        delete wards[_user];
         emit Denied(_user);
     }
 
@@ -216,6 +241,8 @@ contract GovernorResearch {
         address _user,  
         Vote _vote, 
         uint256 _votes) external {
+        
+        if (msg.sender != _user) revert Unauthorized(msg.sender);
 
         IStaking staking = IStaking(stakingAddress);
         
@@ -229,8 +256,7 @@ contract GovernorResearch {
         if(block.timestamp > proposals[_id].endTimeStamp) revert ProposalLifeTimePassed();
 
         //get latest voting rights
-        uint256 _snapshotIndex = staking.getLatestSnapshotIndex(_user);
-        uint256 _votingRights = staking.getUserRights(_user, _snapshotIndex, block.number);
+        uint256 _votingRights = staking.getLatestUserRights(_user);
 
         //check if user has enough voting rights
         if(_votes > _votingRights) revert InsufficientVotingRights(_votingRights, _votes);
@@ -244,9 +270,6 @@ contract GovernorResearch {
 
         } else if(_vote == Vote.No) {
             proposals[_id].votesAgainst += _votes;
-
-        } else if(_vote == Vote.Abstain) {
-            proposals[_id].votesAbstain += _votes;
         }
 
         //add to the total votes
