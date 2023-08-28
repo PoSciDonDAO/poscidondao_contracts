@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Capped.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -9,47 +9,38 @@ contract Trading is ERC20Capped {
     error SellFeeTooHigh();
 
     uint8 lLBA;
-    address donationWallet;
     address treasuryWallet;
 
     mapping(address => uint256) public routerAddresses;
-    mapping(address => uint256) public govs;
+    mapping(address => uint256) public wards;
 
-    modifier gov() {
-        if(govs[msg.sender] != 1) revert Unauthorized(msg.sender);
+    modifier dao() {
+        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
         _;
     }
 
     enum TransferType { Move, Buy, Sell }
 
-    struct Fees {
-        uint64 treasuryFee;
-        uint64 donationFee;
-    }
-
-    Fees public fees;
-    Fees public noFees;
+    uint64 public fee;
 
     event Rely(address indexed user);
     event Deny(address indexed user);
     
     constructor(
-        address _donationWallet,
         address _treasuryWallet
     ) 
     ERC20("Trading Token", "SCI") ERC20Capped(18910000e18) {
-        donationWallet = _donationWallet;
         treasuryWallet = _treasuryWallet;
 
         _mint(treasuryWallet, cap());
-
-        govs[msg.sender] = 1;
+        
+        wards[msg.sender] = 1;
     }
 
     /**
      * @dev set LLBA to finalized;
      */
-    function setLLBAToCompleted() public gov {
+    function setLLBAToCompleted() public dao {
         lLBA = 1;
     }
 
@@ -57,8 +48,8 @@ contract Trading is ERC20Capped {
      * @dev adds a gov
      * @param user the user that becomes a gov
      */
-    function addGov(address user) public gov {
-        govs[user] = 1;
+    function addGov(address user) external dao {
+        wards[user] = 1;
         emit Rely(user);
     }
 
@@ -66,18 +57,17 @@ contract Trading is ERC20Capped {
      * @dev removes a gov
      * @param user the user that will be removed as a gov.
      */
-    function removeGov(address user) public gov {
-        if(govs[user] != 1) {
+    function removeGov(address user) external dao {
+        if(wards[user] != 1) {
             revert Unauthorized(user);
         }
-        delete govs[user];
+        delete wards[user];
         emit Deny(user);
     }
 
-    function setFees(uint64 donationFee, uint64 treasuryFee) public gov {
-        if ((donationFee + treasuryFee)/1e4 > 10) revert SellFeeTooHigh();
-        fees.donationFee = donationFee;
-        fees.treasuryFee = treasuryFee;
+    function setFee(uint64 _fee) external dao {
+        if ((_fee/1e4) > 10) revert SellFeeTooHigh();
+        fee = _fee;
     }
 
     function transferFrom(
@@ -112,21 +102,18 @@ contract Trading is ERC20Capped {
         address from, 
         address to, 
         uint256 amount
-    ) internal returns(bool) {
+    ) internal returns (bool) {
 
         TransferType transferType;
-        Fees memory transferFees; 
 
-        (transferType, transferFees) = getTransferType(from, to);
+        uint256 _transferFee;
+        (transferType, _transferFee) = getTransferType(from, to);
 
-        if(transferFees.treasuryFee + transferFees.donationFee != 0) {
-            uint256 donationFee = (amount * transferFees.donationFee) / (1e7);
-            _transfer(from, treasuryWallet, donationFee);
-            uint256 treasuryFee = (amount * transferFees.treasuryFee) / (1e7);
-            _transfer(from, donationWallet, treasuryFee);
+        if(_transferFee > 0) {
+            uint256 _calcFee = (amount * _transferFee) / (1e7);
+            _transfer(from, treasuryWallet, _calcFee);
 
-            amount -= donationFee;
-            amount -= treasuryFee;
+            amount -= _calcFee;
         }
 
         _transfer(from, to, amount);
@@ -136,19 +123,25 @@ contract Trading is ERC20Capped {
     function getTransferType(
         address from, 
         address to
-    ) internal view returns (TransferType, Fees memory) {
+    ) internal view returns (TransferType, uint64) {
         if(routerAddresses[from] == 1) {
-            return (TransferType.Buy, noFees);
+            return (TransferType.Buy, 0);
         } else if (routerAddresses[to] == 1) {
-            return (TransferType.Sell, fees);
+            return (TransferType.Sell, fee);
         } else {
-            return (TransferType.Move, noFees);
+            return (TransferType.Move, 0);
         }
     }
 
     function setRouterAddress(
-        address router
-    ) external gov {
-        routerAddresses[router] = 1;
+        address _router
+    ) external dao {
+        routerAddresses[_router] = 1;
+    }
+
+    function removeRouterAddress(
+        address _oldRouter
+    ) external dao {
+        delete routerAddresses[_oldRouter];
     }
 }
