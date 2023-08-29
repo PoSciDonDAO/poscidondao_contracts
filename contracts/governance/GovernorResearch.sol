@@ -60,7 +60,7 @@ contract GovernorResearch {
     mapping(uint256 => Proposal)                    private     proposals;
     mapping(uint256 => mapping(address => uint8))   private     voted;
 
-    ///*** ENUMERATOR ***///
+    ///*** ENUMERATORS ***///
     enum ProposalStatus {
         Active, Scheduled, Executed, Cancelled 
     }
@@ -97,6 +97,7 @@ contract GovernorResearch {
         poToken = NftLike(po_);
 
         wards[msg.sender] = 1;
+        wards[treasuryWallet_] = 1;
         emit RelyOn(msg.sender);
     }
 
@@ -339,7 +340,7 @@ contract GovernorResearch {
      */
     function executeProposal(
         uint256 _id
-        ) external dao {
+        ) external payable dao {
 
         if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
 
@@ -349,7 +350,8 @@ contract GovernorResearch {
             IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[_id].details.researchWallet, proposals[_id].details.amountUsdc);
         
         } else if(proposals[_id].details.amountEth > 0) {
-            (bool sent,) = proposals[_id].details.researchWallet.call{value: proposals[_id].details.amountEth}("");
+            address researchWallet = proposals[_id].details.researchWallet;
+            (bool sent,) = researchWallet.call{value: proposals[_id].details.amountEth}("");
             require(sent);
         }
         
