@@ -437,21 +437,19 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    // function test_CancelProposal() public {
-    //     vm.startPrank(dao);
-    //         govRes.propose("NDV", "ADV", "REO");
-    //     vm.stopPrank();
-    //     govRes.lock(address(sci), addr2, 2000e18);
-    //     (,,,,uint256 amtSnapshots) = govRes.users(addr2);
-    //     uint256 id = govRes.getProposalIndex();
-    //     govRes.vote(id, addr2, amtSnapshots, "REO", 2000e18);
-    //     vm.startPrank(dao);
-    //         govRes.cancelProposal(id);
-    //         (,,GovernorResearch.ProposalStatus status,,,,,,, 
-    //         ) = govRes.proposals(govRes.getProposalIndex());
-    //         assertTrue(status == GovernorResearch.ProposalStatus.cancelled);
-    //     vm.stopPrank();
-    // }
+    function test_CancelProposal() public {
+        vm.startPrank(dao);
+            govRes.propose("Introduction", researchWallet, 0, 500 ether);
+        vm.stopPrank();
+
+        vm.startPrank(dao);
+            uint256 id = govRes.getProposalIndex();
+            govRes.cancelProposal(id);
+            (,,GovernorResearch.ProposalStatus status,,, 
+            ) = govRes.getProposalInfo(id);
+            assertTrue(status == GovernorResearch.ProposalStatus.Cancelled);
+        vm.stopPrank();
+    }
 
 
 }

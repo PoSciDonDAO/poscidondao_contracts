@@ -350,8 +350,8 @@ contract GovernorResearch {
             IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[_id].details.researchWallet, proposals[_id].details.amountUsdc);
         
         } else if(proposals[_id].details.amountEth > 0) {
-            address researchWallet = proposals[_id].details.researchWallet;
-            (bool sent,) = researchWallet.call{value: proposals[_id].details.amountEth}("");
+            address _researchWallet = proposals[_id].details.researchWallet;
+            (bool sent,) = _researchWallet.call{value: proposals[_id].details.amountEth}("");
             require(sent);
         }
         
