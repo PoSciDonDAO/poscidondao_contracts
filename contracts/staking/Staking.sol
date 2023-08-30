@@ -2,16 +2,12 @@
 pragma solidity ^0.8.17;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import "contracts/staking/IStaking.sol";
 
 interface AccountBoundTokenLike {
     function push(address, uint256) external;
     function pull(address, uint256) external;
-}
-
-interface TokenLike {
-    function transferFrom(address, address, uint256) external;
-    function transfer(address, uint256) external;
 }
 
 interface NftLike {
@@ -39,7 +35,7 @@ contract Staking is IStaking, ReentrancyGuard {
     address                 private immutable   _sci;
     address                 private immutable   _don;
     NftLike                 public              poToken;
-    TokenLike               public  immutable   sciToken;
+    IERC20                  public  immutable   sciToken;
     AccountBoundTokenLike   public  immutable   donToken;
 
     ///*** STRUCTS ***///
@@ -92,7 +88,7 @@ contract Staking is IStaking, ReentrancyGuard {
         address dao_
     ) {
         poToken       = NftLike(po_);
-        sciToken      = TokenLike(sci_);
+        sciToken      = IERC20(sci_); //implement safeERC20
         donToken      = AccountBoundTokenLike(don_);
 
         _po = po_;
@@ -169,7 +165,7 @@ contract Staking is IStaking, ReentrancyGuard {
         address _user, 
         uint256 _snapshotIndex, 
         uint256 _blockNum
-        ) external view returns (uint256) {
+        ) public view returns (uint256) {
         uint256 index = users[_user].amtSnapshots;
         if (_snapshotIndex > index) revert IncorrectSnapshotIndex();
         Snapshot memory snapshot = users[_user].snapshots[_snapshotIndex];
@@ -177,35 +173,11 @@ contract Staking is IStaking, ReentrancyGuard {
         return snapshot.rights;
     }
 
-    /**
-     * @dev returns snapshot information
-     * @param _user the snapshotted user
-     * @param _snapshotNum the snapshot number
-     */
-    function getSnapshot(address _user, uint256 _snapshotNum) external view returns (uint256, uint256) {
-        return (
-            users[_user].snapshots[_snapshotNum].atBlock, 
-            users[_user].snapshots[_snapshotNum].rights
-        );
-    }
-
-    /**
-     * @dev returns the latest snapshot information
-     * @param _user the snapshotted user
-     */
-    function getLatestSnapshotIndex(address _user) external view returns (uint256) {
-        return users[_user].amtSnapshots;
-    }
-    /**
-     * @dev returns the latest snapshot information
-     * @param _user the snapshotted user
-     */
-    function getLatestSnapshot(address _user) external view returns (uint256, uint256) {
+    function getLatestUserRights(
+        address _user  
+    ) external view returns (uint256) {
         uint256 _latestSnapshot = users[_user].amtSnapshots;
-        return (
-            users[_user].snapshots[_latestSnapshot].atBlock, 
-            users[_user].snapshots[_latestSnapshot].rights
-        );
+        return getUserRights(_user, _latestSnapshot, block.number);
     }
 
     /**
@@ -324,10 +296,11 @@ contract Staking is IStaking, ReentrancyGuard {
      */
     function free(
         address _src, 
-        address _user, 
+        address _user,
         uint256 _amount
         ) external nonReentrant {
         if (msg.sender != _user) revert Unauthorized(msg.sender);
+
         if(users[_user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[_user].voteLockEnd, block.timestamp);
 
         if (_src == _don) {
@@ -394,7 +367,7 @@ contract Staking is IStaking, ReentrancyGuard {
             ) revert InsufficientBalance(users[_user].stakedPo, _amount);
         }
         //Retrieve PO token from user wallet 
-        //but user needs to confirm ERC1155's approve all first
+        //User needs to confirm ERC1155's approve all first
         poToken.safeBatchTransferFrom(
             _user, 
             address(this), 

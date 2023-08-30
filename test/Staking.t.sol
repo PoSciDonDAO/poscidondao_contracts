@@ -50,7 +50,6 @@ contract StakingTest is Test {
             );
 
             sci = new Trading(
-                donationWallet,
                 treasuryWallet
             );
 
@@ -176,7 +175,7 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_Revert_If_LockUsingOtherAddress() public {
+    function test_RevertIfLockUsingOtherAddress() public {
         vm.startPrank(addr2);
 
             bytes4 selector = bytes4(keccak256("Unauthorized(address)"));

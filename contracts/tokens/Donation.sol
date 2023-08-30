@@ -200,6 +200,7 @@ contract Donation is ReentrancyGuard {
 
     /**
      * @dev pushes tokens from user to the staking contract
+     * @param _user the user that wants to push their DON tokens
      * @param _amount the amount of tokens that need to be pushed
      */
     function push(
@@ -219,6 +220,7 @@ contract Donation is ReentrancyGuard {
     
     /**
      * @dev transfers tokens from gov contract to msg.sender
+     * @param _user the user that wants to pull their DON tokens
      * @param _amount the amount of tokens that need to be pulled
      */
     function pull(
