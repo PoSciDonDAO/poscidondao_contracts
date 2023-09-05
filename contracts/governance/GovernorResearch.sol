@@ -54,7 +54,7 @@ contract GovernorResearch {
     address                                         public      usdc;
     uint256                                         private     _proposalIndex;
     address                                         public      po;
-    NftLike                                         public      poToken;
+    AccountBoundNftLike                             public      poToken;
     uint8                                           public      poLive;
     mapping(address => uint8)                       public      wards;
     mapping(uint256 => Proposal)                    private     proposals;

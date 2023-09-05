@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import {IERC20} from "../../lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "contracts/staking/IStaking.sol";
 
 interface AccountBoundTokenLike {
@@ -10,8 +10,9 @@ interface AccountBoundTokenLike {
     function pull(address, uint256) external;
 }
 
-interface NftLike {
-    function safeBatchTransferFrom(address, address, uint256[] memory, uint256[] memory, bytes memory) external;
+interface AccountBoundNftLike {
+    function push(address, uint256[] memory, uint256[] memory) external;
+    function pull(address, uint256[] memory, uint256[] memory) external;
     function balanceOfBatch(address[] memory accounts, uint256[] memory ids) external returns (uint256[] memory);
     function mint(address _user) external;
 }
@@ -34,7 +35,7 @@ contract Staking is IStaking, ReentrancyGuard {
     address                 private             _po;
     address                 private immutable   _sci;
     address                 private immutable   _don;
-    NftLike                 public              poToken;
+    AccountBoundNftLike     public              poToken;
     IERC20                  public  immutable   sciToken;
     AccountBoundTokenLike   public  immutable   donToken;
 
@@ -87,7 +88,7 @@ contract Staking is IStaking, ReentrancyGuard {
         address don_,
         address dao_
     ) {
-        poToken       = NftLike(po_);
+        poToken       = AccountBoundNftLike(po_);
         sciToken      = IERC20(sci_); //implement safeERC20
         donToken      = AccountBoundTokenLike(don_);
 
@@ -355,7 +356,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @dev lets users stake their PO NFTs
      * @param _user the user that wants to stake PO tokens
      */
-    function stakePO(
+    function stakePo(
         address _user, 
         uint256 _amount,
         uint256[] memory _ids
@@ -367,13 +368,10 @@ contract Staking is IStaking, ReentrancyGuard {
             ) revert InsufficientBalance(users[_user].stakedPo, _amount);
         }
         //Retrieve PO token from user wallet 
-        //User needs to confirm ERC1155's approve all first
-        poToken.safeBatchTransferFrom(
-            _user, 
-            address(this), 
+        poToken.push(
+            _user,  
             _turnAmountIntoArray(_amount), 
-            _ids, 
-            "0x0"
+            _ids
         );
 
         //update staked PO balance
@@ -381,6 +379,24 @@ contract Staking is IStaking, ReentrancyGuard {
         
         //emit locked event
         emit Locked(_po, _user, _amount, 0);
+    }
+
+    function unstakePo(
+        address _user, 
+        uint256 _amount,
+        uint256[] memory _ids
+    ) external nonReentrant {
+
+        //Retrieve PO token from user wallet 
+        poToken.pull(
+            _user,  
+            _turnAmountIntoArray(_amount), 
+            _ids
+        );
+        //update staked PO balance
+        users[_user].stakedPo -= _amount; 
+
+        emit Freed(_po, _user, _amount, 0);  
     }
 
     /**

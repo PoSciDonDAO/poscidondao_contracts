@@ -4,14 +4,13 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/ERC1155.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/Counters.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/Strings.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/Context.sol";
 // import "contracts/tokens/ImpactNft.sol";
 
-contract Participation is Context {
+contract Participation {
     using Counters for Counters.Counter;
 
-
     error LengthMismatch();
+    error InsufficientBalance();
     error IncorrectAddress(address _chosenAddress);
     error NotGovernanceContract(address _govAddress);
     error Unauthorized(address user);
@@ -24,6 +23,7 @@ contract Participation is Context {
     string public symbol = "PO";
     bool internal _frozen = false;
     string private _uri;
+    address private _stakingContract;
 
     Counters.Counter public tokenIdCounter;
 
@@ -124,7 +124,7 @@ contract Participation is Context {
         address _user
         ) external dao {
         if(wards[_user] != 1) {
-            revert Unauthorized(msg.sender);
+            revert Unauthorized(_user);
         }
         delete wards[_user];
         emit Denied(_user);
@@ -146,13 +146,13 @@ contract Participation is Context {
 
     /**
      * @dev mints a PO NFT
-     * @param participant the address of the user that participated in governance
+     * @param _participant the address of the user that participated in governance
      */
-    function mint(address participant) external gov {
+    function mint(address _participant) external gov {
         tokenIdCounter.increment();
         uint256 tokenId = tokenIdCounter.current(); 
-        _mint(participant, tokenId, 1, "");
-        emit MintedTokenInfo(participant, tokenId);
+        _mint(_participant, tokenId, 1, "");
+        emit MintedTokenInfo(_participant, tokenId);
     }
 
     /**
@@ -192,23 +192,28 @@ contract Participation is Context {
     }
 
     /**
-     * @dev See {IERC1155-safeBatchTransferFrom}.
+     * @dev pushes participation tokens from user wallet to staking contract
      */
-    function safeBatchTransferFrom(
-        address from,
-        address to,
+    function push(
+        address _user,
         uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
+        uint256[] memory amounts
     ) public virtual {
-        if(from != _msgSender()) revert Unauthorized(_msgSender());
+        if(_user != msg.sender) revert Unauthorized(_user);
 
-        require(
-            from == _msgSender(),
-            "ERC1155: caller is not token owner or approved"
-        );
-        if (to != govRes || to != govOps) revert IncorrectAddress(to);
-        _safeBatchTransferFrom(from, to, ids, amounts, data);
+        _safeBatchTransferFrom(_user, _stakingContract, ids, amounts, '');
+    }
+
+    /**
+     * @dev pulls participation tokens from staking contract to user wallet
+     */
+    function pull(
+        address _user,
+        uint256[] memory _ids,
+        uint256[] memory _amounts
+    ) public virtual {
+        if(_user != msg.sender) revert Unauthorized(_user);
+        _safeBatchTransferFrom(_stakingContract, _user, _ids, _amounts, '');
     }
 
     /**
@@ -231,7 +236,7 @@ contract Participation is Context {
         if(ids.length != amounts.length) revert LengthMismatch();
         if(to == address(0)) revert IncorrectAddress(to);
 
-        address operator = _msgSender();
+        address operator = msg.sender;
 
         _beforeTokenTransfer(operator, from, to, ids, amounts, data);
 
@@ -240,7 +245,7 @@ contract Participation is Context {
             uint256 amount = amounts[i];
 
             uint256 fromBalance = _balances[id][from];
-            require(fromBalance >= amount, "ERC1155: insufficient balance for transfer");
+            if(fromBalance <= amount) revert InsufficientBalance();
             unchecked {
                 _balances[id][from] = fromBalance - amount;
             }
@@ -264,7 +269,7 @@ contract Participation is Context {
     ) internal virtual {
         if (to == address(0)) revert IncorrectAddress(to);
         
-        address operator = _msgSender();
+        address operator = msg.sender;
         uint256[] memory ids = _asSingletonArray(id);
         uint256[] memory amounts = _asSingletonArray(amount);
 
@@ -272,8 +277,6 @@ contract Participation is Context {
 
         _balances[id][to] += amount;
         emit TransferSingle(operator, address(0), to, id, amount);
-
-
     }
 
     /**
@@ -290,10 +293,10 @@ contract Participation is Context {
         uint256[] memory ids,
         uint256[] memory amounts
     ) internal virtual {
-        require(from != address(0), "ERC1155: burn from the zero address");
-        require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
+        if (from == address(0)) revert IncorrectAddress(from);
+        if(ids.length != amounts.length) revert LengthMismatch();
 
-        address operator = _msgSender();
+        address operator = msg.sender;
 
         _beforeTokenTransfer(operator, from, address(0), ids, amounts, "");
 
@@ -302,7 +305,7 @@ contract Participation is Context {
             uint256 amount = amounts[i];
 
             uint256 fromBalance = _balances[id][from];
-            require(fromBalance >= amount, "ERC1155: burn amount exceeds balance");
+            if(fromBalance <= amount) revert InsufficientBalance();
             unchecked {
                 _balances[id][from] = fromBalance - amount;
             }

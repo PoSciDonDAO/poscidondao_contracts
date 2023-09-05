@@ -44,34 +44,34 @@ contract ImpactNft is ERC721 {
         rateNobelImpact = _rateNobelImpact;
     }
 
-    function convertPOToAverageImpactNft(uint256 amount, uint256 tokenId) external {
-        // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
-        // if (balanceOf(msg.sender, tokenId) < rateAverageImpact) revert InsufficientPOTokensToConvert();
+    // function convertPOToAverageImpactNft(uint256 amount, uint256 tokenId) external {
+    //     // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
+    //     // if (balanceOf(msg.sender, tokenId) < rateAverageImpact) revert InsufficientPOTokensToConvert();
 
-        // _burnBatch(msg.sender, 1, rateAverageImpact);
-        //impactNft.mint(msg.sender);
-    }
-    function convertPOToHighImpactNft(uint256 amount, uint256 tokenId) external {
-        // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
-        // if (balanceOf(msg.sender, tokenId) < rateHighImpact) revert InsufficientPOTokensToConvert();
+    //     // _burnBatch(msg.sender, 1, rateAverageImpact);
+    //     //impactNft.mint(msg.sender);
+    // }
+    // function convertPOToHighImpactNft(uint256 amount, uint256 tokenId) external {
+    //     // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
+    //     // if (balanceOf(msg.sender, tokenId) < rateHighImpact) revert InsufficientPOTokensToConvert();
 
-        // _burnBatch(msg.sender, 1, rateHighImpact);
-        //impactNft.mint(msg.sender);
-    }
-    function convertPOToNatureImpactNft(uint256 amount, uint256 tokenId) external {
-        // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
-        // if (balanceOf(msg.sender, tokenId) < rateNatureImpact) revert InsufficientPOTokensToConvert();
+    //     // _burnBatch(msg.sender, 1, rateHighImpact);
+    //     //impactNft.mint(msg.sender);
+    // }
+    // function convertPOToNatureImpactNft(uint256 amount, uint256 tokenId) external {
+    //     // if (amount > balanceOf(msg.sender, tokenId)) revert InsufficientPOBalance();
+    //     // if (balanceOf(msg.sender, tokenId) < rateNatureImpact) revert InsufficientPOTokensToConvert();
 
-        // _burnBatch(msg.sender, 1, rateNatureImpact);
-        //impactNft.mint(msg.sender);
-    }
-    function convertPOToNobelImpactNft(uint256 amount, uint256 tokenId) external {
-        // if (balanceOf(msg.sender, tokenId) < amount) revert InsufficientPOBalance();
-        // if (balanceOf(msg.sender, tokenId) < rateNobelImpact) revert InsufficientPOTokensToConvert();
+    //     // _burnBatch(msg.sender, 1, rateNatureImpact);
+    //     //impactNft.mint(msg.sender);
+    // }
+    // function convertPOToNobelImpactNft(uint256 amount, uint256 tokenId) external {
+    //     // if (balanceOf(msg.sender, tokenId) < amount) revert InsufficientPOBalance();
+    //     // if (balanceOf(msg.sender, tokenId) < rateNobelImpact) revert InsufficientPOTokensToConvert();
 
-        // _burnBatch(msg.sender, tokenId, rateNobelImpact);
-        //impactNft.mint(msg.sender);
-    }
+    //     // _burnBatch(msg.sender, tokenId, rateNobelImpact);
+    //     //impactNft.mint(msg.sender);
+    // }
 
     function mint(address receiver) external {
         tokenId.increment();

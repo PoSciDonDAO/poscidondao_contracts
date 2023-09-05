@@ -48,8 +48,7 @@ contract GovernorResearchTest is Test {
 
             po = new Participation(
                 "", 
-                dao, 
-                royaltyAddress
+                dao
             );
 
             sci = new Trading(

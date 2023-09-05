@@ -44,8 +44,7 @@ contract StakingTest is Test {
         vm.startPrank(dao);
             po = new Participation(
                 "baseURI",
-                dao,
-                royaltyAddress
+                dao
                 // impactNftAddress
             );
 
