@@ -76,8 +76,8 @@ contract GovernorResearchTest is Test {
 
             staking.setGovRes(address(govRes));
 
-            don.ratioEth(18, 10);
-            don.ratioUsdc(10, 10);
+            don.setRatioEth(18, 10);
+            don.setRatioUsdc(10, 10);
             don.setDonationThreshold(1e15);
             don.setStakingContract(address(staking));
             

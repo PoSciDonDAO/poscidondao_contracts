@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.19;
 
 interface IStaking {
     function getUserRights(address _user, uint256 _snapshotIndex, uint256 _blockNum) external view returns (uint256);

@@ -3,8 +3,9 @@ pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "contracts/interface/IDonation.sol";
 
-contract Donation is ReentrancyGuard {
+contract Donation is IDonation, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     error AccountBound();
@@ -89,8 +90,8 @@ contract Donation is ReentrancyGuard {
     /**
      * @dev returns the balance of an account
      */
-    function balanceOf(address account) external view returns (uint256) {
-        return _balances[account];
+    function balanceOf(address _account) external view returns (uint256) {
+        return _balances[_account];
     }
 
     /**
@@ -132,14 +133,14 @@ contract Donation is ReentrancyGuard {
     /**
      * @dev sets the ratio of the ETH to DON token conversion 
      */
-    function ratioEth(uint256 _n, uint256 _d) external gov {
+    function setRatioEth(uint256 _n, uint256 _d) external gov {
         _ratioEth = 1000 * _n / _d;
     }
 
     /**
      * @dev sets the ratio of the USDC to DON token conversion 
      */
-    function ratioUsdc(uint256 _n, uint256 _d) external gov {
+    function setRatioUsdc(uint256 _n, uint256 _d) external gov {
         _ratioUsdc = 10 * _n / _d;
     }
 

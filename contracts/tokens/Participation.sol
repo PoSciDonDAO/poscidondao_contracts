@@ -107,27 +107,27 @@ contract Participation {
 
     /**
      * @dev adds a gov
-     * @param _user the user that is eligible to become a gov
+     * @param user the user that is eligible to become a gov
      */
     function addWard(
-        address _user
+        address user
         ) external dao {
-        wards[_user] = 1;
-        emit RelyOn(_user);
+        wards[user] = 1;
+        emit RelyOn(user);
     }
 
     /**
      * @dev removes a gov
-     * @param _user the user that will be removed as a gov
+     * @param user the user that will be removed as a gov
      */
     function removeWard(
-        address _user
+        address user
         ) external dao {
-        if(wards[_user] != 1) {
-            revert Unauthorized(_user);
+        if(wards[user] != 1) {
+            revert Unauthorized(user);
         }
-        delete wards[_user];
-        emit Denied(_user);
+        delete wards[user];
+        emit Denied(user);
     }
 
     /**
@@ -146,13 +146,13 @@ contract Participation {
 
     /**
      * @dev mints a PO NFT
-     * @param _participant the address of the user that participated in governance
+     * @param participant the address of the user that participated in governance
      */
-    function mint(address _participant) external gov {
+    function mint(address participant) external gov {
         tokenIdCounter.increment();
         uint256 tokenId = tokenIdCounter.current(); 
-        _mint(_participant, tokenId, 1, "");
-        emit MintedTokenInfo(_participant, tokenId);
+        _mint(participant, tokenId, 1, "");
+        emit MintedTokenInfo(participant, tokenId);
     }
 
     /**
@@ -195,25 +195,25 @@ contract Participation {
      * @dev pushes participation tokens from user wallet to staking contract
      */
     function push(
-        address _user,
+        address user,
         uint256[] memory ids,
         uint256[] memory amounts
     ) public virtual {
-        if(_user != msg.sender) revert Unauthorized(_user);
+        if(user != msg.sender) revert Unauthorized(user);
 
-        _safeBatchTransferFrom(_user, _stakingContract, ids, amounts, '');
+        _safeBatchTransferFrom(user, _stakingContract, ids, amounts, '');
     }
 
     /**
      * @dev pulls participation tokens from staking contract to user wallet
      */
     function pull(
-        address _user,
-        uint256[] memory _ids,
-        uint256[] memory _amounts
+        address user,
+        uint256[] memory ids,
+        uint256[] memory amounts
     ) public virtual {
-        if(_user != msg.sender) revert Unauthorized(_user);
-        _safeBatchTransferFrom(_stakingContract, _user, _ids, _amounts, '');
+        if(user != msg.sender) revert Unauthorized(user);
+        _safeBatchTransferFrom(_stakingContract, user, ids, amounts, '');
     }
 
     /**

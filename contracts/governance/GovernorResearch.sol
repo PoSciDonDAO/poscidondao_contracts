@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./../staking/Staking.sol";
+import "./../interface/IParticipation.sol";
+import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -54,7 +55,7 @@ contract GovernorResearch {
     address                                         public      usdc;
     uint256                                         private     _proposalIndex;
     address                                         public      po;
-    AccountBoundNftLike                             public      poToken;
+    IParticipation                                  public      poToken;
     uint8                                           public      poLive;
     mapping(address => uint8)                       public      wards;
     mapping(uint256 => Proposal)                    private     proposals;
@@ -94,7 +95,7 @@ contract GovernorResearch {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
-        poToken = NftLike(po_);
+        poToken = IParticipation(po_);
 
         wards[msg.sender] = 1;
         wards[treasuryWallet_] = 1;

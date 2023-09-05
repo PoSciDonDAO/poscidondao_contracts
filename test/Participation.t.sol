@@ -7,6 +7,7 @@ import "contracts/tokens/Participation.sol";
 import "contracts/test/Token.sol";
 import "contracts/tokens/Donation.sol";
 import "contracts/tokens/Trading.sol";
+import "contracts/staking/Staking.sol";
 
 contract ParticipationTest is Test {
     
@@ -64,8 +65,8 @@ contract ParticipationTest is Test {
             );
             staking.setGovRes(address(govRes));
 
-            don.ratioEth(18, 10);
-            don.ratioUsdc(10, 10);
+            don.setRatioEth(18, 10);
+            don.setRatioUsdc(10, 10);
             don.setDonationThreshold(1e15);
             don.setStakingContract(address(staking));
             

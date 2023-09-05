@@ -29,3 +29,4 @@ argumentsTrading.js
 broadcast/
 artifacts-zk/
 abis/
+.DS_Store

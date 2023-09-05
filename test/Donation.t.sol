@@ -68,8 +68,8 @@ contract DonationTest is Test {
         vm.startPrank(dao);
             don.setStakingContract(address(staking));
             usdc.approve(address(don), 10000e18);
-            don.ratioEth(18, 10);
-            don.ratioUsdc(10, 10);
+            don.setRatioEth(18, 10);
+            don.setRatioUsdc(10, 10);
             don.setDonationThreshold(1e15);
         vm.stopPrank();
     }
