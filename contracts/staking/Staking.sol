@@ -3,16 +3,13 @@ pragma solidity ^0.8.17;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IStaking} from "contracts/interface/IStaking.sol";
 import {IDonation} from "contracts/interface/IDonation.sol";
 import {IParticipation} from "contracts/interface/IParticipation.sol";
 
-interface AccountBoundTokenLike {
-    function push(address, uint256) external;
-    function pull(address, uint256) external;
-}
-
 contract Staking is IStaking, ReentrancyGuard {
+    using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
     error CannotClaim();
@@ -27,12 +24,11 @@ contract Staking is IStaking, ReentrancyGuard {
 
 
     ///*** TOKENS ***//
-    address                 private             _po;
-    address                 private immutable   _sci;
-    address                 private immutable   _don;
-    IParticipation          public              poToken;
-    IERC20                  public  immutable   sciToken;
-    IDonation               public  immutable   donToken;
+    address        private _po;
+    address        private _sci;
+    address        private _don;
+    IParticipation public  poToken;
+    IDonation      public  donToken;
 
     ///*** STRUCTS ***///
     struct User {
@@ -54,8 +50,8 @@ contract Staking is IStaking, ReentrancyGuard {
     uint256                                         private     totStaked;
     mapping(address => uint8)                       public      wards;
     mapping(address => User)                        public      users;
-    uint256                                         public      numerator;          //numerator
-    uint256                                         public      denominator;          //denominator
+    uint256                                         public      numerator;    
+    uint256                                         public      denominator;       
     address                                         public      govRes;
     address                                         public      govOps;
 
@@ -66,7 +62,7 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     modifier gov() {
-        require(msg.sender == govRes || msg.sender == govOps, "Not a gov contract");
+        if(msg.sender != govRes && msg.sender != govOps) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -78,17 +74,10 @@ contract Staking is IStaking, ReentrancyGuard {
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
     constructor(
-        address po,
-        address sci,
         address don,
         address _dao
     ) {
-        poToken       = IParticipation(po);
-        sciToken      = IERC20(sci); //implement safeERC20
-        donToken      = IDonation(don);
-
-        _po = po;
-        _sci = sci;
+        donToken = IDonation(don);
         _don = don;
 
         numerator = 10;
@@ -96,92 +85,25 @@ contract Staking is IStaking, ReentrancyGuard {
 
         wards[_dao] = 1;
     }
-
-    ///*** INTERNAL FUNCTIONS ***///
-    /**
-     * @dev a snaphshot of the current voting rights of a given user
-     * @param user the address that is being snapshotted
-     */
-    function snapshot(
-        address user
-        ) internal {
-        uint256 index = users[user].amtSnapshots;
-        if (index > 0 && users[user].snapshots[index].atBlock == block.number) {
-            users[user].snapshots[index].rights = users[user].votingRights;
-        } else {
-            users[user].amtSnapshots = index += 1;
-            users[user].snapshots[index] = Snapshot(block.number, users[user].votingRights);
-        }
-    }
-
-    /**
-     * @dev calculate the votes for users that have donated e.g. amount * 12/10  
-     * @param amount of deposited DON tokens that will be multiplied with n / d
-     */
-    function calcVotes(
-        uint256 amount
-    ) internal view returns (uint256 votingPower) {
-        return votingPower = amount * numerator / denominator;
-    }
-
-    /**
-    *@dev   Using this function, a given amount will be turned into an array.
-    *       This array will be used in ERC1155's batch mint function. 
-    *@param amount is the amount provided that will be turned into an array.
-    */
-    function turnAmountIntoArray(uint256 amount) internal pure returns (uint256[] memory tokenAmounts) {
-        tokenAmounts = new uint[](amount);
-        for (uint256 i = 0; i < amount;) {
-            tokenAmounts[i] = i + 1;
-            unchecked {
-                i++;
-            }
-        }
-    }
-
-    function turnUserIntoArray(address user, uint256 amountOfTokens) internal pure returns (address[] memory addressArray) {
-        addressArray = new address[](amountOfTokens);
-        for (uint256 i = 0; i < amountOfTokens;) {
-            addressArray[i] = user;
-            unchecked {
-                i++;
-            }
-        }
-    }
     
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Return the voting rights of a user at a certain snapshot
-     * @param user the user address 
-     * @param snapshotIndex the index of the snapshots the user has
-     * @param blockNum the highest block.number at which the user rights will be retrieved
+     * @dev sets the PO token address and interface
+     * @param po the address of the participation ($PO) token
      */
-    function getUserRights(
-        address user, 
-        uint256 snapshotIndex, 
-        uint256 blockNum
-        ) public view returns (uint256) {
-        uint256 index = users[user].amtSnapshots;
-        if (snapshotIndex > index) revert IncorrectSnapshotIndex();
-        Snapshot memory snap = users[user].snapshots[snapshotIndex];
-        if (snap.atBlock > blockNum) revert IncorrectBlockNumber();
-        return snap.rights;
-    }
-
-    function getLatestUserRights(
-        address user  
-    ) external view returns (uint256) {
-        uint256 latestSnapshot = users[user].amtSnapshots;
-        return getUserRights(user, latestSnapshot, block.number);
+    function setPoToken(address po) external dao {
+        _po = po;
+        poToken = IParticipation(po);
     }
 
     /**
-     * @dev returns the total amount of staked SCI and DON tokens
+     * @dev sets the sci token address.
+     * @param sci the address of the tradable ($SCI) token
      */
-    function getTotalStaked() external view returns (uint256) {
-        return totStaked;
-    }
+    function setSciToken(address sci) external dao {
+        _sci = sci;
+    }   
 
     /**
      * @dev sets the address of the research funding governance smart contract
@@ -209,7 +131,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @dev adds a gov
      * @param user the user that is eligible to become a gov
      */
-    function addGov(address user) external dao {
+    function addWard(address user) external dao {
         wards[user] = 1;
         emit RelyOn(user);
     }
@@ -218,7 +140,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @dev removes a gov
      * @param user the user that will be removed as a gov
      */
-    function removeGov(address user) external dao {
+    function removeWard(address user) external dao {
         if(wards[user] != 1) {
             revert Unauthorized(msg.sender);
         }
@@ -240,7 +162,6 @@ contract Staking is IStaking, ReentrancyGuard {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
         if (src == _don) {
-            
             //Retrieve DON tokens from wallet
             donToken.push(user, amount);
 
@@ -258,7 +179,7 @@ contract Staking is IStaking, ReentrancyGuard {
             
         } else if (src == _sci) {
             //Retrieve SCI tokens from user wallet but user needs to approve transfer first 
-            sciToken.transferFrom(user, address(this), amount);
+            IERC20(_sci).safeTransferFrom(user, address(this), amount);
 
             //add to total staked amount
             totStaked += amount;
@@ -268,20 +189,36 @@ contract Staking is IStaking, ReentrancyGuard {
 
             //SCI holders get more votes per locked token 
             //based on amount of DON tokens in circulation
-            uint256 votes = calcVotes(amount);
+            uint256 votes = _calcVotes(amount);
 
             //calculated votes are added as voting rights
             users[user].votingRights = votes;
 
             emit Locked(_sci, user, amount, votes);
 
+        } else if(src == _po) {
+            //retrieve balance of user
+            uint256[] memory balance = poToken.getHeldBalance(user);
+
+            //check if user has enough PO tokens
+            if(balance.length < amount) revert InsufficientBalance(balance.length, amount);
+            
+            //Retrieve PO token from user wallet 
+            poToken.push(user, amount);
+
+            //update staked PO balance
+            users[user].stakedPo += amount;
+            
+            //emit locked event
+            emit Locked(_po, user, amount, 0);
+        
         } else {
             //Revert if the wrong token is chosen
             revert WrongToken();
         }
 
         //snapshot of voting rights
-        snapshot(user);
+        _snapshot(user);
     }
 
     /**
@@ -297,7 +234,7 @@ contract Staking is IStaking, ReentrancyGuard {
         ) external nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
-        if(users[user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
+        if((src == _don || src == _sci) && users[user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
 
         if (src == _don) {
             //check if amount is lower than deposited DON tokens 
@@ -323,7 +260,7 @@ contract Staking is IStaking, ReentrancyGuard {
             if(users[user].stakedSci < amount) revert InsufficientBalance(users[user].stakedSci, amount);
 
             //return SCI tokens
-            sciToken.transfer(user, amount);
+            IERC20(_sci).safeTransfer(user, amount);
 
             //deduct amount from total staked
             totStaked -= amount;
@@ -332,66 +269,31 @@ contract Staking is IStaking, ReentrancyGuard {
             users[user].stakedSci -= amount;
 
             //recalculates the votes based on the remaining deposited amount
-            uint256 votes = calcVotes(users[user].stakedSci);
+            uint256 votes = _calcVotes(users[user].stakedSci);
 
             //add new amount of votes as rights
             users[user].votingRights = votes;
 
             emit Freed(_sci, user, amount, votes);
 
+        } else if (src == _po) {
+            //check if amount is lower than deposited PO tokens
+            if(users[user].stakedPo < amount) revert InsufficientBalance(users[user].stakedPo, amount);
+
+            //Retrieve PO token from staking contract 
+            poToken.pull(user, amount);
+
+            //update staked PO balance
+            users[user].stakedPo -= amount; 
+
+            emit Freed(_po, user, amount, 0);  
+
         } else {
             revert WrongToken();
         }
 
         //make a new snapshot
-        snapshot(user);
-    }
-
-    /**
-     * @dev lets users stake their PO NFTs
-     * @param user the user that wants to stake PO tokens
-     */
-    function stakePo(
-        address user, 
-        uint256 amount,
-        uint256[] memory ids
-    ) external nonReentrant {
-        for (uint256 i = 0; i < amount; i++) {
-            if (
-                poToken.balanceOfBatch(turnUserIntoArray(user, ids.length), ids)[i] < 1
-                && users[user].stakedPo < amount
-            ) revert InsufficientBalance(users[user].stakedPo, amount);
-        }
-        //Retrieve PO token from user wallet 
-        poToken.push(
-            user,  
-            turnAmountIntoArray(amount), 
-            ids
-        );
-
-        //update staked PO balance
-        users[user].stakedPo += amount;
-        
-        //emit locked event
-        emit Locked(_po, user, amount, 0);
-    }
-
-    function unstakePo(
-        address user, 
-        uint256 amount,
-        uint256[] memory ids
-    ) external nonReentrant {
-
-        //Retrieve PO token from user wallet 
-        poToken.pull(
-            user,  
-            turnAmountIntoArray(amount), 
-            ids
-        );
-        //update staked PO balance
-        users[user].stakedPo -= amount; 
-
-        emit Freed(_po, user, amount, 0);  
+        _snapshot(user);
     }
 
     /**
@@ -408,5 +310,99 @@ contract Staking is IStaking, ReentrancyGuard {
         }
         emit VoteLockTimeUpdated(user, voteLockEnd);
         return true;
+    }
+
+    /**
+     * @dev returns the user rights from the latest taken snapshot
+     * @param user the user address     
+     */
+    function getLatestUserRights(
+        address user  
+    ) external view returns (uint256) {
+        uint256 latestSnapshot = users[user].amtSnapshots;
+        return getUserRights(user, latestSnapshot, block.number);
+    }
+
+    /**
+     * @dev returns the total amount of staked SCI and DON tokens
+     */
+    function getTotalStaked() external view returns (uint256) {
+        return totStaked;
+    }
+
+    ///*** PUBLIC FUNCTION ***///
+
+    /**
+     * @dev Return the voting rights of a user at a certain snapshot
+     * @param user the user address 
+     * @param snapshotIndex the index of the snapshots the user has
+     * @param blockNum the highest block.number at which the user rights will be retrieved
+     */
+    function getUserRights(
+        address user, 
+        uint256 snapshotIndex, 
+        uint256 blockNum
+        ) public view returns (uint256) {
+        uint256 index = users[user].amtSnapshots;
+        if (snapshotIndex > index) revert IncorrectSnapshotIndex();
+        Snapshot memory snap = users[user].snapshots[snapshotIndex];
+        if (snap.atBlock > blockNum) revert IncorrectBlockNumber();
+        return snap.rights;
+    }
+
+    ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev a snaphshot of the current voting rights of a given user
+     * @param user the address that is being snapshotted
+     */
+    function _snapshot(address user) internal {
+        uint256 index = users[user].amtSnapshots;
+        if (index > 0 && users[user].snapshots[index].atBlock == block.number) {
+            users[user].snapshots[index].rights = users[user].votingRights;
+        } else {
+            users[user].amtSnapshots = index += 1;
+            users[user].snapshots[index] = Snapshot(block.number, users[user].votingRights);
+        }
+    }
+
+    /**
+     * @dev calculate the votes for users that have donated e.g. amount * 12/10  
+     * @param amount of deposited DON tokens that will be multiplied with n / d
+     */
+    function _calcVotes(uint256 amount) internal view returns (uint256 votingPower) {
+        return votingPower = amount * numerator / denominator;
+    }
+
+    /**
+    *@dev   Using this function, a given amount will be turned into an array.
+    *       This array will be used in ERC1155's batch mint function. 
+    *@param amount is the amount provided that will be turned into an array.
+    */
+    function _turnAmountIntoArray(uint256 amount) internal pure returns (uint256[] memory tokenAmounts) {
+        tokenAmounts = new uint[](amount);
+        for (uint256 i = 0; i < amount;) {
+            tokenAmounts[i] = i + 1;
+            unchecked {
+                i++;
+            }
+        }
+    }
+
+    /**
+    * @dev   A given amount will be turned into an array.
+    *       This array will be used in ERC1155's batch mint function.
+    * @param balance is an array containing the token ids of the user
+    * @param amount is the amount provided that will be turned into an array.
+    */
+    function _turnTokenIdsIntoArray(uint256[] memory balance, uint256 amount) internal pure returns (uint256[] memory tokenIdArray) {
+        tokenIdArray = new uint[](_turnAmountIntoArray(amount).length);
+        for (uint256 i = 0; i < _turnAmountIntoArray(amount).length;) { 
+            uint256 tokenId = balance[i];
+            tokenIdArray[i] = tokenId;
+            unchecked {
+                i++;
+            }  
+        }
     }
 }

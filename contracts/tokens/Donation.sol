@@ -31,8 +31,13 @@ contract Donation is IDonation, ReentrancyGuard {
     mapping(address => uint256) public wards;
     mapping(address => uint256) public stake;
 
-    modifier gov() {
+    modifier dao() {
         if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyStake() {
+        if(msg.sender != _stakingContract) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -105,24 +110,24 @@ contract Donation is IDonation, ReentrancyGuard {
      * @dev sets the staking contract address
      * @param stakingContract_ the address of the staking contract
      */
-    function setStakingContract(address stakingContract_) external gov {
+    function setStakingContract(address stakingContract_) external dao {
         _stakingContract = stakingContract_;
     }
 
     /**
-     * @dev adds a gov
-     * @param _user the user that becomes a gov
+     * @dev adds a dao
+     * @param _user the user that becomes a dao
      */
-    function addGov(address _user) external gov {
+    function addWard(address _user) external dao {
         wards[_user] = 1;
         emit Rely(_user);
     }
 
     /**
-     * @dev removes a gov
-     * @param _user the user that will be removed as a gov.
+     * @dev removes a dao
+     * @param _user the user that will be removed as a dao.
      */
-    function removeGov(address _user) external gov {
+    function removeWard(address _user) external dao {
         if(wards[_user] != 1) {
             revert Unauthorized(_user);
         }
@@ -133,14 +138,14 @@ contract Donation is IDonation, ReentrancyGuard {
     /**
      * @dev sets the ratio of the ETH to DON token conversion 
      */
-    function setRatioEth(uint256 _n, uint256 _d) external gov {
+    function setRatioEth(uint256 _n, uint256 _d) external dao {
         _ratioEth = 1000 * _n / _d;
     }
 
     /**
      * @dev sets the ratio of the USDC to DON token conversion 
      */
-    function setRatioUsdc(uint256 _n, uint256 _d) external gov {
+    function setRatioUsdc(uint256 _n, uint256 _d) external dao {
         _ratioUsdc = 10 * _n / _d;
     }
 
@@ -148,7 +153,7 @@ contract Donation is IDonation, ReentrancyGuard {
      * @dev sets the Threshold to donate usdc or eth
      * @param _amount the least amount of tokens that needs be donated  
      */
-    function setDonationThreshold(uint256 _amount) external gov {
+    function setDonationThreshold(uint256 _amount) external dao {
         _donationThreshold = _amount;
     }
 
@@ -207,9 +212,9 @@ contract Donation is IDonation, ReentrancyGuard {
     function push(
         address _user,
         uint256 _amount
-    ) external nonReentrant {
+    ) external onlyStake nonReentrant {
 
-        //transfer from user to governance contract
+        //transfer from user to daoernance contract
         _transfer(_user, _stakingContract, _amount);
 
         //update staked amount
@@ -220,14 +225,14 @@ contract Donation is IDonation, ReentrancyGuard {
     }
     
     /**
-     * @dev transfers tokens from gov contract to msg.sender
+     * @dev transfers tokens from dao contract to msg.sender
      * @param _user the user that wants to pull their DON tokens
      * @param _amount the amount of tokens that need to be pulled
      */
     function pull(
         address _user,
         uint256 _amount
-    ) external nonReentrant {
+    ) external onlyStake nonReentrant {
         if (stake[_user] < _amount) revert InsufficientStake();
         
         //transfer from staking contract to holder

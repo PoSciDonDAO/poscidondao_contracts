@@ -8,13 +8,13 @@ import "../../lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract Participation {
     using Counters for Counters.Counter;
+    Counters.Counter public tokenIdCounter;
 
     error LengthMismatch();
-    error InsufficientBalance();
+    error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
     error IncorrectAddress(address _chosenAddress);
     error NotGovernanceContract(address _govAddress);
     error Unauthorized(address user);
-
 
     address public daoAddress;
     address public govRes;
@@ -24,68 +24,74 @@ contract Participation {
     bool internal _frozen = false;
     string private _uri;
     address private _stakingContract;
-
-    Counters.Counter public tokenIdCounter;
-
-    // NftLike public immutable govNft;
-    // NftLike public impactNft;
-    // Mapping from token ID to account balances
+   
     mapping(uint256 => mapping(address => uint256)) private _balances;
+    mapping(address => Ids) private _tokenBalances;
+    mapping(address _stakingContract => mapping(address => Ids)) private _stakedBalance;
     mapping(address => uint8) public wards;
 
-    ///*** MODIFIER ***///
     modifier dao() {
         if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
         _;
     }
 
     modifier gov() {
-        require(msg.sender == govRes || msg.sender == govOps, "Not a gov contract");
+        if(msg.sender != govRes && msg.sender != govOps) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyStake() {
+        if(msg.sender != _stakingContract) revert Unauthorized(msg.sender);
         _;
     }
     
-    /*** EVENTS ***/
+    struct Ids {
+        uint256[] ids;
+    }
+
     event RelyOn(address indexed user);
     event Denied(address indexed user);
+    event Push(address indexed user, uint256 amount);
+    event Pull(address indexed user, uint256 amount);
     event MintedTokenInfo(address receiver, uint256 tokenId);
-    
-    /**
-     * @dev Equivalent to multiple {TransferSingle} events, where `operator`, `from` and `to` are the same for all
-     * transfers.
-     */
-    event TransferBatch(
-        address indexed operator,
-        address indexed from,
-        address indexed to,
-        uint256[] ids,
-        uint256[] values
-    );
-
+    event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values);
     event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value);
 
     constructor(
         string memory baseURI_,
         address daoAddress_
-        //address impactNft_
     ) {
         daoAddress = daoAddress_;
-        // impactNft = NftLike(impactNft_);
         wards[daoAddress_] = 1;
         setURI(baseURI_);
     }
 
     /**
-     * @dev sets the address of the governance smart contract
+     * @dev sets the staking address
      */
-    function setGovRes(address _newGovRes) external dao {
-        govRes = _newGovRes;
+    function setStakingContract(address _newStakingContract) external dao {
+        _stakingContract = _newStakingContract;
+    }
+
+    /**
+     * @dev returns the staking contract
+     */
+    function stakingContract() external view returns (address) {
+        return _stakingContract;
     }
 
     /**
      * @dev sets the address of the governance smart contract
      */
-    function setGovOps(address _newGovOps) external dao {
-        govOps = _newGovOps;
+    function setGovRes(address newGovRes) external dao {
+        govRes = newGovRes;
+    }
+
+    /**
+     * @dev sets the address of the governance smart contract
+     */
+    function setGovOps(address newGovOps) external dao {
+        govOps = newGovOps;
     }
 
     /**
@@ -95,23 +101,11 @@ contract Participation {
         _frozen = true;
     }
 
-
-    /**
-     * @dev sets the base URI
-     * @param _baseURI the ipfs base URI
-     */
-    function setURI(string memory _baseURI) public dao {
-        require(!_frozen);
-        _setURI(_baseURI);
-    }
-
     /**
      * @dev adds a gov
      * @param user the user that is eligible to become a gov
      */
-    function addWard(
-        address user
-        ) external dao {
+    function addWard(address user) external dao {
         wards[user] = 1;
         emit RelyOn(user);
     }
@@ -120,14 +114,67 @@ contract Participation {
      * @dev removes a gov
      * @param user the user that will be removed as a gov
      */
-    function removeWard(
-        address user
-        ) external dao {
+    function removeWard(address user) external dao {
         if(wards[user] != 1) {
             revert Unauthorized(user);
         }
         delete wards[user];
         emit Denied(user);
+    }
+
+    /**
+     * @dev pushes participation tokens from user wallet to staking contract
+     */
+    function push(
+        address user,
+        uint256 amount
+    ) external onlyStake {
+        uint256[] memory balance = getHeldBalance(user);
+        uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
+        _safeBatchTransferFrom(
+            user, 
+            _stakingContract, 
+            ids, 
+            _turnAmountIntoArray(amount),
+            '');
+        
+        for(uint256 i = 0; i < ids.length; i++) {
+            _stakedBalance[_stakingContract][user].ids.push(ids[i]);
+        }
+    }
+
+    /**
+     * @dev pulls participation tokens from staking contract to user wallet
+     */
+    function pull(
+        address user,
+        uint256 amount
+    ) external onlyStake {
+        uint256[] memory balance = getStakedBalance(user);
+        uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
+        _safeBatchTransferFrom(
+            _stakingContract,
+            user, 
+            ids, 
+            _turnAmountIntoArray(amount),
+            '');
+            
+            for(uint256 i = 0; i < ids.length; i++) {
+            _stakedBalance[_stakingContract][user].ids.pop();
+        }
+    }
+
+
+    /**
+     * @dev mints a PO NFT
+     * @param user the address of the user that participated in governance
+     */
+    function mint(address user) external gov {
+        tokenIdCounter.increment();
+        uint256 tokenId = tokenIdCounter.current(); 
+        _mint(user, tokenId, 1, "");
+        _tokenBalances[user].ids.push(tokenId);
+        emit MintedTokenInfo(user, tokenId);
     }
 
     /**
@@ -138,82 +185,63 @@ contract Participation {
     function uri(uint256 tokenId) public view returns (string memory) {
         return string(abi.encodePacked(_uri, "/", Strings.toString(tokenId)));
     }
-
-
-    // function setNftAddress(address _newImpactNft) public dao {
-    //     impactNft = NftLike(_newImpactNft); 
-    // }
-
+    
     /**
-     * @dev mints a PO NFT
-     * @param participant the address of the user that participated in governance
+     * @dev sets the base URI
+     * @param baseURI the ipfs base URI
      */
-    function mint(address participant) external gov {
-        tokenIdCounter.increment();
-        uint256 tokenId = tokenIdCounter.current(); 
-        _mint(participant, tokenId, 1, "");
-        emit MintedTokenInfo(participant, tokenId);
+    function setURI(string memory baseURI) public dao {
+        require(!_frozen);
+        _setURI(baseURI);
     }
 
     /**
-     * @dev See {IERC1155-balanceOf}.
-     *
-     * Requirements:
-     *
-     * - `account` cannot be the zero address.
+     * @dev returns an array of token ids held by the user
+     * @param user the user address of interest
      */
-    function balanceOf(address account, uint256 id) public view virtual returns (uint256) {
-        require(account != address(0), "ERC1155: address zero is not a valid owner");
-        return _balances[id][account];
+    function getHeldBalance(address user) public view returns (uint256[] memory) {
+        return _tokenBalances[user].ids;
     }
 
     /**
-     * @dev See {IERC1155-balanceOfBatch}.
-     *
-     * Requirements:
-     *
-     * - `accounts` and `ids` must have the same length.
+     * @dev returns an array of token ids held by the staking smart contract
+     * @param user the user address of interest
      */
-    function balanceOfBatch(address[] memory accounts, uint256[] memory ids)
-        public
-        view
-        virtual
-        returns (uint256[] memory)
-    {
-        if(ids.length != accounts.length) revert LengthMismatch();
+    function getStakedBalance(address user) public view returns (uint256[] memory) {
+        return _stakedBalance[_stakingContract][user].ids;
+    }
 
-        uint256[] memory batchBalances = new uint256[](accounts.length);
 
-        for (uint256 i = 0; i < accounts.length; ++i) {
-            batchBalances[i] = balanceOf(accounts[i], ids[i]);
+    /**
+    *@dev Using this function, a given amount will be turned into an array.
+    *     This array will be used in ERC1155's batch mint function. 
+    *@param amount is the amount provided that will be turned into an array.
+    */
+    function _turnAmountIntoArray(uint256 amount) internal pure returns (uint256[] memory tokenAmounts) {
+        tokenAmounts = new uint[](amount);
+        for (uint256 i = 0; i < amount;) {
+            tokenAmounts[i] = i + 1;
+            unchecked {
+                i++;
+            }
         }
-
-        return batchBalances;
     }
 
     /**
-     * @dev pushes participation tokens from user wallet to staking contract
-     */
-    function push(
-        address user,
-        uint256[] memory ids,
-        uint256[] memory amounts
-    ) public virtual {
-        if(user != msg.sender) revert Unauthorized(user);
-
-        _safeBatchTransferFrom(user, _stakingContract, ids, amounts, '');
-    }
-
-    /**
-     * @dev pulls participation tokens from staking contract to user wallet
-     */
-    function pull(
-        address user,
-        uint256[] memory ids,
-        uint256[] memory amounts
-    ) public virtual {
-        if(user != msg.sender) revert Unauthorized(user);
-        _safeBatchTransferFrom(_stakingContract, user, ids, amounts, '');
+    * @dev A given amount will be turned into an array.
+    *      This array will be used in ERC1155's batch mint function.
+    * @param balance is an array containing the token ids of the user
+    * @param amount is the amount provided that will be turned into an array.
+    */
+    function _turnTokenIdsIntoArray(uint256[] memory balance, uint256 amount) internal pure returns (uint256[] memory tokenIdArray) {
+        tokenIdArray = new uint[](_turnAmountIntoArray(amount).length);
+        for (uint256 i = 0; i < _turnAmountIntoArray(amount).length;) { 
+            uint256 tokenId = balance[i];
+            tokenIdArray[i] = tokenId;
+            unchecked {
+                i++;
+            }  
+        }
     }
 
     /**
@@ -245,7 +273,7 @@ contract Participation {
             uint256 amount = amounts[i];
 
             uint256 fromBalance = _balances[id][from];
-            if(fromBalance <= amount) revert InsufficientBalance();
+            if(fromBalance < amount) revert InsufficientBalance(fromBalance, amount);
             unchecked {
                 _balances[id][from] = fromBalance - amount;
             }
@@ -305,7 +333,7 @@ contract Participation {
             uint256 amount = amounts[i];
 
             uint256 fromBalance = _balances[id][from];
-            if(fromBalance <= amount) revert InsufficientBalance();
+            if(fromBalance < amount) revert InsufficientBalance(fromBalance, amount);
             unchecked {
                 _balances[id][from] = fromBalance - amount;
             }

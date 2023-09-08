@@ -39,17 +39,25 @@ contract ParticipationTest is Test {
         usdc.transfer(dao, 1000e18);
 
         vm.startPrank(dao);
+            po = new Participation(
+                "", 
+                dao
+            );
+
+            sci = new Trading(
+                treasuryWallet
+            );
 
             don = new Donation(
                 address(usdc),
                 donationWallet
             );
 
-            po = new Participation(
-                "", 
+            staking = new Staking(
+                address(don),
                 dao
             );
-
+                
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
@@ -57,29 +65,20 @@ contract ParticipationTest is Test {
                 address(po)
             );
 
-            staking = new Staking(
-                address(po),
-                address(sci),
-                address(don),
-                dao
-            );
+            staking.setPoToken(address(po));
+            staking.setSciToken(address(sci));
             staking.setGovRes(address(govRes));
-
             don.setRatioEth(18, 10);
             don.setRatioUsdc(10, 10);
             don.setDonationThreshold(1e15);
             don.setStakingContract(address(staking));
-            
+            po.setStakingContract(address(staking));
             govRes.govParams("proposalLifeTime", 8 weeks);
             govRes.govParams("quorum", 1000e18);
             govRes.govParams("voteLockTime", 2 weeks);
+            govRes.setPoPhase(1);
 
-            deal(address(usdc), addr1, 10000e18);
-            deal(address(usdc), addr2, 10000e18);
-            deal(address(usdc), addr3, 10000e18);
-            deal(address(usdc), treasuryWallet, 10000000e18);
-            deal(treasuryWallet, 100000 ether);
-
+            po.setGovRes(address(govRes));
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -89,19 +88,109 @@ contract ParticipationTest is Test {
         vm.startPrank(addr2);
             usdc.approve(address(don), 1000000000e18);
         vm.stopPrank();
+
+        deal(address(usdc), addr1, 10000e18);
+        deal(address(usdc), addr2, 10000e18);
+        deal(address(usdc), addr3, 10000e18);
+        deal(address(usdc), treasuryWallet, 10000000e18);
+        deal(treasuryWallet, 100000 ether);
+
+
+        deal(address(sci), addr1, 100000000e18);
+        deal(address(don), addr1, 100000000e18);
+        deal(addr1, 10000 ether);
+
+
+        deal(address(sci), addr2, 100000000e18);
+        deal(address(don), addr2, 100000000e18);
+        deal(addr2, 10000 ether);
+
+        vm.startPrank(addr1);
+            sci.approve(address(govRes), 10000e18);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+            usdc.approve(address(govRes), 100000000000000e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
+            sci.approve(address(govRes), 10000e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+            sci.approve(address(govRes), 10000e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
+            sci.approve(address(staking), 10000e18);
+        vm.stopPrank();
     }
 
-    function test_receiveParticipationTokens() public {
-        vm.startPrank(addr1);
-            don.donateEth{value: 1 ether}(addr1);
-            staking.lock(address(don), addr1, 1000e18);
-        vm.stopPrank();        
+    function test_ReceiveParticipationTokens() public {
         vm.startPrank(dao);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr1);
-
+            don.donateEth{value: 1 ether}(addr1);
+            staking.lock(address(don), addr1, 1000e18);
+            uint256 id = govRes.getProposalIndex();
+            govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
+            uint256[] memory balance = po.getHeldBalance(addr1);
+            assertEq(balance[0], 1);   
         vm.stopPrank();
+        vm.startPrank(addr2);
+            don.donateEth{value: 1 ether}(addr2);
+            staking.lock(address(don), addr2, 1000e18);
+            uint256 id2 = govRes.getProposalIndex();
+            govRes.vote(id2, addr2, GovernorResearch.Vote.Yes, 1000e18);
+            uint256[] memory balance2 = po.getHeldBalance(addr2);
+            assertEq(balance2[0], 2);   
+        vm.stopPrank();
+    }
 
+    function test_StakeParticipationTokens() public {
+        vm.startPrank(dao);
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
+        vm.stopPrank();
+        vm.startPrank(addr1);
+            don.donateEth{value: 1 ether}(addr1);
+            staking.lock(address(don), addr1, 1000e18);
+            uint256 id = govRes.getProposalIndex();
+            govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
+            uint256[] memory balance = po.getHeldBalance(addr1);
+            staking.lock(address(po), addr1, balance.length);
+            (
+            uint256 stakedPo,
+            ,,,,
+            ) = staking.users(addr1);
+            assertEq(stakedPo, 1);
+            assertEq(po.getStakedBalance(addr1).length, 1);
+        vm.stopPrank();
+    }
+
+    function test_UnstakeParticipationTokens() public {
+        vm.startPrank(dao);
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
+        vm.stopPrank();
+        vm.startPrank(addr1);
+            don.donateEth{value: 1 ether}(addr1);
+            staking.lock(address(don), addr1, 1000e18);
+            uint256 id = govRes.getProposalIndex();
+            govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
+            uint256[] memory balanceHeld = po.getHeldBalance(addr1);
+            staking.lock(address(po), addr1, balanceHeld.length);
+            (
+            uint256 stakedPo,
+            ,,,,
+            ) = staking.users(addr1);
+            assertEq(stakedPo, 1);
+            uint256[] memory balanceStaked = po.getStakedBalance(addr1);
+            assertEq(balanceStaked.length, 1);
+            staking.free(address(po), addr1, balanceStaked.length);
+            uint256[] memory balanceStaked2 = po.getStakedBalance(addr1);
+            assertEq(balanceStaked2.length, 0);
+            uint256[] memory balanceHeld2 = po.getHeldBalance(addr1);
+            assertEq(balanceHeld2.length, 1);
+        vm.stopPrank();
     }
 }

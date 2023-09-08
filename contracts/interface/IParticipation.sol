@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 interface IParticipation {
-    function push(address user, uint256[] memory ids, uint256[] memory amounts) external;
-    function pull(address user, uint256[] memory ids, uint256[] memory amounts) external;
-    function balanceOfBatch(address[] memory accounts, uint256[] memory ids) external returns (uint256[] memory);
+    function getHeldBalance(address participant) external view returns (uint256[] memory);
+    function push(address user, uint256 amount) external;
+    function pull(address user, uint256 amount) external;
     function mint(address participant) external;
 }

@@ -38,8 +38,6 @@ contract DonationTest is Test {
                 donationWallet
             );
             staking = new Staking(
-                po,
-                sci,
                 address(don),
                 dao
             );
@@ -76,12 +74,12 @@ contract DonationTest is Test {
 
     function test_addAndRemoveGov() public {
         vm.startPrank(dao);
-            don.addGov(addr4);
+            don.addWard(addr4);
         vm.stopPrank();
         assertEq(don.wards(addr4), 1);
 
         vm.startPrank(dao);
-            don.removeGov(addr4);
+            don.removeWard(addr4);
         vm.stopPrank();
         assertEq(don.wards(addr4), 0);
     }
@@ -151,43 +149,6 @@ contract DonationTest is Test {
         vm.expectEmit(true, true, true, true);
         emit DonationCompleted(addr2, 1000e18, 1000e18);
         don.donateUsdc(addr2, 1000e18);
-        vm.stopPrank();
-    }
-
-    function test_PushToStaking() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            don.push(addr2, 90e18);
-            assertEq(don.balanceOf(address(staking)), 90e18);
-            assertEq(don.stake(addr2), 90e18);
-        vm.stopPrank();
-    }
-
-    function test_PullFromStaking() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            //lock
-            don.push(addr2, 100e18);
-            assertEq(don.balanceOf(address(staking)), don.stake(addr2));
-            assertEq(don.balanceOf(addr2), 0);
-            //free
-            don.pull(addr2, 100e18);
-            assertEq(don.balanceOf(address(staking)), 0);
-            assertEq(don.balanceOf(addr2), 100e18);
-        vm.stopPrank();
-    }
-
-    function test_RevertPull_If_InsufficientDONStaked() public {
-        vm.startPrank(addr2);
-            don.donateUsdc(addr2, 100e18);
-            //lock
-            don.push(addr2, 100e18);
-        vm.stopPrank();
-        vm.startPrank(addr2);
-            //free
-            bytes4 selector = bytes4(keccak256("InsufficientStake()"));
-            vm.expectRevert(selector);
-            don.pull(addr2, 1000e18);
         vm.stopPrank();
     }
 }

@@ -57,12 +57,13 @@ contract StakingTest is Test {
                 donationWallet
             );
 
-            staking = new Staking(
-                address(po),
-                address(sci), 
+            staking = new Staking( 
                 address(don),
                 dao
             );
+
+            staking.setPoToken(address(po));
+            staking.setSciToken(address(sci));
 
             don.setStakingContract(address(staking));
         vm.stopPrank();
@@ -99,10 +100,10 @@ contract StakingTest is Test {
 
     function test_AddingAndRemovingGov() public {
         vm.startPrank(dao);
-            staking.addGov(addr1);
+            staking.addWard(addr1);
             assertEq(staking.wards(addr1), 1);
 
-            staking.removeGov(addr1);
+            staking.removeWard(addr1);
             assertEq(staking.wards(addr1), 0);
         vm.stopPrank();
     }

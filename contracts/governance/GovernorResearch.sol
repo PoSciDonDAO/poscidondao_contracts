@@ -127,65 +127,10 @@ contract GovernorResearch {
     }
 
     /**
-     * @dev returns if user has voted for a given proposal
-     * @param _id the proposal id
-     */
-    function getVoted(uint256 _id) external view returns (uint8) {
-        return voted[_id][msg.sender];
-    }
-
-    /**
-     * @dev returns the proposal index 
-     */
-    function getProposalIndex() external view returns (uint256) {
-        return _proposalIndex;
-    }
-
-    /**
-     * @dev returns proposal information
-     * @param _id the index of the proposal of interest
-     */
-    function getProposalInfo(uint256 _id) external view returns (
-        uint256,
-        uint256,
-        ProposalStatus,
-        uint256,
-        uint256,
-        uint256
-    ) {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        return (
-            proposals[_id].startBlockNum,
-            proposals[_id].endTimeStamp,
-            proposals[_id].status,
-            proposals[_id].votesFor,
-            proposals[_id].votesAgainst,
-            proposals[_id].totalVotes
-        );
-    }
-
-    function getProposalProjectInfo(uint256 _id) external view returns (
-        string memory,
-        address,
-        uint256,
-        uint256
-    ) {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        return (
-            proposals[_id].details.info,
-            proposals[_id].details.researchWallet,
-            proposals[_id].details.amountUsdc,
-            proposals[_id].details.amountEth
-        );
-    }
-
-    /**
      * @dev adds a gov
      * @param _user the user that is eligible to become a gov
      */
-    function addGov(
-        address _user
-        ) external dao {
+    function addWard(address _user) external dao {
         wards[_user] = 1;
         emit RelyOn(_user);
     }
@@ -194,9 +139,7 @@ contract GovernorResearch {
      * @dev removes a gov
      * @param _user the user that will be removed as a gov
      */
-    function removeGov(
-        address _user
-        ) external dao {
+    function removeWard(address _user) external dao {
         if(wards[_user] != 1) {
             revert Unauthorized(msg.sender);
         }
@@ -371,5 +314,58 @@ contract GovernorResearch {
         if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
         proposals[_id].status = ProposalStatus.Cancelled;
         emit Cancelled(_id);
+    }
+    
+    /**
+     * @dev returns if user has voted for a given proposal
+     * @param _id the proposal id
+     */
+    function getVoted(uint256 _id) external view returns (uint8) {
+        return voted[_id][msg.sender];
+    }
+
+    /**
+     * @dev returns the proposal index 
+     */
+    function getProposalIndex() external view returns (uint256) {
+        return _proposalIndex;
+    }
+
+    /**
+     * @dev returns proposal information
+     * @param _id the index of the proposal of interest
+     */
+    function getProposalInfo(uint256 _id) external view returns (
+        uint256,
+        uint256,
+        ProposalStatus,
+        uint256,
+        uint256,
+        uint256
+    ) {
+        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        return (
+            proposals[_id].startBlockNum,
+            proposals[_id].endTimeStamp,
+            proposals[_id].status,
+            proposals[_id].votesFor,
+            proposals[_id].votesAgainst,
+            proposals[_id].totalVotes
+        );
+    }
+
+    function getProposalProjectInfo(uint256 _id) external view returns (
+        string memory,
+        address,
+        uint256,
+        uint256
+    ) {
+        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        return (
+            proposals[_id].details.info,
+            proposals[_id].details.researchWallet,
+            proposals[_id].details.amountUsdc,
+            proposals[_id].details.amountEth
+        );
     }
 }

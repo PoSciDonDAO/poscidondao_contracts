@@ -6,7 +6,6 @@ import "contracts/governance/GovernorResearch.sol";
 import "contracts/tokens/Participation.sol";
 import "contracts/tokens/Donation.sol";
 import "contracts/tokens/Trading.sol";
-import "contracts/tokens/ImpactNft.sol";
 import "contracts/test/Token.sol";
 import "contracts/staking/Staking.sol";
 
@@ -16,7 +15,6 @@ contract GovernorResearchTest is Test {
     Participation public po;
     Trading public sci;
     Donation public don;
-    ImpactNft public nft;
     Token public usdc;
     Staking public staking;
 
@@ -61,12 +59,13 @@ contract GovernorResearchTest is Test {
             );
 
             staking = new Staking(
-                address(po),
-                address(sci),
                 address(don),
                 dao
             );
-                
+
+            staking.setPoToken(address(po));
+            staking.setSciToken(address(sci));
+
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
@@ -133,10 +132,10 @@ contract GovernorResearchTest is Test {
 
     function test_AddingAndRemovingGov() public {
         vm.startPrank(dao);
-            govRes.addGov(addr1);
+            govRes.addWard(addr1);
             assertEq(govRes.wards(addr1), 1);
 
-            govRes.removeGov(addr1);
+            govRes.removeWard(addr1);
             assertEq(govRes.wards(addr1), 0);
         vm.stopPrank();
     }
