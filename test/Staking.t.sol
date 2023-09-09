@@ -45,7 +45,6 @@ contract StakingTest is Test {
             po = new Participation(
                 "baseURI",
                 dao
-                // impactNftAddress
             );
 
             sci = new Trading(
@@ -54,7 +53,8 @@ contract StakingTest is Test {
 
             don = new Donation(
                 address(usdc),
-                donationWallet
+                donationWallet,
+                treasuryWallet
             );
 
             staking = new Staking( 

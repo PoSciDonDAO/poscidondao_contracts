@@ -79,11 +79,11 @@ contract GovernorResearch {
     /*** EVENTS ***/
     event RelyOn(address indexed _user);
     event Denied(address indexed _user);
-    event Proposed(uint256 indexed _id, ProjectInfo _details);
-    event Voted(uint256 indexed _id, Vote indexed _vote, uint256 _amount);
-    event Scheduled(uint256 indexed _id);
-    event Executed(uint256 indexed _id);
-    event Cancelled(uint256 indexed _id);
+    event Proposed(uint256 indexed id, ProjectInfo _details);
+    event Voted(uint256 indexed id, Vote indexed _vote, uint256 _amount);
+    event Scheduled(uint256 indexed id);
+    event Executed(uint256 indexed id);
+    event Cancelled(uint256 indexed id);
 
 
     constructor(
@@ -208,12 +208,12 @@ contract GovernorResearch {
     /**
      * @dev vote for an of option of a given proposal 
      *      using the rights from the most recent snapshot
-     * @param _id the index of the proposal
+     * @param id the index of the proposal
      * @param _user the address of the voting users
      * @param _votes the amount of votes given to the chosen research project
      */
     function vote(
-        uint256 _id, 
+        uint256 id, 
         address _user,  
         Vote _vote, 
         uint256 _votes) external {
@@ -223,13 +223,13 @@ contract GovernorResearch {
         IStaking staking = IStaking(stakingAddress);
         
         //check if proposal exists
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
         
         //check if proposal is still active
-        if(proposals[_id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[_id].status); 
+        if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status); 
         
         //check if proposal life time has not passed
-        if(block.timestamp > proposals[_id].endTimeStamp) revert ProposalLifeTimePassed();
+        if(block.timestamp > proposals[id].endTimeStamp) revert ProposalLifeTimePassed();
 
         //get latest voting rights
         uint256 _votingRights = staking.getLatestUserRights(_user);
@@ -238,21 +238,21 @@ contract GovernorResearch {
         if(_votes > _votingRights) revert InsufficientVotingRights(_votingRights, _votes);
 
         //check if user already voted for this proposal
-        if(voted[_id][_user] == 1) revert VoteLock();
+        if(voted[id][_user] == 1) revert VoteLock();
         
         //vote for, against or abstain
         if(_vote == Vote.Yes) {
-            proposals[_id].votesFor += _votes;
+            proposals[id].votesFor += _votes;
 
         } else if(_vote == Vote.No) {
-            proposals[_id].votesAgainst += _votes;
+            proposals[id].votesAgainst += _votes;
         }
 
         //add to the total votes
-        proposals[_id].totalVotes += _votes;
+        proposals[id].totalVotes += _votes;
 
         //set user as voted for proposal
-        voted[_id][_user] = 1;
+        voted[id][_user] = 1;
 
         //mint a participation token if live
         if (poLive == 1) {
@@ -261,67 +261,61 @@ contract GovernorResearch {
         staking.voted(_user, block.timestamp + voteLockTime);
 
         //emit Voted events
-        emit Voted(_id, _vote, _votes);
+        emit Voted(id, _vote, _votes);
     }
 
     /**
      * @dev finalizes the voting phase
-     * @param _id the index of the proposal of interest
+     * @param id the index of the proposal of interest
      */
-    function finalizeVoting(
-        uint256 _id
-        ) external dao {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        if(proposals[_id].totalVotes < quorum) revert QuorumNotReached();
-        if(proposals[_id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[_id].status);
-        proposals[_id].status = ProposalStatus.Scheduled;
-        emit Scheduled(_id);
+    function finalizeVoting(uint256 id) external dao {
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+        if(proposals[id].totalVotes < quorum) revert QuorumNotReached();
+        if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status);
+        proposals[id].status = ProposalStatus.Scheduled;
+        emit Scheduled(id);
     }
 
     /**
      * @dev executes the proposal
-     * @param _id the index of the proposal of interest
+     * @param id the index of the proposal of interest
      */
-    function executeProposal(
-        uint256 _id
-        ) external payable dao {
+    function executeProposal(uint256 id) external payable dao {
 
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
 
-        if(proposals[_id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[_id].status);
+        if(proposals[id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[id].status);
 
-        if(proposals[_id].details.amountUsdc > 0) {
-            IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[_id].details.researchWallet, proposals[_id].details.amountUsdc);
+        if(proposals[id].details.amountUsdc > 0) {
+            IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[id].details.researchWallet, proposals[id].details.amountUsdc);
         
-        } else if(proposals[_id].details.amountEth > 0) {
-            address _researchWallet = proposals[_id].details.researchWallet;
-            (bool sent,) = _researchWallet.call{value: proposals[_id].details.amountEth}("");
+        } else if(proposals[id].details.amountEth > 0) {
+            address _researchWallet = proposals[id].details.researchWallet;
+            (bool sent,) = _researchWallet.call{value: proposals[id].details.amountEth}("");
             require(sent);
         }
         
-        proposals[_id].status = ProposalStatus.Executed;
+        proposals[id].status = ProposalStatus.Executed;
         
-        emit Executed(_id);
+        emit Executed(id);
     }
     
     /**
      * @dev cancels the proposal
-     * @param _id the index of the proposal of interest
+     * @param id the index of the proposal of interest
      */
-    function cancelProposal(
-        uint256 _id
-        ) external dao {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
-        proposals[_id].status = ProposalStatus.Cancelled;
-        emit Cancelled(_id);
+    function cancelProposal(uint256 id) external dao {
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+        proposals[id].status = ProposalStatus.Cancelled;
+        emit Cancelled(id);
     }
     
     /**
      * @dev returns if user has voted for a given proposal
-     * @param _id the proposal id
+     * @param id the proposal id
      */
-    function getVoted(uint256 _id) external view returns (uint8) {
-        return voted[_id][msg.sender];
+    function getVoted(uint256 id) external view returns (uint8) {
+        return voted[id][msg.sender];
     }
 
     /**
@@ -333,9 +327,9 @@ contract GovernorResearch {
 
     /**
      * @dev returns proposal information
-     * @param _id the index of the proposal of interest
+     * @param id the index of the proposal of interest
      */
-    function getProposalInfo(uint256 _id) external view returns (
+    function getProposalInfo(uint256 id) external view returns (
         uint256,
         uint256,
         ProposalStatus,
@@ -343,29 +337,29 @@ contract GovernorResearch {
         uint256,
         uint256
     ) {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
         return (
-            proposals[_id].startBlockNum,
-            proposals[_id].endTimeStamp,
-            proposals[_id].status,
-            proposals[_id].votesFor,
-            proposals[_id].votesAgainst,
-            proposals[_id].totalVotes
+            proposals[id].startBlockNum,
+            proposals[id].endTimeStamp,
+            proposals[id].status,
+            proposals[id].votesFor,
+            proposals[id].votesAgainst,
+            proposals[id].totalVotes
         );
     }
 
-    function getProposalProjectInfo(uint256 _id) external view returns (
+    function getProposalProjectInfo(uint256 id) external view returns (
         string memory,
         address,
         uint256,
         uint256
     ) {
-        if(_id > _proposalIndex || _id < 1) revert ProposalInexistent();
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
         return (
-            proposals[_id].details.info,
-            proposals[_id].details.researchWallet,
-            proposals[_id].details.amountUsdc,
-            proposals[_id].details.amountEth
+            proposals[id].details.info,
+            proposals[id].details.researchWallet,
+            proposals[id].details.amountUsdc,
+            proposals[id].details.amountEth
         );
     }
 }

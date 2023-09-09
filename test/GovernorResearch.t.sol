@@ -55,7 +55,8 @@ contract GovernorResearchTest is Test {
 
             don = new Donation(
                 address(usdc),
-                donationWallet
+                donationWallet,
+                treasuryWallet
             );
 
             staking = new Staking(

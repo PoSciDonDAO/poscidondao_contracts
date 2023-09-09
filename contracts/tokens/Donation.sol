@@ -10,6 +10,7 @@ contract Donation is IDonation, ReentrancyGuard {
     
     error AccountBound();
     error IncorrectAddress();
+    error IncorrectPercentage();
     error InsufficientBalance();
     error InsufficientDonation();
     error InsufficientStake();
@@ -22,9 +23,11 @@ contract Donation is IDonation, ReentrancyGuard {
     uint256 private _donationThreshold;
     uint256 private _ratioEth;
     uint256 private _ratioUsdc;
+    uint256 private _donationFraction;
     address private _stakingContract;
 
     address public donationWallet;
+    address public treasuryWallet;
     address public usdc;
 
     mapping(address => uint256) private _balances;
@@ -50,61 +53,21 @@ contract Donation is IDonation, ReentrancyGuard {
 
     constructor(
         address _usdc,
-        address _donationWallet
+        address _donationWallet,
+        address _treasuryWallet
     ) {
         _name = "Donation Token";
         _symbol = "DON";
         _decimals = 18;
+        _donationFraction = 95;
         usdc = _usdc;
         donationWallet = _donationWallet;
+        treasuryWallet = _treasuryWallet;
 
         wards[msg.sender] = 1;
     }
     
-    //external functions
-
-    /**
-     * @dev Returns the name of the token.
-     */
-    function name() external view returns (string memory) {
-        return _name;
-    }
-
-    /**
-     * @dev Returns the symbol of the token, 
-     * usually a shorter version of the name.
-     */
-    function symbol() external view returns (string memory) {
-        return _symbol;
-    }
-
-    /**
-     * @dev returns the decimals of the token
-     */
-    function decimals() external view returns (uint16) {
-        return _decimals;
-    }
-
-    /**
-     * @dev returns the total supply of the token
-     */
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
-    }
-
-    /**
-     * @dev returns the balance of an account
-     */
-    function balanceOf(address _account) external view returns (uint256) {
-        return _balances[_account];
-    }
-
-    /**
-     * @dev returns the staking contract
-     */
-    function stakingContract() external view returns (address) {
-        return _stakingContract;
-    }
+    ///*** EXTERNAL FUNCTIONS ***///
 
     /**
      * @dev sets the staking contract address
@@ -151,10 +114,15 @@ contract Donation is IDonation, ReentrancyGuard {
 
     /**
      * @dev sets the Threshold to donate usdc or eth
-     * @param _amount the least amount of tokens that needs be donated  
+     * @param amount the least amount of tokens that needs be donated  
      */
-    function setDonationThreshold(uint256 _amount) external dao {
-        _donationThreshold = _amount;
+    function setDonationThreshold(uint256 amount) external dao {
+        _donationThreshold = amount;
+    }
+
+    function setDonationFraction(uint256 percentage) external dao {
+        if(percentage < 95) revert IncorrectPercentage();
+        _donationFraction = percentage;
     }
 
     /**
@@ -167,9 +135,13 @@ contract Donation is IDonation, ReentrancyGuard {
         //check if the donation Threshold has been reached
         if (msg.value < _donationThreshold) revert InsufficientDonation();
 
+        uint256 amountDonation = msg.value / 100 * _donationFraction;
+        uint256 amountTreasury = msg.value / 100 * (100 - _donationFraction);
+
         //transfer Eth to donation wallet if successful
-        (bool sent,) = donationWallet.call{value: msg.value}("");
-        require(sent);
+        (bool sentDonation,) = donationWallet.call{value: amountDonation}("");
+        (bool sentTreasury,) = treasuryWallet.call{value: amountTreasury}("");
+        require(sentDonation && sentTreasury);
         
         //determine the amount of DON tokens issued
         uint256 _amount = msg.value * _ratioEth;
@@ -184,24 +156,28 @@ contract Donation is IDonation, ReentrancyGuard {
     /**
      * @dev sends donated USDC to the donation wallet 
      * donor receives DON tokens based on the given ratio.
-     * @param _usdcAmount the amount of donated USDC
-     * @param _user the user that donates the USDC  
+     * @param usdcAmount the amount of donated USDC
+     * @param user the user that donates the USDC  
      */
-    function donateUsdc(address _user, uint256 _usdcAmount) external nonReentrant {
+    function donateUsdc(address user, uint256 usdcAmount) external nonReentrant {
         //check if the donation Threshold has been reached
-        if (_usdcAmount < _donationThreshold) revert InsufficientDonation();
+        if (usdcAmount < _donationThreshold) revert InsufficientDonation();
+
+        uint256 amountDonation = usdcAmount / 100 * _donationFraction;
+        uint256 amountTreasury = usdcAmount / 100 * (100 - _donationFraction);
 
         //pull usdc from wallet to donation wallet
-        IERC20(usdc).safeTransferFrom(_user, donationWallet, _usdcAmount);
+        IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
+        IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
         
         //calculate amount of don tokens 
-        uint256 _amount = _usdcAmount * _ratioUsdc / 10;
+        uint256 _amount = usdcAmount * _ratioUsdc / 10;
 
         //mint don tokens to function caller
-        _mint(_user, _amount);
+        _mint(user, _amount);
 
         //emit event
-        emit DonationCompleted(_user, _usdcAmount, _amount);
+        emit DonationCompleted(user, usdcAmount, _amount);
     }
 
     /**
@@ -271,6 +247,51 @@ contract Donation is IDonation, ReentrancyGuard {
         }
         emit Transfer(address(0), _account, _amount);
     }
+
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory) {
+        return _name;
+    }
+
+    /**
+     * @dev Returns the symbol of the token, 
+     * usually a shorter version of the name.
+     */
+    function symbol() external view returns (string memory) {
+        return _symbol;
+    }
+
+    /**
+     * @dev returns the decimals of the token
+     */
+    function decimals() external view returns (uint16) {
+        return _decimals;
+    }
+
+    /**
+     * @dev returns the total supply of the token
+     */
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    /**
+     * @dev returns the balance of an account
+     */
+    function balanceOf(address _account) external view returns (uint256) {
+        return _balances[_account];
+    }
+
+    /**
+     * @dev returns the staking contract
+     */
+    function stakingContract() external view returns (address) {
+        return _stakingContract;
+    }
+
+    ///*** INTERNAL FUNCTIONS ***///
 
     /**
      * @dev Destroys `amount` tokens from `account`, reducing the

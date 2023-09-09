@@ -19,9 +19,10 @@ contract DonationTest is Test {
     address addr5 = vm.addr(5);
     address dao = vm.addr(6);
     address donationWallet = vm.addr(7);
-    address stakingContract = vm.addr(8);
-    address po = vm.addr(9);
-    address sci = vm.addr(10);
+    address treasuryWallet = vm.addr(8);
+    address stakingContract = vm.addr(9);
+    address po = vm.addr(10);
+    address sci = vm.addr(11);
 
     event DonationCompleted(address indexed user, uint256 donation, uint256 tokenAmount);
     event Transfer(address indexed from, address indexed to, uint256 value);
@@ -35,7 +36,8 @@ contract DonationTest is Test {
         vm.startPrank(dao);
             don = new Donation(
                 address(usdc),
-                donationWallet
+                donationWallet,
+                treasuryWallet
             );
             staking = new Staking(
                 address(don),
@@ -99,7 +101,8 @@ contract DonationTest is Test {
     function test_DonateUsdc() public {
         vm.startPrank(addr2);
         don.donateUsdc(addr2, 1000e18);
-        assertEq(usdc.balanceOf(donationWallet), 1000e18);
+        assertEq(usdc.balanceOf(donationWallet), 950e18);
+        assertEq(usdc.balanceOf(treasuryWallet), 50e18);
         assertEq(don.balanceOf(addr2), 1000e18);
         vm.stopPrank();
     }
@@ -114,9 +117,10 @@ contract DonationTest is Test {
 
     function test_DonateEther() public {
         vm.startPrank(addr2);
-        don.donateEth{value: 1 ether}(addr2);
-        assertEq(don.balanceOf(addr2), 1800e18);
-        assertEq(donationWallet.balance, 1 ether);
+        don.donateEth{value: 100 ether}(addr2);
+        assertEq(don.balanceOf(addr2), 180000e18);
+        assertEq(donationWallet.balance, 95 ether);
+        assertEq(treasuryWallet.balance, 5 ether);
         vm.stopPrank();
     }
     
@@ -132,7 +136,8 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
         don.donateEth{value: 1000000 ether}(addr2);
         assertEq(don.balanceOf(addr2), 1800000000e18);
-        assertEq(donationWallet.balance, 1000000 ether);
+        assertEq(donationWallet.balance, 950000 ether);
+        assertEq(treasuryWallet.balance, 50000 ether);
         vm.stopPrank();
     }
 
