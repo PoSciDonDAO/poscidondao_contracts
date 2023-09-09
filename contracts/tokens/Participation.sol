@@ -130,18 +130,22 @@ contract Participation {
         //get unstaked balance and turn into token id array
         uint256[] memory balance = getHeldBalance(user);
         uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
-        
+        uint256[] memory amounts = _turnAmountIntoArray(amount);
         //transfer tokens from user to staking contract
-        _safeBatchTransferFrom(user, _stakingContract, ids, _turnAmountIntoArray(amount), '');
+        _safeBatchTransferFrom(user, _stakingContract, ids, amounts, '');
         
+        Ids storage walletIds = _tokenBalances[user];
         //add each token id in unstaked balance to token id balance
-        for(uint256 i = 0; i < ids.length; i++) {
+        for(uint256 i = 0; i < amounts.length; i++) {
             //add token id to balance staked
             _stakedBalances[_stakingContract][user].ids.push(ids[i]);
-
+            
             //shift array and remove last token id of held balance
-            _tokenBalances[user].ids[i] = _tokenBalances[user].ids[_tokenBalances[user].ids.length - 1];
-            _tokenBalances[user].ids.pop();
+            walletIds.ids[i] = walletIds.ids[walletIds.ids.length - 1];
+        }
+
+        for(uint256 i = 0; i < amounts.length; i++) {
+            walletIds.ids.pop();
         }
 
         emit Push(user, amount, ids);
@@ -157,18 +161,21 @@ contract Participation {
         //get staked balance and turn into token id array
         uint256[] memory balance = getStakedBalance(user);
         uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
-
+        uint256[] memory amounts = _turnAmountIntoArray(amount);
         //transfer tokens from staking contract to user
-        _safeBatchTransferFrom(_stakingContract, user, ids, _turnAmountIntoArray(amount), '');
-            
+        _safeBatchTransferFrom(_stakingContract, user, ids, amounts, '');
+        
+        Ids storage stakedIds = _stakedBalances[_stakingContract][user];  
         //remove last element in staked balance in each iteration
         for(uint256 i = 0; i < ids.length; i++) {
-            Ids memory stakedIds = _stakedBalances[_stakingContract][user];
 
             stakedIds.ids[i] = stakedIds.ids[stakedIds.ids.length - 1];
-            _stakedBalances[_stakingContract][user].ids.pop();
-
+            
             _tokenBalances[user].ids.push(ids[i]);
+        }
+        
+        for(uint256 i = 0; i < ids.length; i++) {
+            stakedIds.ids.pop();
         }
 
         //emit Pull event
@@ -181,8 +188,8 @@ contract Participation {
      */
     function mint(address user) external gov {
         //increment and set new token id
-        tokenIdCounter.increment();
         uint256 tokenId = tokenIdCounter.current(); 
+        tokenIdCounter.increment();
 
         //mint token
         _mint(user, tokenId, 1, "");
@@ -254,7 +261,7 @@ contract Participation {
     function _turnAmountIntoArray(uint256 amount) internal pure returns (uint256[] memory tokenAmounts) {
         tokenAmounts = new uint[](amount);
         for (uint256 i = 0; i < amount;) {
-            tokenAmounts[i] = i + 1;
+            tokenAmounts[i] = 1;
             unchecked {
                 i++;
             }

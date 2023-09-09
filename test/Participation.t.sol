@@ -136,7 +136,7 @@ contract ParticipationTest is Test {
             uint256 id = govRes.getProposalIndex();
             govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
             uint256[] memory balance = po.getHeldBalance(addr1);
-            assertEq(balance[0], 1);   
+            assertEq(balance[0], 0);   
         vm.stopPrank();
         vm.startPrank(addr2);
             don.donateEth{value: 1 ether}(addr2);
@@ -144,7 +144,7 @@ contract ParticipationTest is Test {
             uint256 id2 = govRes.getProposalIndex();
             govRes.vote(id2, addr2, GovernorResearch.Vote.Yes, 1000e18);
             uint256[] memory balance2 = po.getHeldBalance(addr2);
-            assertEq(balance2[0], 2);   
+            assertEq(balance2[0], 1);   
         vm.stopPrank();
     }
 
@@ -157,23 +157,34 @@ contract ParticipationTest is Test {
             staking.lock(address(don), addr1, 1000e18);
             uint256 id = govRes.getProposalIndex();
             govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
-            
+        vm.stopPrank();
+
+        vm.startPrank(dao);
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+            don.donateEth{value: 1 ether}(addr1);
+            staking.lock(address(don), addr1, 1000e18);
+            uint256 id2 = govRes.getProposalIndex();
+            govRes.vote(id2, addr1, GovernorResearch.Vote.Yes, 1000e18);
+
             staking.lock(address(po), addr1, po.getHeldBalance(addr1).length);
             (uint256 stakedPo,,,,,) = staking.users(addr1);
             uint256[] memory balanceHeld = po.getHeldBalance(addr1);
             uint256[] memory balanceStaked = po.getStakedBalance(addr1);
             assertEq(balanceHeld.length, 0);
-            assertEq(stakedPo, 1);
-            assertEq(balanceStaked.length, 1);
-        vm.stopPrank();
+            assertEq(stakedPo, 2);
+            assertEq(balanceStaked.length, 2);
+         vm.stopPrank();
     }
 
     function test_UnstakeParticipationTokens() public {
         vm.startPrank(dao);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
-        vm.startPrank(addr1);
 
+        vm.startPrank(addr1);
             don.donateEth{value: 1 ether}(addr1);
             staking.lock(address(don), addr1, 1000e18);
             uint256 id = govRes.getProposalIndex();
@@ -187,6 +198,48 @@ contract ParticipationTest is Test {
             assertEq(balanceStaked.length, 0);
             assertEq(balanceHeld.length, 1);
 
+        vm.stopPrank();
+    }
+
+    function propose() public {
+        vm.startPrank(dao);
+            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
+        vm.stopPrank();
+    }
+
+    function donateAndLock() public {
+        vm.startPrank(addr1);
+            don.donateEth{value: 1 ether}(addr1);
+            staking.lock(address(don), addr1, 1000e18);
+        vm.stopPrank();
+    }
+
+    function vote() public {
+        vm.startPrank(addr1);
+            uint256 id = govRes.getProposalIndex();
+            govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
+        vm.stopPrank();
+    }
+
+    function test_StakeMultipleParticipationTokens() public {
+        donateAndLock();
+        for(uint256 i = 0; i < 5; i++) {
+            propose();
+            vote();
+        }
+
+        vm.startPrank(addr1);
+            uint256[] memory balanceStaked = po.getStakedBalance(addr1);
+            uint256[] memory balanceHeld = po.getHeldBalance(addr1);
+            assertEq(balanceStaked.length, 0);
+            assertEq(balanceHeld.length, 5);
+            staking.lock(address(po), addr1, 5);
+            (uint256 stakedPo,,,,,) = staking.users(addr1);
+            assertEq(stakedPo, 5);
+            uint256[] memory balanceStaked2 = po.getStakedBalance(addr1);
+            uint256[] memory balanceHeld2 = po.getHeldBalance(addr1);
+            assertEq(balanceStaked2.length, 5);
+            assertEq(balanceHeld2.length, 0);
         vm.stopPrank();
     }
 }
