@@ -27,11 +27,11 @@ contract Participation {
    
     mapping(uint256 => mapping(address => uint256)) private _balances;
     mapping(address => Ids) private _tokenBalances;
-    mapping(address _stakingContract => mapping(address => Ids)) private _stakedBalance;
-    mapping(address => uint8) public wards;
+    mapping(address _stakingContract => mapping(address => Ids)) private _stakedBalances;
+    mapping(address => uint8) private _wards;
 
     modifier dao() {
-        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
+        if(_wards[msg.sender] != 1) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -51,8 +51,8 @@ contract Participation {
 
     event RelyOn(address indexed user);
     event Denied(address indexed user);
-    event Push(address indexed user, uint256 amount);
-    event Pull(address indexed user, uint256 amount);
+    event Push(address indexed user, uint256 amount, uint256[] tokenIds);
+    event Pull(address indexed user, uint256 amount, uint256[] tokenIds);
     event MintedTokenInfo(address receiver, uint256 tokenId);
     event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values);
     event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value);
@@ -62,22 +62,20 @@ contract Participation {
         address daoAddress_
     ) {
         daoAddress = daoAddress_;
-        wards[daoAddress_] = 1;
+
+        _wards[daoAddress_] = 1;
+        emit RelyOn(daoAddress_);
+
         setURI(baseURI_);
     }
+
+    ///*** EXTERNAL FUNCTIONS ***///
 
     /**
      * @dev sets the staking address
      */
     function setStakingContract(address _newStakingContract) external dao {
         _stakingContract = _newStakingContract;
-    }
-
-    /**
-     * @dev returns the staking contract
-     */
-    function stakingContract() external view returns (address) {
-        return _stakingContract;
     }
 
     /**
@@ -106,7 +104,7 @@ contract Participation {
      * @param user the user that is eligible to become a gov
      */
     function addWard(address user) external dao {
-        wards[user] = 1;
+        _wards[user] = 1;
         emit RelyOn(user);
     }
 
@@ -115,10 +113,10 @@ contract Participation {
      * @param user the user that will be removed as a gov
      */
     function removeWard(address user) external dao {
-        if(wards[user] != 1) {
+        if(_wards[user] != 1) {
             revert Unauthorized(user);
         }
-        delete wards[user];
+        delete _wards[user];
         emit Denied(user);
     }
 
@@ -129,18 +127,24 @@ contract Participation {
         address user,
         uint256 amount
     ) external onlyStake {
+        //get unstaked balance and turn into token id array
         uint256[] memory balance = getHeldBalance(user);
         uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
-        _safeBatchTransferFrom(
-            user, 
-            _stakingContract, 
-            ids, 
-            _turnAmountIntoArray(amount),
-            '');
         
+        //transfer tokens from user to staking contract
+        _safeBatchTransferFrom(user, _stakingContract, ids, _turnAmountIntoArray(amount), '');
+        
+        //add each token id in unstaked balance to token id balance
         for(uint256 i = 0; i < ids.length; i++) {
-            _stakedBalance[_stakingContract][user].ids.push(ids[i]);
+            //add token id to balance staked
+            _stakedBalances[_stakingContract][user].ids.push(ids[i]);
+
+            //shift array and remove last token id of held balance
+            _tokenBalances[user].ids[i] = _tokenBalances[user].ids[_tokenBalances[user].ids.length - 1];
+            _tokenBalances[user].ids.pop();
         }
+
+        emit Push(user, amount, ids);
     }
 
     /**
@@ -150,31 +154,69 @@ contract Participation {
         address user,
         uint256 amount
     ) external onlyStake {
+        //get staked balance and turn into token id array
         uint256[] memory balance = getStakedBalance(user);
         uint256[] memory ids = _turnTokenIdsIntoArray(balance, amount);
-        _safeBatchTransferFrom(
-            _stakingContract,
-            user, 
-            ids, 
-            _turnAmountIntoArray(amount),
-            '');
-            
-            for(uint256 i = 0; i < ids.length; i++) {
-            _stakedBalance[_stakingContract][user].ids.pop();
-        }
-    }
 
+        //transfer tokens from staking contract to user
+        _safeBatchTransferFrom(_stakingContract, user, ids, _turnAmountIntoArray(amount), '');
+            
+        //remove last element in staked balance in each iteration
+        for(uint256 i = 0; i < ids.length; i++) {
+            Ids memory stakedIds = _stakedBalances[_stakingContract][user];
+
+            stakedIds.ids[i] = stakedIds.ids[stakedIds.ids.length - 1];
+            _stakedBalances[_stakingContract][user].ids.pop();
+
+            _tokenBalances[user].ids.push(ids[i]);
+        }
+
+        //emit Pull event
+        emit Pull(user, amount, ids);
+    }
 
     /**
      * @dev mints a PO NFT
      * @param user the address of the user that participated in governance
      */
     function mint(address user) external gov {
+        //increment and set new token id
         tokenIdCounter.increment();
         uint256 tokenId = tokenIdCounter.current(); 
+
+        //mint token
         _mint(user, tokenId, 1, "");
+
+        //update balance user
         _tokenBalances[user].ids.push(tokenId);
+
+        //emit event
         emit MintedTokenInfo(user, tokenId);
+    }
+
+    /**
+     * @dev returns the staking contract address
+     */
+    function getStakingContract() external view returns (address) {
+        return _stakingContract;
+    }
+
+    /**
+     * @dev returns if user is a ward or not
+     */
+    function getWard(address user) external view returns (uint8) {
+        return _wards[user];
+    }
+
+    ///*** PUBLIC FUNCTIONS ***///
+
+    /**
+     * @dev sets the base URI
+     * @param baseURI the ipfs base URI
+     */
+    function setURI(string memory baseURI) public dao {
+        require(!_frozen);
+        _setURI(baseURI);
     }
 
     /**
@@ -184,15 +226,6 @@ contract Participation {
     */
     function uri(uint256 tokenId) public view returns (string memory) {
         return string(abi.encodePacked(_uri, "/", Strings.toString(tokenId)));
-    }
-    
-    /**
-     * @dev sets the base URI
-     * @param baseURI the ipfs base URI
-     */
-    function setURI(string memory baseURI) public dao {
-        require(!_frozen);
-        _setURI(baseURI);
     }
 
     /**
@@ -208,9 +241,10 @@ contract Participation {
      * @param user the user address of interest
      */
     function getStakedBalance(address user) public view returns (uint256[] memory) {
-        return _stakedBalance[_stakingContract][user].ids;
+        return _stakedBalances[_stakingContract][user].ids;
     }
 
+    ///*** INTERNAL FUNCTIONS ***///
 
     /**
     *@dev Using this function, a given amount will be turned into an array.
@@ -260,7 +294,7 @@ contract Participation {
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) internal virtual {
+    ) internal {
         if(ids.length != amounts.length) revert LengthMismatch();
         if(to == address(0)) revert IncorrectAddress(to);
 
@@ -284,7 +318,7 @@ contract Participation {
     }
 
 
-    function _setURI(string memory newuri) internal virtual {
+    function _setURI(string memory newuri) internal {
         _uri = newuri;
     }
 
@@ -294,7 +328,7 @@ contract Participation {
         uint256 id,
         uint256 amount,
         bytes memory data
-    ) internal virtual {
+    ) internal {
         if (to == address(0)) revert IncorrectAddress(to);
         
         address operator = msg.sender;
@@ -320,7 +354,7 @@ contract Participation {
         address from,
         uint256[] memory ids,
         uint256[] memory amounts
-    ) internal virtual {
+    ) internal {
         if (from == address(0)) revert IncorrectAddress(from);
         if(ids.length != amounts.length) revert LengthMismatch();
 
@@ -369,7 +403,8 @@ contract Participation {
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) internal virtual {}
+    ) internal {}
+
 
 
     function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {

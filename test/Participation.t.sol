@@ -157,14 +157,14 @@ contract ParticipationTest is Test {
             staking.lock(address(don), addr1, 1000e18);
             uint256 id = govRes.getProposalIndex();
             govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
-            uint256[] memory balance = po.getHeldBalance(addr1);
-            staking.lock(address(po), addr1, balance.length);
-            (
-            uint256 stakedPo,
-            ,,,,
-            ) = staking.users(addr1);
+            
+            staking.lock(address(po), addr1, po.getHeldBalance(addr1).length);
+            (uint256 stakedPo,,,,,) = staking.users(addr1);
+            uint256[] memory balanceHeld = po.getHeldBalance(addr1);
+            uint256[] memory balanceStaked = po.getStakedBalance(addr1);
+            assertEq(balanceHeld.length, 0);
             assertEq(stakedPo, 1);
-            assertEq(po.getStakedBalance(addr1).length, 1);
+            assertEq(balanceStaked.length, 1);
         vm.stopPrank();
     }
 
@@ -173,24 +173,20 @@ contract ParticipationTest is Test {
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr1);
+
             don.donateEth{value: 1 ether}(addr1);
             staking.lock(address(don), addr1, 1000e18);
             uint256 id = govRes.getProposalIndex();
             govRes.vote(id, addr1, GovernorResearch.Vote.Yes, 1000e18);
-            uint256[] memory balanceHeld = po.getHeldBalance(addr1);
-            staking.lock(address(po), addr1, balanceHeld.length);
-            (
-            uint256 stakedPo,
-            ,,,,
-            ) = staking.users(addr1);
-            assertEq(stakedPo, 1);
+
+            staking.lock(address(po), addr1, po.getHeldBalance(addr1).length);
+            staking.free(address(po), addr1, po.getStakedBalance(addr1).length);
+
             uint256[] memory balanceStaked = po.getStakedBalance(addr1);
-            assertEq(balanceStaked.length, 1);
-            staking.free(address(po), addr1, balanceStaked.length);
-            uint256[] memory balanceStaked2 = po.getStakedBalance(addr1);
-            assertEq(balanceStaked2.length, 0);
-            uint256[] memory balanceHeld2 = po.getHeldBalance(addr1);
-            assertEq(balanceHeld2.length, 1);
+            uint256[] memory balanceHeld = po.getHeldBalance(addr1);
+            assertEq(balanceStaked.length, 0);
+            assertEq(balanceHeld.length, 1);
+
         vm.stopPrank();
     }
 }
