@@ -89,13 +89,12 @@ contract GovernorResearch {
     constructor(
         address stakingAddress_,
         address treasuryWallet_,
-        address usdc_,
-        address po_
+        address usdc_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
-        poToken = IParticipation(po_);
+
 
         wards[msg.sender] = 1;
         wards[treasuryWallet_] = 1;
@@ -120,10 +119,11 @@ contract GovernorResearch {
     }
 
     /**
-     * @dev sets the PO token address
+     * @dev sets the PO token address and interface
      */
-    function setPoAddress(address po_) external dao {
+    function setPoToken(address po_) external dao {
         po = po_;
+        poToken = IParticipation(po_);
     }
 
     /**

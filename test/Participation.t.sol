@@ -62,10 +62,10 @@ contract ParticipationTest is Test {
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
-                address(usdc),
-                address(po)
+                address(usdc)
             );
 
+            govRes.setPoToken(address(po));
             staking.setPoToken(address(po));
             staking.setSciToken(address(sci));
             staking.setGovRes(address(govRes));

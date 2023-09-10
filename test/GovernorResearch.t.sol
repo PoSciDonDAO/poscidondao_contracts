@@ -63,17 +63,17 @@ contract GovernorResearchTest is Test {
                 address(don),
                 dao
             );
-
+            
             staking.setPoToken(address(po));
             staking.setSciToken(address(sci));
 
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
-                address(usdc),
-                address(po)
+                address(usdc)
             );
-
+            
+            govRes.setPoToken(address(po));
             staking.setGovRes(address(govRes));
 
             don.setRatioEth(18, 10);
@@ -150,7 +150,7 @@ contract GovernorResearchTest is Test {
     function test_SetParticipationToken() public {
         vm.startPrank(dao);
             address addressPo = address(govRes.poToken());
-            govRes.setPoAddress(addressPo);
+            govRes.setPoToken(addressPo);
             assertEq(addressPo, govRes.po());
         vm.stopPrank();
     }
