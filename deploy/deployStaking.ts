@@ -26,10 +26,9 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("Staking");
 
   // Estimate contract deployment fee
-  const poToken = "";
-  const sciToken = "0x51eB878370cD7CD4Fe11Ab99b741cab6762bDf6C";
   const donToken = "0xD2A8954564318C1144047d45A898822bCaB76b23";
-  const deploymentFee = await deployer.estimateDeployFee(artifact, [sciToken, donToken]);
+  const daoAddress = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const deploymentFee = await deployer.estimateDeployFee(artifact, [donToken, daoAddress]);
 
   // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2
   // const depositHandle = await deployer.zkWallet.deposit({
@@ -45,11 +44,11 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const parsedFee = ethers.utils.formatEther(deploymentFee.toString());
   console.log(`The deployment is estimated to cost ${parsedFee} ETH`);
 
-  const govResContract = await deployer.deploy(artifact, [sciToken, donToken]);
+  const govResContract = await deployer.deploy(artifact, [donToken, daoAddress]);
 
   //obtain the Constructor Arguments
   console.log(
-    "constructor args:" + govResContract.interface.encodeDeploy([sciToken, donToken])
+    "constructor args:" + govResContract.interface.encodeDeploy([donToken, daoAddress])
   );
 
   // Show the contract info.
@@ -57,6 +56,6 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
   await run("verify:verify", {
     address: contractAddress,
-    constructorArguments: [sciToken, donToken],
+    constructorArguments: [donToken, daoAddress],
   });
 }

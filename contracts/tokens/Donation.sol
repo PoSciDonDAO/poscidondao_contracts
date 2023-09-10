@@ -60,6 +60,9 @@ contract Donation is IDonation, ReentrancyGuard {
         _symbol = "DON";
         _decimals = 18;
         _donationFraction = 95;
+        _donationThreshold = 1e15;
+        _ratioEth = 1800;
+        _ratioUsdc = 10;
         usdc = _usdc;
         donationWallet = _donationWallet;
         treasuryWallet = _treasuryWallet;

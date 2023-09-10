@@ -27,13 +27,13 @@ module.exports = {
     zkTestnet: {
       url: "https://zksync2-testnet.zksync.dev", // The testnet RPC URL of zkSync Era network.
       ethNetwork: "goerli", // The Ethereum Web3 RPC URL, or the identifier of the network (e.g. `mainnet` or `goerli`)
-    zksync: true,
-    verifyURL: 'https://zksync2-testnet-explorer.zksync.dev/contract_verification'
+      zksync: true,
+      verifyURL: 'https://zksync2-testnet-explorer.zksync.dev/contract_verification'
     },
   },
   // defaultNetwork: "zkTestnet", // optional (if not set, use '--network zkTestnet')
   solidity: {
-      version: "0.8.20",
+      version: "0.8.19",
   },
   etherscan: {
     apiKey: {
