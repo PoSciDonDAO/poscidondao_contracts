@@ -154,11 +154,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @param user the user that wants to lock tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lock(
-        address src, 
-        address user, 
-        uint256 amount
-        ) external nonReentrant {
+    function lock(address src, address user, uint256 amount) external nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
         if (src == _don) {
@@ -227,11 +223,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @param user the user's address holding SCI or DON tokens
      * @param amount the amount of tokens that will be freed
      */
-    function free(
-        address src, 
-        address user,
-        uint256 amount
-        ) external nonReentrant {
+    function free(address src, address user, uint256 amount) external nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
         if((src == _don || src == _sci) && users[user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
@@ -301,10 +293,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @param user the user's address holding SCI or DON tokens
      * @param voteLockEnd the block number where the vote lock ends
      */ 
-    function voted(
-        address user,
-        uint256 voteLockEnd
-    ) external gov returns (bool) {
+    function voted(address user, uint256 voteLockEnd) external gov returns (bool) {
         if(users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
@@ -316,9 +305,7 @@ contract Staking is IStaking, ReentrancyGuard {
      * @dev returns the user rights from the latest taken snapshot
      * @param user the user address     
      */
-    function getLatestUserRights(
-        address user  
-    ) external view returns (uint256) {
+    function getLatestUserRights(address user) external view returns (uint256) {
         uint256 latestSnapshot = users[user].amtSnapshots;
         return getUserRights(user, latestSnapshot, block.number);
     }
@@ -328,6 +315,27 @@ contract Staking is IStaking, ReentrancyGuard {
      */
     function getTotalStaked() external view returns (uint256) {
         return totStaked;
+    }
+
+    /**
+     * @dev returns the amount of staked PO tokens of a given user
+     */
+    function getPoStaked(address user) external view returns (uint256) {
+        return users[user].stakedPo;
+    }
+
+    /**
+     * @dev returns the amount of staked SCI tokens of a given user
+     */
+    function getSciStaked(address user) external view returns (uint256) {
+        return users[user].stakedSci;
+    }
+
+    /**
+     * @dev returns the amount of staked DON tokens of a given user
+     */
+    function getDonStaked(address user) external view returns (uint256) {
+        return users[user].stakedDon;
     }
 
     ///*** PUBLIC FUNCTION ***///
@@ -372,37 +380,5 @@ contract Staking is IStaking, ReentrancyGuard {
      */
     function _calcVotes(uint256 amount) internal view returns (uint256 votingPower) {
         return votingPower = amount * numerator / denominator;
-    }
-
-    /**
-    *@dev   Using this function, a given amount will be turned into an array.
-    *       This array will be used in ERC1155's batch mint function. 
-    *@param amount is the amount provided that will be turned into an array.
-    */
-    function _turnAmountIntoArray(uint256 amount) internal pure returns (uint256[] memory tokenAmounts) {
-        tokenAmounts = new uint[](amount);
-        for (uint256 i = 0; i < amount;) {
-            tokenAmounts[i] = i + 1;
-            unchecked {
-                i++;
-            }
-        }
-    }
-
-    /**
-    * @dev   A given amount will be turned into an array.
-    *       This array will be used in ERC1155's batch mint function.
-    * @param balance is an array containing the token ids of the user
-    * @param amount is the amount provided that will be turned into an array.
-    */
-    function _turnTokenIdsIntoArray(uint256[] memory balance, uint256 amount) internal pure returns (uint256[] memory tokenIdArray) {
-        tokenIdArray = new uint[](_turnAmountIntoArray(amount).length);
-        for (uint256 i = 0; i < _turnAmountIntoArray(amount).length;) { 
-            uint256 tokenId = balance[i];
-            tokenIdArray[i] = tokenId;
-            unchecked {
-                i++;
-            }  
-        }
     }
 }

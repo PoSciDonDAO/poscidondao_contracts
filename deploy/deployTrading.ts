@@ -26,9 +26,8 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("Trading");
 
   // Estimate contract deployment fee
-  const donationWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
   const treasuryWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const deploymentFee = await deployer.estimateDeployFee(artifact, [donationWallet, treasuryWallet]);
+  const deploymentFee = await deployer.estimateDeployFee(artifact, [treasuryWallet]);
 
   // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2
   // const depositHandle = await deployer.zkWallet.deposit({
@@ -44,11 +43,11 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const parsedFee = ethers.utils.formatEther(deploymentFee.toString());
   console.log(`The deployment is estimated to cost ${parsedFee} ETH`);
 
-  const tradingContract = await deployer.deploy(artifact, [donationWallet, treasuryWallet]);
+  const tradingContract = await deployer.deploy(artifact, [treasuryWallet]);
 
   //obtain the Constructor Arguments
   console.log(
-    "constructor args:" + tradingContract.interface.encodeDeploy([donationWallet, treasuryWallet])
+    "constructor args:" + tradingContract.interface.encodeDeploy([treasuryWallet])
   );
 
   // Show the contract info.
@@ -56,7 +55,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
   await run("verify:verify", {
     address: contractAddress,
-    constructorArguments: [donationWallet, treasuryWallet],
+    constructorArguments: [treasuryWallet],
   });
 
 }

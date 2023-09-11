@@ -26,7 +26,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("Staking");
 
   // Estimate contract deployment fee
-  const donToken = "0xD2A8954564318C1144047d45A898822bCaB76b23";
+  const donToken = "0xfB64e38b6E480b5507a9559BB68d6388D347317B";
   const daoAddress = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const deploymentFee = await deployer.estimateDeployFee(artifact, [donToken, daoAddress]);
 
