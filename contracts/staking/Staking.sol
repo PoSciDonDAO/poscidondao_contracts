@@ -27,8 +27,8 @@ contract Staking is IStaking, ReentrancyGuard {
     address        private _po;
     address        private _sci;
     address        private _don;
-    IParticipation public  poToken;
-    IDonation      public  donToken;
+    IParticipation public poToken;
+    IDonation      public donToken;
 
     ///*** STRUCTS ***///
     struct User {
@@ -311,6 +311,27 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     /**
+     * @dev returns the address for the Participation (PO) token
+     */
+    function getPoAddress() external view returns (address) {
+        return _po;
+    }
+
+    /**
+     * @dev returns the address for the Participation (PO) token
+     */
+    function getSciAddress() external view returns (address) {
+        return _sci;
+    }
+
+    /**
+     * @dev returns the address for the Participation (PO) token
+     */
+    function getDonAddress() external view returns (address) {
+        return _don;
+    }
+
+    /**
      * @dev returns the total amount of staked SCI and DON tokens
      */
     function getTotalStaked() external view returns (uint256) {
@@ -320,21 +341,21 @@ contract Staking is IStaking, ReentrancyGuard {
     /**
      * @dev returns the amount of staked PO tokens of a given user
      */
-    function getPoStaked(address user) external view returns (uint256) {
+    function getStakedPo(address user) external view returns (uint256) {
         return users[user].stakedPo;
     }
 
     /**
      * @dev returns the amount of staked SCI tokens of a given user
      */
-    function getSciStaked(address user) external view returns (uint256) {
+    function getStakedSci(address user) external view returns (uint256) {
         return users[user].stakedSci;
     }
 
     /**
      * @dev returns the amount of staked DON tokens of a given user
      */
-    function getDonStaked(address user) external view returns (uint256) {
+    function getStakedDon(address user) external view returns (uint256) {
         return users[user].stakedDon;
     }
 

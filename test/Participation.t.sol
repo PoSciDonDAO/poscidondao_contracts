@@ -62,6 +62,7 @@ contract ParticipationTest is Test {
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
+                donationWallet,
                 address(usdc)
             );
 

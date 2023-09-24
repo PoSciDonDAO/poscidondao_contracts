@@ -16,7 +16,7 @@ if (!PRIVATE_KEY)
 
 // An example of a deploy script that will deploy and call a simple contract.
 export default async function (hre: HardhatRuntimeEnvironment) {
-  console.log(`Running deploy script for the GovernorResearch contract`);
+  console.log(`Running deploy script for the Staking contract`);
 
   // Initialize the wallet.
   const wallet = new Wallet(PRIVATE_KEY);
@@ -26,7 +26,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("Staking");
 
   // Estimate contract deployment fee
-  const donToken = "0xfB64e38b6E480b5507a9559BB68d6388D347317B";
+  const donToken = "0xe47c408E9BEDAe9e4F567767Bd27ed6B6A81b1ff";
   const daoAddress = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const deploymentFee = await deployer.estimateDeployFee(artifact, [donToken, daoAddress]);
 

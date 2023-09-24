@@ -19,8 +19,9 @@ contract Donation is IDonation, ReentrancyGuard {
     string  private _name;
     string  private _symbol;
     uint16  private _decimals;
-    uint256 private _totalSupply;
-    uint256 private _donationThreshold;
+    uint256 private _totalSupply;    
+    uint256 private _donationThresholdEth;
+    uint256 private _donationThresholdUsdc;
     uint256 private _ratioEth;
     uint256 private _ratioUsdc;
     uint256 private _donationFraction;
@@ -60,7 +61,8 @@ contract Donation is IDonation, ReentrancyGuard {
         _symbol = "DON";
         _decimals = 18;
         _donationFraction = 95;
-        _donationThreshold = 1e15;
+        _donationThresholdEth = 1e15;
+        _donationThresholdUsdc = 1;
         _ratioEth = 1800;
         _ratioUsdc = 10;
         usdc = _usdc;
@@ -117,10 +119,12 @@ contract Donation is IDonation, ReentrancyGuard {
 
     /**
      * @dev sets the Threshold to donate usdc or eth
-     * @param amount the least amount of tokens that needs be donated  
+     * @param amountUsdc the least amount of USDC that needs be donated  
+     * @param amountEth the least amount of ETH that needs be donated  
      */
-    function setDonationThreshold(uint256 amount) external dao {
-        _donationThreshold = amount;
+    function setDonationThreshold(uint256 amountUsdc, uint256 amountEth) external dao {
+        _donationThresholdUsdc = amountUsdc;
+        _donationThresholdEth = amountEth;
     }
 
     function setDonationFraction(uint256 percentage) external dao {
@@ -136,7 +140,7 @@ contract Donation is IDonation, ReentrancyGuard {
      */
     function donateEth(address _user) external payable nonReentrant {
         //check if the donation Threshold has been reached
-        if (msg.value < _donationThreshold) revert InsufficientDonation();
+        if (msg.value < _donationThresholdEth) revert InsufficientDonation();
 
         uint256 amountDonation = msg.value / 100 * _donationFraction;
         uint256 amountTreasury = msg.value / 100 * (100 - _donationFraction);
@@ -164,7 +168,7 @@ contract Donation is IDonation, ReentrancyGuard {
      */
     function donateUsdc(address user, uint256 usdcAmount) external nonReentrant {
         //check if the donation Threshold has been reached
-        if (usdcAmount < _donationThreshold) revert InsufficientDonation();
+        if (usdcAmount < _donationThresholdUsdc) revert InsufficientDonation();
 
         uint256 amountDonation = usdcAmount / 100 * _donationFraction;
         uint256 amountTreasury = usdcAmount / 100 * (100 - _donationFraction);
@@ -191,7 +195,7 @@ contract Donation is IDonation, ReentrancyGuard {
     function push(
         address _user,
         uint256 _amount
-    ) external onlyStake nonReentrant {
+    ) external onlyStake {
 
         //transfer from user to daoernance contract
         _transfer(_user, _stakingContract, _amount);
@@ -204,14 +208,14 @@ contract Donation is IDonation, ReentrancyGuard {
     }
     
     /**
-     * @dev transfers tokens from dao contract to msg.sender
+     * @dev pulls tokens from staking contract to user
      * @param _user the user that wants to pull their DON tokens
      * @param _amount the amount of tokens that need to be pulled
      */
     function pull(
         address _user,
         uint256 _amount
-    ) external onlyStake nonReentrant {
+    ) external onlyStake {
         if (stake[_user] < _amount) revert InsufficientStake();
         
         //transfer from staking contract to holder
