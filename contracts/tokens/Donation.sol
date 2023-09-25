@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "contracts/interface/IDonation.sol";
@@ -62,7 +63,7 @@ contract Donation is IDonation, ReentrancyGuard {
         _decimals = 18;
         _donationFraction = 95;
         _donationThresholdEth = 1e15;
-        _donationThresholdUsdc = 1;
+        _donationThresholdUsdc = 1e6;
         _ratioEth = 1800;
         _ratioUsdc = 10;
         usdc = _usdc;
@@ -83,24 +84,32 @@ contract Donation is IDonation, ReentrancyGuard {
     }
 
     /**
-     * @dev adds a dao
-     * @param _user the user that becomes a dao
+     * @dev sets the staking contract address
+     * @param usdcAddress the address of the staking contract
      */
-    function addWard(address _user) external dao {
-        wards[_user] = 1;
-        emit Rely(_user);
+    function setUsdcAddress(address usdcAddress) external dao {
+        usdc = usdcAddress;
+    }
+
+    /**
+     * @dev adds a dao
+     * @param user the user that becomes a dao
+     */
+    function addWard(address user) external dao {
+        wards[user] = 1;
+        emit Rely(user);
     }
 
     /**
      * @dev removes a dao
-     * @param _user the user that will be removed as a dao.
+     * @param user the user that will be removed as a dao.
      */
-    function removeWard(address _user) external dao {
-        if(wards[_user] != 1) {
-            revert Unauthorized(_user);
+    function removeWard(address user) external dao {
+        if(wards[user] != 1) {
+            revert Unauthorized(user);
         }
-        delete wards[_user];
-        emit Deny(_user);
+        delete wards[user];
+        emit Deny(user);
     }
 
     /**
@@ -135,10 +144,10 @@ contract Donation is IDonation, ReentrancyGuard {
     /**
      * @dev sends Eth donations to the donation wallet, 
      * donor receives DON tokens.
-     * ! Per 0.001 ETH --> 1 DON Token !
-     * @param _user the user that donates the Ether 
+     * ! Per 0.001 ETH --> ethPrice/1000 DON Token !
+     * @param user the user that donates the Ether 
      */
-    function donateEth(address _user) external payable nonReentrant {
+    function donateEth(address user) external payable nonReentrant {
         //check if the donation Threshold has been reached
         if (msg.value < _donationThresholdEth) revert InsufficientDonation();
 
@@ -151,13 +160,13 @@ contract Donation is IDonation, ReentrancyGuard {
         require(sentDonation && sentTreasury);
         
         //determine the amount of DON tokens issued
-        uint256 _amount = msg.value * _ratioEth;
+        uint256 amount = msg.value * _ratioEth;
 
         //mint DON tokens
-        _mint(_user, _amount);
+        _mint(user, amount);
 
         //emit event
-        emit DonationCompleted(_user, msg.value, _amount);
+        emit DonationCompleted(user, msg.value, amount);
     }
 
     /**
@@ -178,81 +187,81 @@ contract Donation is IDonation, ReentrancyGuard {
         IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
         
         //calculate amount of don tokens 
-        uint256 _amount = usdcAmount * _ratioUsdc / 10;
+        uint256 amount = usdcAmount * _ratioUsdc / 10 * 10e11;
 
         //mint don tokens to function caller
-        _mint(user, _amount);
+        _mint(user, amount);
 
         //emit event
-        emit DonationCompleted(user, usdcAmount, _amount);
+        emit DonationCompleted(user, usdcAmount, amount);
     }
 
     /**
      * @dev pushes tokens from user to the staking contract
-     * @param _user the user that wants to push their DON tokens
-     * @param _amount the amount of tokens that need to be pushed
+     * @param user the user that wants to push their DON tokens
+     * @param amount the amount of tokens that need to be pushed
      */
     function push(
-        address _user,
-        uint256 _amount
+        address user,
+        uint256 amount
     ) external onlyStake {
 
         //transfer from user to daoernance contract
-        _transfer(_user, _stakingContract, _amount);
+        _transfer(user, _stakingContract, amount);
 
         //update staked amount
-        stake[_user] += _amount;
+        stake[user] += amount;
 
         //emit Push event
-        emit Push(_user, _amount);
+        emit Push(user, amount);
     }
     
     /**
      * @dev pulls tokens from staking contract to user
-     * @param _user the user that wants to pull their DON tokens
-     * @param _amount the amount of tokens that need to be pulled
+     * @param user the user that wants to pull their DON tokens
+     * @param amount the amount of tokens that need to be pulled
      */
     function pull(
-        address _user,
-        uint256 _amount
+        address user,
+        uint256 amount
     ) external onlyStake {
-        if (stake[_user] < _amount) revert InsufficientStake();
+        if (stake[user] < amount) revert InsufficientStake();
         
         //transfer from staking contract to holder
-        _transfer(_stakingContract, _user, _amount);
+        _transfer(_stakingContract, user, amount);
         
         //subtract the pulled amount            
-        stake[_user] -= _amount;
+        stake[user] -= amount;
 
         //emit Pull event
-        emit Pull(_user, _amount);
+        emit Pull(user, amount);
     }
 
     /**
      * @dev allows you to burn your DON tokens
-     * @param _amount of tokens that will be burned
+     * @param amount of tokens that will be burned
      */
-    function burn(uint256 _amount) external {
-        _burn(msg.sender, _amount);
+    function burn(uint256 amount) external {
+        _burn(msg.sender, amount);
     } 
 
     //internal functions
     /**
      * @dev mints DON tokens
-     * @param _account account of the donor
-     * @param _amount amount of DON tokens that will be minted
+     * @param account account of the donor
+     * @param amount amount of DON tokens that will be minted
      */
-    function _mint(address _account, uint256 _amount) internal {
-        if (_account == address(0)) revert IncorrectAddress();
+    function _mint(address account, uint256 amount) internal {
+        if (account == address(0)) revert IncorrectAddress();
 
-        _beforeTokenTransfer(address(0), _account, _amount);
+        _beforeTokenTransfer(address(0), account, amount);
 
-        _totalSupply += _amount;
+        _totalSupply += amount;
         unchecked {
             // Overflow not possible: balance + amount is at most totalSupply + amount, which is checked above.
-            _balances[_account] += _amount;
+            _balances[account] += amount;
         }
-        emit Transfer(address(0), _account, _amount);
+        emit Transfer(address(0), account, amount);
     }
 
     /**
@@ -287,8 +296,8 @@ contract Donation is IDonation, ReentrancyGuard {
     /**
      * @dev returns the balance of an account
      */
-    function balanceOf(address _account) external view returns (uint256) {
-        return _balances[_account];
+    function balanceOf(address account) external view returns (uint256) {
+        return _balances[account];
     }
 
     /**
@@ -303,23 +312,23 @@ contract Donation is IDonation, ReentrancyGuard {
     /**
      * @dev Destroys `amount` tokens from `account`, reducing the
      * total supply.
-     * @param _account account of the donor
-     * @param _amount amount of DON tokens that will be burned
+     * @param account account of the donor
+     * @param amount amount of DON tokens that will be burned
      */
-    function _burn(address _account, uint256 _amount) internal virtual {
-        if (_account == address(0)) revert IncorrectAddress();
+    function _burn(address account, uint256 amount) internal virtual {
+        if (account == address(0)) revert IncorrectAddress();
 
-        _beforeTokenTransfer(_account, address(0), _amount);
+        _beforeTokenTransfer(account, address(0), amount);
 
-        uint256 accountBalance = _balances[_account];
-        if (accountBalance < _amount) revert InsufficientBalance();
+        uint256 accountBalance = _balances[account];
+        if (accountBalance < amount) revert InsufficientBalance();
         unchecked {
-            _balances[_account] = accountBalance - _amount;
+            _balances[account] = accountBalance - amount;
             // Overflow not possible: amount <= accountBalance <= totalSupply.
-            _totalSupply -= _amount;
+            _totalSupply -= amount;
         }
 
-        emit Transfer(_account, address(0), _amount);
+        emit Transfer(account, address(0), amount);
     }
 
     /**

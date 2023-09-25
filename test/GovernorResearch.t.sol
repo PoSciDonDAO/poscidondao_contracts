@@ -72,9 +72,6 @@ contract GovernorResearchTest is Test {
             govRes.setPoToken(address(po));
             staking.setGovRes(address(govRes));
 
-            don.setRatioEth(18, 10);
-            don.setRatioUsdc(10, 10);
-            don.setDonationThreshold(1e15);
             don.setStakingContract(address(staking));
             
             govRes.govParams("proposalLifeTime", 4 weeks);

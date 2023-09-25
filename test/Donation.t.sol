@@ -68,9 +68,6 @@ contract DonationTest is Test {
         vm.startPrank(dao);
             don.setStakingContract(address(staking));
             usdc.approve(address(don), 10000e18);
-            don.setRatioEth(18, 10);
-            don.setRatioUsdc(10, 10);
-            don.setDonationThreshold(1e15);
         vm.stopPrank();
     }
 
@@ -100,18 +97,18 @@ contract DonationTest is Test {
 
     function test_DonateUsdc() public {
         vm.startPrank(addr2);
-        don.donateUsdc(addr2, 1000e18);
-        assertEq(usdc.balanceOf(donationWallet), 950e18);
-        assertEq(usdc.balanceOf(treasuryWallet), 50e18);
+        don.donateUsdc(addr2, 1000e6);
+        assertEq(usdc.balanceOf(donationWallet), 950e6);
+        assertEq(usdc.balanceOf(treasuryWallet), 50e6);
         assertEq(don.balanceOf(addr2), 1000e18);
         vm.stopPrank();
     }
 
-    function test_Revert_If_ThresholdDonateUsdcNotReached() public {
+    function test_RevertIfThresholdDonateUsdcNotReached() public {
         vm.startPrank(addr2);
         bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
         vm.expectRevert(selector);
-        don.donateUsdc(addr2, 1e14);
+        don.donateUsdc(addr2, 1e5);
         vm.stopPrank();
     }
 
@@ -124,7 +121,7 @@ contract DonationTest is Test {
         vm.stopPrank();
     }
     
-    function test_Revert_If_ThresholdDonateEtherNotReached() public {
+    function test_RevertIfThresholdDonateEtherNotReached() public {
         vm.startPrank(addr2);
         bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
         vm.expectRevert(selector);
@@ -152,8 +149,8 @@ contract DonationTest is Test {
     function test_DonateUsdcMintEvent() public {
         vm.startPrank(addr2);
         vm.expectEmit(true, true, true, true);
-        emit DonationCompleted(addr2, 1000e18, 1000e18);
-        don.donateUsdc(addr2, 1000e18);
+        emit DonationCompleted(addr2, 1000e6, 1000e18);
+        don.donateUsdc(addr2, 1000e6);
         vm.stopPrank();
     }
 }
