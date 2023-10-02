@@ -14,14 +14,12 @@ contract GovernorResearch {
     error EmptyOptions();
     error IncorrectBlockNumber();
     error IncorrectOption();
-    error IncorrectPaymentMethod();
     error IncorrectPhase(ProposalStatus);
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
     error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
     error TokensStillLocked(uint256 voteLockTimeStamp, uint256 currentTimeStamp);
     error ProposalLifeTimePassed();
-    error ProposalLifeTimeHasNotPassedYet(uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
     error Unauthorized(address user);
@@ -30,20 +28,20 @@ contract GovernorResearch {
 
     ///*** STRUCTS ***///
     struct Proposal {
-        uint256 startBlockNum;
-        uint256 endTimeStamp;
-        ProposalStatus status; 
-        ProjectInfo details; 
-        uint256 votesFor;
-        uint256 votesAgainst;
-        uint256 totalVotes;        
+        uint256                     startBlockNum;
+        uint256                     endTimeStamp;
+        ProposalStatus              status; 
+        ProjectInfo                 details; 
+        uint256                     votesFor;
+        uint256                     votesAgainst;
+        uint256                     totalVotes;        
     }
 
     struct ProjectInfo {
-        string info; //IPFS link
-        address researchWallet; //wallet address to send funds to
-        uint256 amountUsdc; //amount of funds in Usdc
-        uint256 amountEth; //amount of funds in Eth
+        string                      info; //IPFS link
+        address                     researchWallet; //wallet address to send funds to
+        uint256                     amountUsdc; //amount of funds in Usdc
+        uint256                     amountEth; //amount of funds in Eth
     }
 
     ///*** GOVERNANCE PARAMETERS ***///
@@ -52,17 +50,16 @@ contract GovernorResearch {
     uint256 public voteLockTime;
 
     ///*** STORAGE & MAPPINGS ***///
-    address public stakingAddress;
-    address public treasuryWallet;
-    address public donationWallet;
-    address public usdc;
-    uint8 public poLive;
-    address public po;
-    IParticipation public poToken;
-    uint256 private _proposalIndex;
-    mapping(address => uint8) public wards;
-    mapping(uint256 => Proposal) private proposals;
-    mapping(uint256 => mapping(address => uint8)) private voted;
+    address                                         public      stakingAddress;
+    address                                         public      treasuryWallet;
+    address                                         public      usdc;
+    uint256                                         private     _proposalIndex;
+    address                                         public      po;
+    IParticipation                                  public      poToken;
+    uint8                                           public      poLive;
+    mapping(address => uint8)                       public      wards;
+    mapping(uint256 => Proposal)                    private     proposals;
+    mapping(uint256 => mapping(address => uint8))   private     voted;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -88,39 +85,23 @@ contract GovernorResearch {
     event Executed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
 
+
     constructor(
         address stakingAddress_,
         address treasuryWallet_,
-        address donationWallet_,
         address usdc_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
-        donationWallet = donationWallet_;
         usdc = usdc_;
 
 
         wards[msg.sender] = 1;
         wards[treasuryWallet_] = 1;
-        wards[donationWallet_] = 1;
         emit RelyOn(msg.sender);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
-    
-    /**
-     * @dev sets the treasury wallet address
-     */
-    function setTreasuryWallet(address newTreasuryWallet) external dao {
-        treasuryWallet = newTreasuryWallet;
-    }
-
-    /**
-     * @dev sets the donation wallet address
-     */
-    function setDonationWallet(address newDonationWallet) external dao {
-        donationWallet = newDonationWallet;
-    }
 
     /**
      * @dev sets the staking address
@@ -291,96 +272,30 @@ contract GovernorResearch {
         if(id > _proposalIndex || id < 1) revert ProposalInexistent();
         if(proposals[id].totalVotes < quorum) revert QuorumNotReached();
         if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status);
-        if(block.timestamp < proposals[id].endTimeStamp) revert ProposalLifeTimeHasNotPassedYet(block.timestamp, proposals[id].endTimeStamp);
         proposals[id].status = ProposalStatus.Scheduled;
         emit Scheduled(id);
     }
 
     /**
-     * @dev executes the proposal using USDC
+     * @dev executes the proposal
      * @param id the index of the proposal of interest
      */
-    function executeProposalUsdc(uint256 id) external dao {
-        //check if proposal exists
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-        //check if proposal has finalized voting 
-        if(proposals[id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[id].status);
-        
-        if(proposals[id].details.amountEth > 0) revert IncorrectPaymentMethod();
+    function executeProposal(uint256 id) external payable dao {
 
-        address researchWallet = proposals[id].details.researchWallet;
-        
-        uint256 donationWalletUsdcBalance = IERC20(usdc).balanceOf(donationWallet);
-        //if insufficient balance send all usdc in the donation wallet to the research wallet
-        if(donationWalletUsdcBalance > 0 
-        && donationWalletUsdcBalance < proposals[id].details.amountUsdc) {
-            //transfer whole donation wallet balance to research wallet
-            IERC20(usdc).safeTransferFrom(donationWallet, researchWallet, donationWalletUsdcBalance);
-            //update remaining amount of usdc
-            proposals[id].details.amountUsdc -= donationWalletUsdcBalance;
-        //
-        } else if (donationWalletUsdcBalance >= proposals[id].details.amountUsdc) {
-            //transfer whole amount from donation wallet
-            IERC20(usdc).safeTransferFrom(donationWallet, researchWallet, proposals[id].details.amountUsdc);
-            //transfer completed so amount can be set to zero
-            proposals[id].details.amountUsdc = 0;
-        }
-        
+        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+
+        if(proposals[id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[id].status);
+
         if(proposals[id].details.amountUsdc > 0) {
-            //if donation wallet did not have the full amount, rest is bein sent from treasury
-            IERC20(usdc).safeTransferFrom(treasuryWallet, researchWallet, proposals[id].details.amountUsdc);
-            //transfer completed so amount can be set to zero
-            proposals[id].details.amountUsdc = 0;
-        }      
+            IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[id].details.researchWallet, proposals[id].details.amountUsdc);
         
-        //if all funds have been transferred set phase to executed
-        if(proposals[id].details.amountUsdc == 0) {
-            proposals[id].status = ProposalStatus.Executed;
+        } else if(proposals[id].details.amountEth > 0) {
+            address _researchWallet = proposals[id].details.researchWallet;
+            (bool sent,) = _researchWallet.call{value: proposals[id].details.amountEth}("");
+            require(sent);
         }
         
-        emit Executed(id);
-    }
-
-    /**
-     * @dev executes the proposal using ETH. 
-     *      Should first be called by the donation wallet and then by the treasury
-     * @param id the index of the proposal of interest
-     */
-    function executeProposalEth(uint256 id) external dao {
-        //check if proposal exists
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-        //check if proposal has finalized voting 
-        if(proposals[id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[id].status);
-        
-        if(proposals[id].details.amountUsdc > 0) revert IncorrectPaymentMethod();
-        
-        address researchWallet = proposals[id].details.researchWallet;
-
-        if(msg.sender == donationWallet) {
-            if(donationWallet.balance > 0 
-            && donationWallet.balance < proposals[id].details.amountEth) {
-                (bool sent,) = researchWallet.call{value: donationWallet.balance}("");
-                require(sent, "Failed to send Ether");
-
-                proposals[id].details.amountEth -= donationWallet.balance;
-
-            } else if (donationWallet.balance >= proposals[id].details.amountEth) {
-
-                (bool sent,) = researchWallet.call{value: proposals[id].details.amountEth}("");
-                require(sent, "Failed to send Ether");
-
-                proposals[id].details.amountEth = 0;
-            }
-        } else if(msg.sender == treasuryWallet) {
-            (bool sent,) = researchWallet.call{value: proposals[id].details.amountEth}("");
-            require(sent, "Failed to send Ether");
-            
-            proposals[id].details.amountEth = 0;
-        }
-
-        if(proposals[id].details.amountEth == 0) {
-            proposals[id].status = ProposalStatus.Executed;
-        }
+        proposals[id].status = ProposalStatus.Executed;
         
         emit Executed(id);
     }
@@ -391,11 +306,7 @@ contract GovernorResearch {
      */
     function cancelProposal(uint256 id) external dao {
         if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-
-        if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status);
-
         proposals[id].status = ProposalStatus.Cancelled;
-
         emit Cancelled(id);
     }
     
