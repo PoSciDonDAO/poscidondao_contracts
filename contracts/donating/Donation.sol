@@ -20,8 +20,6 @@ contract Donation is AccessControl, ReentrancyGuard {
     address public treasuryWallet;
     address public usdc;
 
-    mapping(address => uint256) private _balances;
-
     event DonationCompleted(address indexed user, uint256 donation);
 
     constructor(
