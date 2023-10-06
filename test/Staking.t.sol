@@ -3,16 +3,14 @@ pragma solidity ^0.8.19;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Participation.sol";
-import "contracts/tokens/Donation.sol";
-import "contracts/tokens/Trading.sol";
+import "contracts/tokens/SCI.sol";
 import "contracts/test/Token.sol";
 import "contracts/staking/Staking.sol";
 
 contract StakingTest is Test {
 
     Participation public po;
-    Trading public sci;
-    Donation public don;
+    SCI public sci;
     Token public usdc;
     Staking public staking;
 
@@ -47,33 +45,16 @@ contract StakingTest is Test {
                 dao
             );
 
-            sci = new Trading(
-                treasuryWallet
-            );
-
-            don = new Donation(
-                address(usdc),
-                donationWallet,
+            sci = new SCI(
                 treasuryWallet
             );
 
             staking = new Staking( 
-                address(don),
                 dao
             );
 
             staking.setPoToken(address(po));
             staking.setSciToken(address(sci));
-
-            don.setStakingContract(address(staking));
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
-            usdc.approve(address(don), 1000000000e18);
-        vm.stopPrank();
-
-        vm.startPrank(addr2);
-            usdc.approve(address(don), 1000000000e18);
         vm.stopPrank();
 
         deal(address(usdc), addr1, 10000e18);
@@ -81,13 +62,10 @@ contract StakingTest is Test {
         deal(address(usdc), addr3, 10000e18);
 
         deal(address(sci), addr1, 100000000e18);
-        deal(address(don), addr1, 100000000e18);
 
         deal(address(sci), addr2, 100000000e18);
-        deal(address(don), addr2, 100000000e18);
 
         deal(address(sci), addr3, 100000000e18);
-        deal(address(don), addr3, 100000000e18);
 
         vm.startPrank(addr1);
             sci.approve(address(staking), 10000e18);
@@ -95,16 +73,6 @@ contract StakingTest is Test {
 
         vm.startPrank(addr2);
             sci.approve(address(staking), 10000e18);
-        vm.stopPrank();
-    }
-
-    function test_AddingAndRemovingGov() public {
-        vm.startPrank(dao);
-            staking.addWard(addr1);
-            assertEq(staking.wards(addr1), 1);
-
-            staking.removeWard(addr1);
-            assertEq(staking.wards(addr1), 0);
         vm.stopPrank();
     }
 
@@ -115,7 +83,6 @@ contract StakingTest is Test {
             (
             uint256 stakedPo,
             uint256 stakedSci, 
-            uint256 stakedDon, 
             uint256 votingRights, 
             uint256 voteLockTime, 
             uint256 amtSnapshots
@@ -123,45 +90,10 @@ contract StakingTest is Test {
 
             assertEq(stakedPo, 0);
             assertEq(stakedSci, sci.balanceOf(address(staking)));
-            assertEq(stakedDon, 0);
             assertEq(votingRights, 500e18);
             assertEq(voteLockTime, 0);
             assertEq(amtSnapshots, 1);
             
-        vm.stopPrank();
-    }
-
-    function test_LockDonTokens() public {
-        vm.startPrank(addr1);
-            staking.lock(address(don), addr1, 500e18);
-
-            (
-            uint256 stakedPo,
-            uint256 stakedSci, 
-            uint256 stakedDon, 
-            uint256 votingRights, 
-            uint256 voteLockTime, 
-            uint256 amtSnapshots
-            ) = staking.users(addr1);
-
-            assertEq(staking.getTotalStaked(), 500e18);
-            assertEq(stakedPo, 0);
-            assertEq(stakedSci, 0);
-            assertEq(stakedDon, 500e18);
-            assertEq(votingRights, 500e18);
-            assertEq(voteLockTime, 0);
-            assertEq(amtSnapshots, 1);
-            
-        vm.stopPrank();
-    }
-
-    function test_EmitLockEventWithDonTokens() public {
-        vm.startPrank(addr1);
-            vm.expectEmit(true, true, true, true);
-
-            emit Locked(address(don), addr1, 100e18, 100e18);
-
-            staking.lock(address(don), addr1, 100e18);
         vm.stopPrank();
     }
 
@@ -180,10 +112,10 @@ contract StakingTest is Test {
 
             bytes4 selector = bytes4(keccak256("Unauthorized(address)"));
             vm.expectRevert(abi.encodeWithSelector(selector, addr2));
-            staking.lock(address(don), addr1, 500e18);
+            staking.lock(address(sci), addr1, 500e18);
 
             vm.expectRevert(abi.encodeWithSelector(selector, addr2));
-            staking.lock(address(sci), addr1, 500e18);
+            staking.lock(address(treasuryWallet), addr1, 500e18);
             
         vm.stopPrank();
     }
@@ -208,7 +140,6 @@ contract StakingTest is Test {
         (
         uint256 stakedPo,
         uint256 stakedSci, 
-        uint256 stakedDon, 
         uint256 votingRights, 
         uint256 voteLockTime, 
         uint256 amtSnapshots
@@ -217,46 +148,8 @@ contract StakingTest is Test {
         assertEq(staking.getTotalStaked(), 300e18);
         assertEq(stakedPo, 0);
         assertEq(stakedSci, 300e18);
-        assertEq(stakedDon, 0);
         assertEq(votingRights, 300e18);
         assertEq(voteLockTime, 0);
         assertEq(amtSnapshots, 3);
     }
-
-    function test_FreeDonTokens() public {
-        vm.startPrank(addr3);
-            staking.lock(address(don), addr3, 500e18);
-        vm.stopPrank();
-
-        vm.roll(block.number + 100);
-
-        vm.startPrank(addr3);
-            staking.free(address(don), addr3, 100e18);
-        vm.stopPrank();
-
-        vm.roll(block.number + 200);
-
-        vm.startPrank(addr3);
-            staking.free(address(don), addr3, 100e18);
-        vm.stopPrank();
-
-        (
-        uint256 stakedPo,
-        uint256 stakedSci, 
-        uint256 stakedDon, 
-        uint256 votingRights, 
-        uint256 voteLockTime, 
-        uint256 amtSnapshots
-        ) = staking.users(addr3);
-
-        assertEq(staking.getTotalStaked(), 300e18);
-        assertEq(stakedPo, 0);
-        assertEq(stakedSci, 0);
-        assertEq(stakedDon, 300e18);
-        assertEq(votingRights, 300e18);
-        assertEq(voteLockTime, 0);
-        assertEq(amtSnapshots, 3);
-    }
-
-
 }

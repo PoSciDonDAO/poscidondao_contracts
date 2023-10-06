@@ -26,9 +26,9 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const artifact = await deployer.loadArtifact("GovernorResearch");
 
   // Estimate contract deployment fee
-  const stakingAddress = "0xB5e2DB6Fe0096225fB41E9784899f29d22e42d2a";
+  const stakingAddress = "0x86CD5B3B83224e3c1C3747628CE38D15Bf40DD26";
   const treasuryWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const usdc = "0x0faF6df7054946141266420b43783387A78d82A9";
 
   const deploymentFee = await deployer.estimateDeployFee(artifact, [stakingAddress, treasuryWallet, usdc]);
 

@@ -2,19 +2,17 @@
 pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/governance/GovernorResearch.sol";
+import "contracts/governance/Governor.sol";
 import "contracts/tokens/Participation.sol";
-import "contracts/tokens/Donation.sol";
-import "contracts/tokens/Trading.sol";
+import "contracts/tokens/SCI.sol";
 import "contracts/test/Token.sol";
 import "contracts/staking/Staking.sol";
 
 contract GovernorResearchTest is Test {
 
-    GovernorResearch public govRes;
+    Governor public govRes;
     Participation public po;
-    Trading public sci;
-    Donation public don;
+    SCI public sci;
     Token public usdc;
     Staking public staking;
 
@@ -23,11 +21,10 @@ contract GovernorResearchTest is Test {
     address addr3 = vm.addr(3);
     address addr4 = vm.addr(4);
     address addr5 = vm.addr(5);
-    address dao = vm.addr(6);
-    address donationWallet = vm.addr(7);
-    address treasuryWallet = vm.addr(8);
-    address royaltyAddress = vm.addr(9);
-    address researchWallet = vm.addr(10);
+    address donationWallet = vm.addr(6);
+    address treasuryWallet = vm.addr(7);
+    address royaltyAddress = vm.addr(8);
+    address researchWallet = vm.addr(9);
 
     event Locked(address indexed user, address indexed gov, uint256 deposit, uint256 votes);
     event Freed(address indexed gov, address indexed user, uint256 amount, uint256 remainingVotes);
@@ -35,33 +32,20 @@ contract GovernorResearchTest is Test {
     function setUp() public {
 
         usdc = new Token(10000000e18);
-        usdc.transfer(addr1, 10000e18);
-        usdc.transfer(addr2, 10000e18);
-        usdc.transfer(addr3, 1000e18);
-        usdc.transfer(addr4, 1000e18);
-        usdc.transfer(addr5, 1000e18);
-        usdc.transfer(dao, 1000e18);
 
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
 
             po = new Participation(
                 "", 
-                dao
-            );
-
-            sci = new Trading(
                 treasuryWallet
             );
 
-            don = new Donation(
-                address(usdc),
-                donationWallet,
+            sci = new SCI(
                 treasuryWallet
             );
 
             staking = new Staking(
-                address(don),
-                dao
+                treasuryWallet
             );
             
             staking.setPoToken(address(po));
@@ -70,45 +54,33 @@ contract GovernorResearchTest is Test {
             govRes = new GovernorResearch(
                 address(staking), 
                 treasuryWallet,
+                donationWallet,
                 address(usdc)
             );
             
             govRes.setPoToken(address(po));
             staking.setGovRes(address(govRes));
-
-            don.setRatioEth(18, 10);
-            don.setRatioUsdc(10, 10);
-            don.setDonationThreshold(1e15);
-            don.setStakingContract(address(staking));
             
-            govRes.govParams("proposalLifeTime", 8 weeks);
+            govRes.govParams("proposalLifeTime", 4 weeks);
             govRes.govParams("quorum", 1000e18);
             govRes.govParams("voteLockTime", 2 weeks);
         vm.stopPrank();
 
-        vm.startPrank(addr1);
-            usdc.approve(address(don), 1000000000e18);
-        vm.stopPrank();
-
-        vm.startPrank(addr2);
-            usdc.approve(address(don), 1000000000e18);
-        vm.stopPrank();
-
+        deal(address(sci), addr1, 10000000000e18);
         deal(address(usdc), addr1, 10000e18);
-        deal(address(usdc), addr2, 10000e18);
-        deal(address(usdc), addr3, 10000e18);
-        deal(address(usdc), treasuryWallet, 10000000e18);
-        deal(treasuryWallet, 100000 ether);
-
-
-        deal(address(sci), addr1, 100000000e18);
-        deal(address(don), addr1, 100000000e18);
         deal(addr1, 10000 ether);
 
-
-        deal(address(sci), addr2, 100000000e18);
-        deal(address(don), addr2, 100000000e18);
+        deal(address(sci), addr2, 10000000000e18);
+        deal(address(usdc), addr2, 10000e18);
         deal(addr2, 10000 ether);
+
+        deal(address(sci), treasuryWallet, 10000000000e18);
+        deal(address(usdc), treasuryWallet, 100000000e18);
+        deal(treasuryWallet, 10000 ether);
+        
+        deal(address(sci), donationWallet, 10000000000e18);
+        deal(address(usdc), donationWallet, 10000000e18);
+        deal(donationWallet, 5000 ether);
 
         vm.startPrank(addr1);
             sci.approve(address(govRes), 10000e18);
@@ -118,37 +90,35 @@ contract GovernorResearchTest is Test {
             usdc.approve(address(govRes), 100000000000000e18);
         vm.stopPrank();
 
+        vm.startPrank(donationWallet);
+            usdc.approve(address(govRes), 100000000000000e18);
+        vm.stopPrank();
+
         vm.startPrank(addr2);
-            sci.approve(address(govRes), 10000e18);
+            sci.approve(address(govRes), 1000000000000e18);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-            sci.approve(address(govRes), 10000e18);
+            sci.approve(address(govRes), 1000000000000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-            sci.approve(address(staking), 10000e18);
+            sci.approve(address(staking), 1000000000000e18);
         vm.stopPrank();
-    }
 
-    function test_AddingAndRemovingGov() public {
-        vm.startPrank(dao);
-            govRes.addWard(addr1);
-            assertEq(govRes.wards(addr1), 1);
-
-            govRes.removeWard(addr1);
-            assertEq(govRes.wards(addr1), 0);
+        vm.startPrank(addr1);
+            sci.approve(address(staking), 1000000000000e18);
         vm.stopPrank();
     }
 
     function test_SetGovParams() public {
-        assertEq(govRes.proposalLifeTime(), 8 weeks);
+        assertEq(govRes.proposalLifeTime(), 4 weeks);
         assertEq(govRes.quorum(), 1000e18);
         assertEq(govRes.voteLockTime(), 2 weeks);
     }
 
     function test_SetParticipationToken() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             address addressPo = address(govRes.poToken());
             govRes.setPoToken(addressPo);
             assertEq(addressPo, govRes.po());
@@ -156,7 +126,7 @@ contract GovernorResearchTest is Test {
     }
 
     function test_Proposal() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
             (uint256 startBlockNum, 
             uint256 endTimeStamp, 
@@ -188,13 +158,12 @@ contract GovernorResearchTest is Test {
     }
 
     function test_VoteFor() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-            don.donateUsdc(addr1, 200e18);
-            staking.lock(address(don), addr1, 200e18);
+            staking.lock(address(sci), addr1, 200e18);
             assertEq(address(govRes), staking.govRes());
             govRes.vote(govRes.getProposalIndex(), addr1, GovernorResearch.Vote.Yes, 100e18);
 
@@ -209,7 +178,7 @@ contract GovernorResearchTest is Test {
             assertEq(totalVotes, 100e18);
 
             (
-            ,,,,
+            ,,,
             uint256 voteLockTime, 
             ) = staking.users(addr1);
 
@@ -218,13 +187,12 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertVoteIfUserNotMsgSender() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-            don.donateEth{value: 100 ether}(addr2);
-            staking.lock(address(don), addr2, 180000e18);
+            staking.lock(address(sci), addr2, 180000e18);
         vm.stopPrank();
 
         vm.startPrank(addr3);
@@ -235,13 +203,12 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertVoteWithVoteLockIfAlreadyVoted() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-            don.donateEth{value: 100 ether}(addr2);
-            staking.lock(address(don), addr2, 180000e18);
+            staking.lock(address(sci), addr2, 180000e18);
 
             uint256 id = govRes.getProposalIndex();
             govRes.vote(id, addr2, GovernorResearch.Vote.Yes, 100000e18);
@@ -252,12 +219,11 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertVoteWithInsufficientRights() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr2);
-            don.donateEth{value: 100 ether}(addr2);
-            staking.lock(address(don), addr2, 180e18);
+            staking.lock(address(sci), addr2, 180e18);
 
             bytes4 selector = bytes4(keccak256("InsufficientVotingRights(uint256,uint256)"));
             vm.expectRevert(abi.encodeWithSelector(selector, 180e18, 1.8e23));
@@ -266,12 +232,11 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertVoteIfProposalInexistent() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr1);
-            don.donateEth{value: 100 ether}(addr2);
-            staking.lock(address(don), addr1, 1.8e23);
+            staking.lock(address(sci), addr1, 1.8e23);
         vm.stopPrank();
         vm.startPrank(addr1);
             bytes4 selector = bytes4(keccak256("ProposalInexistent()"));
@@ -281,7 +246,7 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertIfQuorumNotReached() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
             uint256 id = govRes.getProposalIndex();
             bytes4 selector = bytes4(keccak256("QuorumNotReached()"));
@@ -291,16 +256,16 @@ contract GovernorResearchTest is Test {
     }
 
     function test_FinalizeVoting() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         uint256 id = govRes.getProposalIndex();
         vm.startPrank(addr2);
-            don.donateEth{value: 1000 ether}(addr2);
-            staking.lock(address(don), addr2, 1.8e24);
+            staking.lock(address(sci), addr2, 1.8e24);
             govRes.vote(id, addr2, GovernorResearch.Vote.Yes, 8e23);
         vm.stopPrank();
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
+            vm.warp(4.1 weeks);
             govRes.finalizeVoting(id);
             (,,GovernorResearch.ProposalStatus status,,,
             ) = govRes.getProposalInfo(id);
@@ -309,16 +274,16 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertVoteIfVotingIsFinalized() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         uint256 id = govRes.getProposalIndex();
         vm.startPrank(addr2);
-            don.donateEth{value: 1000 ether}(addr2);
-            staking.lock(address(don), addr2, 1.8e24);
+            staking.lock(address(sci), addr2, 1.8e24);
             govRes.vote(id, addr2, GovernorResearch.Vote.Yes, 8e23);
         vm.stopPrank();
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
+            vm.warp(4.1 weeks);
             govRes.finalizeVoting(id);
         vm.stopPrank();
         bytes4 selector = bytes4(keccak256("IncorrectPhase(uint8)"));
@@ -329,97 +294,140 @@ contract GovernorResearchTest is Test {
     }
 
     function test_RevertFreeTokensWhenVotesLocked() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr2);
-            don.donateEth{value: 1 ether}(addr2);
-            staking.lock(address(don), addr2, 1800e18);
+            staking.lock(address(sci), addr2, 1800e18);
             govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
         vm.stopPrank();
-        (,,,,uint256 voteLockEnd,) = staking.users(addr2);
+        (,,,uint256 voteLockEnd,) = staking.users(addr2);
         bytes4 selector = bytes4(keccak256("TokensStillLocked(uint256,uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, voteLockEnd, block.timestamp));
         vm.startPrank(addr2);
-            staking.free(address(don), addr2, 1400e18);
+            staking.free(address(sci), addr2, 1400e18);
         vm.stopPrank();
     }
 
     function test_FreeTokensAterVotingAndAfterVoteLockTimePassed() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 5000000e18, 0);
         vm.stopPrank();
         vm.startPrank(addr2);
-            don.donateEth{value: 1 ether}(addr2);
-            staking.lock(address(don), addr2, 1800e18); 
+            staking.lock(address(sci), addr2, 1800e18); 
             govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
-            (,,,,uint256 voteLockEnd, 
+            (,,,uint256 voteLockEnd, 
             ) = staking.users(addr2);
             vm.warp(voteLockEnd);
-            staking.free(address(don), addr2, 1800e18); 
+            staking.free(address(sci), addr2, 1800e18); 
         vm.stopPrank();
     }
 
     function test_ExecuteProposalUsingUsdc() public {
-        vm.startPrank(dao);
-            govRes.propose("Introduction", researchWallet, 5000000e18, 0);
+        vm.startPrank(treasuryWallet);
+            govRes.propose("Introduction", researchWallet, 5000000e6, 0);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-            don.donateEth{value: 1 ether}(addr2);
-            staking.lock(address(don), addr2, 1800e18);
+            staking.lock(address(sci), addr2, 1800e18);
             govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
         vm.stopPrank();
 
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             uint256 id = govRes.getProposalIndex();
-            govRes.finalizeVoting(id);
-            govRes.executeProposal(id);
-            (,,GovernorResearch.ProposalStatus status,,,
-            ) = govRes.getProposalInfo(id);
-            assertTrue(status == GovernorResearch.ProposalStatus.Executed);
+            vm.warp(4.1 weeks);
+            govRes.finalizeVoting(id);            
             (, 
             address wallet, 
-            uint256 usdcAmount, 
-            uint256 eth
-            ) = govRes.getProposalProjectInfo(id);
+            uint256 usdcAmount,
+            ) = govRes.getProposalProjectInfo(id); 
+            
+            govRes.executeProposalUsdc(id, true);
+            (,,GovernorResearch.ProposalStatus status,,,
+            ) = govRes.getProposalInfo(id);
+
+            assertTrue(status == GovernorResearch.ProposalStatus.Executed);
             assertEq(usdc.balanceOf(wallet), usdcAmount); 
-            assertEq(wallet.balance, eth); 
         vm.stopPrank();
     }
 
-    function test_ExecuteProposalUsingEth() public {
-        vm.startPrank(dao);
+    function test_ExecuteProposalUsingEthWithDonWallet() public {
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 0, 500 ether);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-            don.donateEth{value: 1 ether}(addr2);
-            staking.lock(address(don), addr2, 1800e18);
+            staking.lock(address(sci), addr2, 1800e18);
             govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
         vm.stopPrank();
 
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             uint256 id = govRes.getProposalIndex();
+            vm.warp(4.1 weeks);
             govRes.finalizeVoting(id);
         vm.stopPrank();
 
-        (, 
-        address wallet, 
-        uint256 usdcAmount, 
-        uint256 ethAmount
-        ) = govRes.getProposalProjectInfo(id);
+        vm.startPrank(donationWallet);
+            govRes.executeProposalEth{value: 500 ether}(id);
+
+            (,address wallet,,) = govRes.getProposalProjectInfo(id);
+            
+            assertEq(usdc.balanceOf(wallet), 0);
+            assertEq(wallet.balance, 500 ether);
+        vm.stopPrank(); 
+    }
+
+    function test_ExecuteProposalUsingEthWithTreasuryWallet() public {
+        vm.startPrank(treasuryWallet);
+            govRes.propose("Introduction", researchWallet, 0, 500 ether);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
+            staking.lock(address(sci), addr2, 1800e18);
+            govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
+        vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
-            govRes.executeProposal{value: ethAmount}(id);
-            assertEq(usdc.balanceOf(wallet), usdcAmount); 
-            assertEq(wallet.balance, ethAmount);
-        vm.stopPrank(); 
+            uint256 id = govRes.getProposalIndex();
+            vm.warp(4.1 weeks);
+            govRes.finalizeVoting(id);
+        vm.stopPrank();
 
+        (,address wallet,,) = govRes.getProposalProjectInfo(id);
+
+        vm.startPrank(treasuryWallet);
+            govRes.executeProposalEth{value: 500 ether}(id);
+
+            assertEq(usdc.balanceOf(wallet), 0); 
+            assertEq(wallet.balance, 500 ether);
+        vm.stopPrank(); 
+    }
+
+    function test_RevertExecutionIfIncorrectMsgValue() public {
+        vm.startPrank(treasuryWallet);
+            govRes.propose("Introduction", researchWallet, 0, 500 ether);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
+            staking.lock(address(sci), addr2, 1800e18);
+            govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 1800e18);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+            uint256 id = govRes.getProposalIndex();
+            vm.warp(4.1 weeks);
+            govRes.finalizeVoting(id);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+            bytes4 selector = bytes4(keccak256("IncorrectEthValue()"));
+            vm.expectRevert(abi.encodeWithSelector(selector));
+            govRes.executeProposalEth{value: 501 ether}(id);
+        vm.stopPrank(); 
     }
 
     function test_RevertProposalExecutionFunctionIfIncorrectPhase() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 0, 500 ether);
         vm.stopPrank();
 
@@ -428,20 +436,22 @@ contract GovernorResearchTest is Test {
             govRes.vote(1, addr2, GovernorResearch.Vote.Yes, 2000e18);
         vm.stopPrank();
 
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             uint256 id = govRes.getProposalIndex();
             bytes4 selector = bytes4(keccak256("IncorrectPhase(uint8)"));
             vm.expectRevert(abi.encodeWithSelector(selector, GovernorResearch.ProposalStatus.Active));
-            govRes.executeProposal(id);
+            govRes.executeProposalEth(id); 
+            vm.expectRevert(abi.encodeWithSelector(selector, GovernorResearch.ProposalStatus.Active));
+            govRes.executeProposalEth(id); 
         vm.stopPrank();
     }
 
     function test_CancelProposal() public {
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             govRes.propose("Introduction", researchWallet, 0, 500 ether);
         vm.stopPrank();
 
-        vm.startPrank(dao);
+        vm.startPrank(treasuryWallet);
             uint256 id = govRes.getProposalIndex();
             govRes.cancelProposal(id);
             (,,GovernorResearch.ProposalStatus status,,, 
