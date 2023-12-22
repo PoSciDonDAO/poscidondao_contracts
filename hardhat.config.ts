@@ -24,11 +24,15 @@ module.exports = {
       url: `https://goerli.infura.io/v3/${process.env.INFURA_KEY}`, // The Ethereum Web3 RPC URL (optional).
       zksync: false, // Set to false to target other networks.
     },
+    sepolia: {
+      url: `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`, // The Ethereum Web3 RPC URL (optional).
+      zksync: false, // Set to false to target other networks.
+    },
     zkTestnet: {
-      url: "https://zksync2-testnet.zksync.dev", // The testnet RPC URL of zkSync Era network.
-      ethNetwork: "goerli", // The Ethereum Web3 RPC URL, or the identifier of the network (e.g. `mainnet` or `goerli`)
+      url: "https://sepolia.era.zksync.dev", // The testnet RPC URL of zkSync Era network.
+      ethNetwork: "sepolia", // The Ethereum Web3 RPC URL, or the identifier of the network (e.g. `mainnet` or `goerli`)
       zksync: true,
-      verifyURL: 'https://zksync2-testnet-explorer.zksync.dev/contract_verification'
+      verifyURL: 'https://explorer.sepolia.era.zksync.dev/contract_verification'
     },
   },
   // defaultNetwork: "zkTestnet", // optional (if not set, use '--network zkTestnet')
@@ -39,6 +43,7 @@ module.exports = {
     apiKey: {
         mainnet: process.env.ETHERSCAN_API_KEY,
         goerli: process.env.ETHERSCAN_API_KEY,
+        sepolia: process.env.ETHERSCAN_API_KEY
     }    
   },
 }

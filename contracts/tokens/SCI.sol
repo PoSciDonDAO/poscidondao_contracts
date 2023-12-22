@@ -9,8 +9,8 @@ contract SCI is ERC20, AccessControl {
     constructor(
         address _treasuryWallet
     ) 
-    ERC20("PoSciDon Token", "SCI") {
-        _setupRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
+    ERC20("PoSciDonDAO Token", "SCI") {
+        _grantRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
     }
 
     function mint(address account, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {

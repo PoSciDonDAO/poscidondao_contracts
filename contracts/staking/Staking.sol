@@ -47,20 +47,16 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     mapping(address => User) public users;
     uint256 public numerator;
     uint256 public denominator;
-    address public govRes;
-    address public govOps;
-    // bool public discontinued = false;
+    address public govContract;
 
     ///*** MODIFIER ***///
     modifier gov() {
-        if (msg.sender != govRes && msg.sender != govOps)
+        if (msg.sender != govContract)
             revert Unauthorized(msg.sender);
         _;
     }
 
     /*** EVENTS ***/
-    event RelyOn(address indexed user);
-    event Denied(address indexed user);
     event Locked(
         address indexed token,
         address indexed user,
@@ -75,11 +71,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     );
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
-    constructor(address sci_) {
+    constructor(address treasuryWallet_, address sci_) {
         numerator = 10;
         denominator = 10;
 
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         _sci = IERC20(sci_);
     }
@@ -105,19 +101,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev sets the address of the research funding governance smart contract
      */
-    function setGovRes(
-        address newGovRes
+    function setGov(
+        address newGov
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govRes = newGovRes;
-    }
-
-    /**
-     * @dev sets the address of the operations funding governance smart contract
-     */
-    function setGovOps(
-        address newGovOps
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govOps = newGovOps;
+        govContract = newGov;
     }
 
     /**
@@ -167,11 +154,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             emit Locked(address(_sci), user, amount, votes);
         } else if (src == address(_po)) {
             //retrieve balance of user
-            uint256[] memory balance = _po.getHeldBalance(user);
+            uint256 balance = _po.balanceOf(user);
 
             //check if user has enough PO tokens
-            if (balance.length < amount)
-                revert InsufficientBalance(balance.length, amount);
+            if (balance < amount)
+                revert InsufficientBalance(balance, amount);
 
             //Retrieve PO token from user wallet
             _po.push(user, amount);

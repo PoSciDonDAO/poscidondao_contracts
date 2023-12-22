@@ -16,20 +16,18 @@ if (!PRIVATE_KEY)
 
 // An example of a deploy script that will deploy and call a simple contract.
 export default async function (hre: HardhatRuntimeEnvironment) {
-  console.log(`Running deploy script for the Donation contract`);
+  console.log(`Running deploy script for the usdc contract`);
 
   // Initialize the wallet.
   const wallet = new Wallet(PRIVATE_KEY);
 
   // Create deployer object and load the artifact of the contract you want to deploy.
   const deployer = new Deployer(hre, wallet);
-  const artifact = await deployer.loadArtifact("Donation");
+  const artifact = await deployer.loadArtifact("MockUsdc");
 
   // Estimate contract deployment fee
-  const usdc = "0x07659EfbcB9C3D82C2B54Bf80d95cB870A612744";
-  const donationWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
-  const treasuryWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const deploymentFee = await deployer.estimateDeployFee(artifact, [usdc, donationWallet, treasuryWallet]);
+  const amount = 100000e6;
+  const deploymentFee = await deployer.estimateDeployFee(artifact, [amount]);
 
   // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2
   // const depositHandle = await deployer.zkWallet.deposit({
@@ -45,19 +43,19 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const parsedFee = ethers.utils.formatEther(deploymentFee.toString());
   console.log(`The deployment is estimated to cost ${parsedFee} ETH`);
 
-  const donContract = await deployer.deploy(artifact, [usdc, donationWallet, treasuryWallet]);
+  const usdcContract = await deployer.deploy(artifact, [amount]);
 
   //obtain the Constructor Arguments
   console.log(
-    "constructor args:" + donContract.interface.encodeDeploy([usdc, donationWallet, treasuryWallet])
+    "constructor args:" + usdcContract.interface.encodeDeploy([amount])
   );
 
   // Show the contract info.
-  const contractAddress = donContract.address;
+  const contractAddress = usdcContract.address;
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
   await run("verify:verify", {
     address: contractAddress,
-    constructorArguments: [usdc, donationWallet, treasuryWallet],
+    constructorArguments: [amount],
   });
-  console.log(`${contractAddress} has been verified`);
+
 }
