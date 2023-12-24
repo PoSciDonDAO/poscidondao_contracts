@@ -7,11 +7,13 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 import {IStaking} from "contracts/interface/IStaking.sol";
 import {IParticipation} from "contracts/interface/IParticipation.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 contract Staking is IStaking, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error AlreadyDelegated();
     error CannotClaim();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
@@ -19,7 +21,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     error NotGovernanceContract(address govAddress);
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
-    error VoteLock();
+    error UnauthorizedDelegation();
     error WrongToken();
 
     ///*** TOKENS ***//
@@ -33,6 +35,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 votingRights; //Voting rights
         uint256 voteLockEnd; //Time before tokens can be unlocked during voting
         uint256 amtSnapshots; //Amount of snapshots
+        address delegate; //Address of the delegate
         mapping(uint256 => Snapshot) snapshots; //Index => snapshot
     }
 
@@ -45,14 +48,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     uint256 private totStaked;
     mapping(address => uint8) public wards;
     mapping(address => User) public users;
-    uint256 public numerator;
-    uint256 public denominator;
     address public govContract;
 
     ///*** MODIFIER ***///
     modifier gov() {
-        if (msg.sender != govContract)
-            revert Unauthorized(msg.sender);
+        if (msg.sender != govContract) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -60,21 +60,17 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     event Locked(
         address indexed token,
         address indexed user,
-        uint256 amount,
-        uint256 votes
+        uint256 amountLocked
     );
     event Freed(
         address indexed token,
         address indexed user,
-        uint256 amount,
-        uint256 remainingVotes
+        uint256 amountFreed
     );
+    event Delegated(address indexed owner, address indexed newDelegate);
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
     constructor(address treasuryWallet_, address sci_) {
-        numerator = 10;
-        denominator = 10;
-
         _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         _sci = IERC20(sci_);
@@ -101,21 +97,53 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev sets the address of the research funding governance smart contract
      */
-    function setGov(
-        address newGov
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGov(address newGov) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govContract = newGov;
     }
 
     /**
-     * @dev set the numerator and denominator
+     * @dev delegates the owner's voting rights
+     * @param owner the owner of the delegated voting rights
+     * @param newDelegate user that will receive the delegated voting rights
      */
-    function setNandD(
-        uint256 n,
-        uint256 d
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        numerator = n;
-        denominator = d;
+    function delegate(address owner, address newDelegate) external {
+        address oldDelegate = users[owner].delegate;
+
+        if (oldDelegate == newDelegate) revert AlreadyDelegated();
+
+        //check if function caller can change delegation
+        if (
+            owner != msg.sender
+            // || //owner can change delegates
+            // (oldDelegate != msg.sender && newDelegate != address(0)) //delegates can remove delegations from themselves
+        ) revert UnauthorizedDelegation();
+
+        users[owner].delegate = newDelegate;
+
+        //update vote unlock time
+        if (oldDelegate != address(0)) {
+            users[owner].voteLockEnd = Math.max(
+                users[owner].voteLockEnd,
+                users[oldDelegate].voteLockEnd
+            );
+
+            users[oldDelegate].votingRights -= users[owner].votingRights;
+
+            _snapshot(oldDelegate, users[oldDelegate].votingRights);
+        }
+
+        //update voting rights for delegate
+        if (newDelegate != address(0)) {
+            users[newDelegate].votingRights += users[owner].votingRights;
+
+            _snapshot(newDelegate, users[newDelegate].votingRights);
+            //update owner's voting power
+            users[owner].votingRights = 0;
+
+            _snapshot(owner, users[owner].votingRights);
+        }
+
+        emit Delegated(owner, newDelegate);
     }
 
     /**
@@ -141,24 +169,28 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             //Adds amount of deposited SCI tokens
             users[user].stakedSci += amount;
 
-            //SCI holders get more votes per locked token
-            //based on amount of DON tokens in circulation
-            uint256 votes = _calcVotes(amount);
+            address delegated = users[user].delegate;
+            if (delegated != address(0)) {
+                //update voting rights for delegated address
+                users[delegated].votingRights += amount;
+                //snapshot of delegate's voting rights
+                _snapshot(delegated, users[delegated].votingRights);
 
-            //calculated votes are added as voting rights
-            users[user].votingRights = votes;
+                emit Locked(address(_sci), user, amount);
+            } else {
+                //update voting rights for user
+                users[user].votingRights += amount;
+                //snapshot of voting rights
+                _snapshot(user, users[user].votingRights);
 
-            //snapshot of voting rights
-            _snapshot(user);
-
-            emit Locked(address(_sci), user, amount, votes);
+                emit Locked(address(_sci), user, amount);
+            }
         } else if (src == address(_po)) {
             //retrieve balance of user
             uint256 balance = _po.balanceOf(user);
 
             //check if user has enough PO tokens
-            if (balance < amount)
-                revert InsufficientBalance(balance, amount);
+            if (balance < amount) revert InsufficientBalance(balance, amount);
 
             //Retrieve PO token from user wallet
             _po.push(user, amount);
@@ -167,7 +199,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[user].stakedPo += amount;
 
             //emit locked event
-            emit Locked(address(_po), user, amount, 0);
+            emit Locked(address(_po), user, amount);
         } else {
             //Revert if the wrong token is chosen
             revert WrongToken();
@@ -204,16 +236,29 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             //remove amount from deposited amount
             users[user].stakedSci -= amount;
 
-            //recalculates the votes based on the remaining deposited amount
-            uint256 votes = _calcVotes(users[user].stakedSci);
+            address delegated = users[user].delegate;
+            if (delegated != address(0)) {
+                //check if delegate did not vote recently
+                if (users[delegated].voteLockEnd <= block.timestamp) {
+                    revert TokensStillLocked(
+                        block.timestamp,
+                        users[delegated].voteLockEnd
+                    );
+                }
 
-            //add new amount of votes as rights
-            users[user].votingRights = votes;
+                //remove delegate voting rights
+                users[delegated].votingRights -= amount;
 
-            //snapshot of voting rights
-            _snapshot(user);
+                _snapshot(delegated, users[delegated].votingRights);
+            } else {
+                //add new amount of votes as rights
+                users[user].votingRights -= amount;
 
-            emit Freed(address(_sci), user, amount, votes);
+                //snapshot of voting rights
+                _snapshot(user, users[user].votingRights);
+            }
+
+            emit Freed(address(_sci), user, amount);
         } else if (src == address(_po)) {
             //check if amount is lower than deposited PO tokens
             if (users[user].stakedPo < amount)
@@ -225,7 +270,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             //update staked PO balance
             users[user].stakedPo -= amount;
 
-            emit Freed(address(_po), user, amount, 0);
+            emit Freed(address(_po), user, amount);
         } else {
             revert WrongToken();
         }
@@ -321,26 +366,13 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev a snaphshot of the current voting rights of a given user
      * @param user the address that is being snapshotted
      */
-    function _snapshot(address user) internal {
+    function _snapshot(address user, uint256 votingRights) internal {
         uint256 index = users[user].amtSnapshots;
         if (index > 0 && users[user].snapshots[index].atBlock == block.number) {
-            users[user].snapshots[index].rights = users[user].votingRights;
+            users[user].snapshots[index].rights = votingRights;
         } else {
             users[user].amtSnapshots = index += 1;
-            users[user].snapshots[index] = Snapshot(
-                block.number,
-                users[user].votingRights
-            );
+            users[user].snapshots[index] = Snapshot(block.number, votingRights);
         }
-    }
-
-    /**
-     * @dev calculate the votes for users that have donated e.g. amount * 12/10
-     * @param amount of deposited DON tokens that will be multiplied with n / d
-     */
-    function _calcVotes(
-        uint256 amount
-    ) internal view returns (uint256 votingPower) {
-        return votingPower = (amount * numerator) / denominator;
     }
 }
