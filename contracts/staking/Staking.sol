@@ -21,7 +21,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     error NotGovernanceContract(address govAddress);
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
-    error UnauthorizedDelegation();
+    error UnauthorizedDelegation(
+        address owner,
+        address oldDelegate,
+        address newDelegate
+    );
     error WrongToken();
 
     ///*** TOKENS ***//
@@ -57,17 +61,26 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Locked(
-        address indexed token,
-        address indexed user,
-        uint256 amountLocked
+    event Delegated(
+        address indexed owner,
+        address indexed oldDelegate,
+        address indexed newDelegate
     );
     event Freed(
         address indexed token,
         address indexed user,
         uint256 amountFreed
     );
-    event Delegated(address indexed owner, address indexed newDelegate);
+    event Locked(
+        address indexed token,
+        address indexed user,
+        uint256 amountLocked
+    );
+    event Snapshotted(
+        address indexed owner,
+        uint256 votingRights,
+        uint256 indexed blockNumber
+    );
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
     constructor(address treasuryWallet_, address sci_) {
@@ -113,10 +126,9 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         //check if function caller can change delegation
         if (
-            owner != msg.sender
-            // || //owner can change delegates
-            // (oldDelegate != msg.sender && newDelegate != address(0)) //delegates can remove delegations from themselves
-        ) revert UnauthorizedDelegation();
+            !(owner == msg.sender ||
+                (oldDelegate == msg.sender && newDelegate == address(0)))
+        ) revert UnauthorizedDelegation(owner, oldDelegate, newDelegate);
 
         users[owner].delegate = newDelegate;
 
@@ -127,14 +139,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
                 users[oldDelegate].voteLockEnd
             );
 
-            users[oldDelegate].votingRights -= users[owner].votingRights;
+            users[oldDelegate].votingRights -= users[owner].stakedSci;
 
             _snapshot(oldDelegate, users[oldDelegate].votingRights);
+
+            users[owner].votingRights += users[owner].stakedSci;
+
+            _snapshot(owner, users[owner].votingRights);
         }
 
         //update voting rights for delegate
         if (newDelegate != address(0)) {
-            users[newDelegate].votingRights += users[owner].votingRights;
+            users[newDelegate].votingRights += users[owner].stakedSci;
 
             _snapshot(newDelegate, users[newDelegate].votingRights);
             //update owner's voting power
@@ -143,7 +159,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(owner, users[owner].votingRights);
         }
 
-        emit Delegated(owner, newDelegate);
+        emit Delegated(owner, oldDelegate, newDelegate);
     }
 
     /**
@@ -239,10 +255,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             address delegated = users[user].delegate;
             if (delegated != address(0)) {
                 //check if delegate did not vote recently
-                if (users[delegated].voteLockEnd <= block.timestamp) {
+                if (users[delegated].voteLockEnd > block.timestamp) {
                     revert TokensStillLocked(
-                        block.timestamp,
-                        users[delegated].voteLockEnd
+                        users[delegated].voteLockEnd,
+                        block.timestamp
                     );
                 }
 
@@ -301,8 +317,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @param user the user address
      */
     function getLatestUserRights(address user) external view returns (uint256) {
-        uint256 latestSnapshot = users[user].amtSnapshots;
-        return getUserRights(user, latestSnapshot, block.number);
+        uint256 latestSnapshotIndex = users[user].amtSnapshots;
+        return getUserRights(user, latestSnapshotIndex, block.number);
     }
 
     /**
@@ -374,5 +390,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[user].amtSnapshots = index += 1;
             users[user].snapshots[index] = Snapshot(block.number, votingRights);
         }
+        emit Snapshotted(user, votingRights, block.number);
     }
 }
