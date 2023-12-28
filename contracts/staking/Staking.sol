@@ -243,11 +243,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address src,
         address user,
         uint256 amount
-    ) external notTerminated nonReentrant {
+    ) external nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
-        if (src == address(_sci) && users[user].voteLockEnd > block.timestamp)
+        if (
+            src == address(_sci) &&
+            users[user].voteLockEnd > block.timestamp &&
+            !terminated
+        ) {
             revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
+        } else {
+            users[user].voteLockEnd = 0;
+        }
 
         if (src == address(_sci)) {
             //check if amount is lower than deposited SCI tokens
@@ -266,11 +273,16 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             address delegated = users[user].delegate;
             if (delegated != address(0)) {
                 //check if delegate did not vote recently
-                if (users[delegated].voteLockEnd > block.timestamp) {
+                if (
+                    users[delegated].voteLockEnd > block.timestamp &&
+                    !terminated
+                ) {
                     revert TokensStillLocked(
                         users[delegated].voteLockEnd,
                         block.timestamp
                     );
+                } else {
+                    users[delegated].voteLockEnd = 0;
                 }
 
                 //remove delegate voting rights

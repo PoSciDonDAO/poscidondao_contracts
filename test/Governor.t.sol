@@ -618,4 +618,36 @@ contract GovernorTest is Test {
         );
         vm.stopPrank();
     }
+
+    function test_FreeTokensEvenIfTerminatedAndVoteLocked() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        gov.proposeOperation("Introduction", address(0), 0, 0, 0, false);
+        uint256 id = gov.getOperationsProposalIndex();
+        gov.voteOnOperations(id, addr1, true, 2000e18);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+        gov.terminate();
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        staking.free(address(sci), addr1, 2000e18);
+        vm.stopPrank();
+        (
+            uint256 stakedPo,
+            uint256 stakedSci,
+            uint256 votingRights,
+            uint256 voteLockEnd,
+            uint256 amtSnapshots,
+            address delegate
+        ) = staking.users(addr1);
+        assertEq(staking.getTotalStaked(), 0);
+        assertEq(stakedPo, 0);
+        assertEq(stakedSci, 0);
+        assertEq(votingRights, 0);
+        assertEq(voteLockEnd, 0);
+        assertEq(amtSnapshots, 1);
+        assertEq(delegate, address(0));
+    }
 }
