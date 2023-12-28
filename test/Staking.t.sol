@@ -255,9 +255,6 @@ contract StakingTest is Test {
         vm.startPrank(addr1);
         staking.delegate(addr1, addr2);
         vm.stopPrank();
-        // vm.startPrank(addr2);
-        // staking.lock(address(sci), addr2, 500e18);
-        // vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr2);
         staking.delegate(addr1, address(0));

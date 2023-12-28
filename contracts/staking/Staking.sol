@@ -15,6 +15,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotClaim();
+    error ContractTerminated(address admin, uint256 blockNumber);
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
@@ -36,8 +37,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     struct User {
         uint256 stakedPo; //PO deposited
         uint256 stakedSci; //SCI deposited
-        uint256 votingRights; //Voting rights
-        uint256 voteLockEnd; //Time before tokens can be unlocked during voting
+        uint256 votingRights; //Voting rights for Operation proposals
+        uint256 voteLockEnd; //Time before tokens can be unlocked after voting
         uint256 amtSnapshots; //Amount of snapshots
         address delegate; //Address of the delegate
         mapping(uint256 => Snapshot) snapshots; //Index => snapshot
@@ -49,14 +50,20 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
+    bool public terminated = false;
+    address public govContract;
     uint256 private totStaked;
     mapping(address => uint8) public wards;
     mapping(address => User) public users;
-    address public govContract;
 
-    ///*** MODIFIER ***///
+    ///*** MODIFIERS ***///
     modifier gov() {
         if (msg.sender != govContract) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier notTerminated() {
+        if (terminated) revert ContractTerminated(_msgSender(), block.number);
         _;
     }
 
@@ -81,6 +88,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 votingRights,
         uint256 indexed blockNumber
     );
+    event Terminated(address admin, uint256 blockNumber);
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
     constructor(address treasuryWallet_, address sci_) {
@@ -108,7 +116,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the address of the research funding governance smart contract
+     * @dev sets the address of the governance smart contract
      */
     function setGov(address newGov) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govContract = newGov;
@@ -119,7 +127,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @param owner the owner of the delegated voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
-    function delegate(address owner, address newDelegate) external {
+    function delegate(
+        address owner,
+        address newDelegate
+    ) external notTerminated {
         address oldDelegate = users[owner].delegate;
 
         if (oldDelegate == newDelegate) revert AlreadyDelegated();
@@ -172,7 +183,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address src,
         address user,
         uint256 amount
-    ) external nonReentrant {
+    ) external notTerminated nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
         if (src == address(_sci)) {
@@ -232,7 +243,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address src,
         address user,
         uint256 amount
-    ) external nonReentrant {
+    ) external notTerminated nonReentrant {
         if (msg.sender != user) revert Unauthorized(msg.sender);
 
         if (src == address(_sci) && users[user].voteLockEnd > block.timestamp)
@@ -308,9 +319,20 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         return true;
     }
 
-    // function emergencyDiscontinuation() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    /**
+     * @dev terminates the staking smart contract
+     */
+    function terminate(address admin) external gov notTerminated nonReentrant {
+        terminated = true;
+        emit Terminated(admin, block.number);
+    }
 
-    // }
+    /**
+     * @dev return the timestamp where the lock after voting ends
+     */
+    function getVoteLockEnd(address user) external view returns (uint256) {
+        return users[user].voteLockEnd;
+    }
 
     /**
      * @dev returns the user rights from the latest taken snapshot

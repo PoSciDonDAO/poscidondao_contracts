@@ -182,9 +182,9 @@ contract GovernorTest is Test {
         assertEq(votesAgainst, 0);
         assertEq(totalVotes, 100e18);
 
-        (, , , uint256 voteLockTime, , ) = staking.users(addr1);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
-        assertEq(voteLockTime, (block.timestamp + gov.voteLockTime()));
+        assertEq(voteLockEnd, (block.timestamp + gov.voteLockTime()));
         vm.stopPrank();
     }
 
@@ -387,7 +387,7 @@ contract GovernorTest is Test {
         vm.stopPrank();
     }
 
-    function test_FreeTokensAterVotingAndAfterVoteLockTimePassed() public {
+    function test_FreeTokensAterVotingAndAfterVoteLockEndPassed() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 120e18);
         gov.proposeOperation(
@@ -557,6 +557,65 @@ contract GovernorTest is Test {
         (, , Governor.ProposalStatus status, , , ) = gov
             .getOperationsProposalInfo(id);
         assertTrue(status == Governor.ProposalStatus.Cancelled);
+        vm.stopPrank();
+    }
+
+    function test_CompleteProposalIfNotExecutable() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        gov.proposeOperation("Introduction", address(0), 0, 0, 0, false);
+        uint256 id = gov.getOperationsProposalIndex();
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        staking.lock(address(sci), addr2, 2000e18);
+        gov.voteOnOperations(id, addr2, true, 2000e18);
+        vm.stopPrank();
+        vm.warp(4.1 weeks);
+        gov.finalizeVotingOperationsProposal(id);
+        vm.startPrank(treasuryWallet);
+        gov.completeOperationsProposal(id);
+        (, , Governor.ProposalStatus status, , , ) = gov
+            .getOperationsProposalInfo(id);
+        assertTrue(status == Governor.ProposalStatus.Completed);
+        vm.stopPrank();
+    }
+
+    function test_RevertNonExecutableProposalIfPaymentProvided() public {
+        vm.startPrank(addr1);
+        bytes4 selector = bytes4(keccak256("WrongInput()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        gov.proposeOperation(
+            "Introduction",
+            operationWallet,
+            500000e6,
+            0,
+            0,
+            false
+        );
+        vm.stopPrank();
+    }
+
+    function test_TerminateGovernorAndStakingSmartContracts() public {
+        vm.startPrank(treasuryWallet);
+        gov.terminate();
+        vm.stopPrank();
+        assertEq(gov.terminated(), true);
+        vm.startPrank(addr1);
+        bytes4 selector = bytes4(
+            keccak256("ContractTerminated(address,uint256)")
+        );
+        vm.expectRevert(abi.encodeWithSelector(selector, addr1, block.number));
+        staking.lock(address(sci), addr1, 2000e18);
+
+        vm.expectRevert(abi.encodeWithSelector(selector, addr1, block.number));
+        gov.proposeOperation(
+            "Introduction",
+            operationWallet,
+            500000e6,
+            0,
+            0,
+            false
+        );
         vm.stopPrank();
     }
 }

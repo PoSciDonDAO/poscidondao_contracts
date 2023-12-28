@@ -13,6 +13,7 @@ contract Governor is AccessControl, ReentrancyGuard {
 
     ///*** ERRORS ***///
     error AlreadyActiveProposal();
+    error ContractTerminated(address admin, uint256 blockNumber);
     error EmptyOptions();
     error IncorrectCoinValue();
     error IncorrectBlockNumber();
@@ -77,6 +78,7 @@ contract Governor is AccessControl, ReentrancyGuard {
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
     bytes32 public constant OPERATIONS_ROLE = keccak256("OPERATIONS_ROLE");
+    bool public terminated = false;
     mapping(uint256 => Proposal) private researchProposals;
     mapping(uint256 => Proposal) private operationsProposals;
     mapping(uint256 => mapping(address => uint8)) private votedResearch;
@@ -98,6 +100,12 @@ contract Governor is AccessControl, ReentrancyGuard {
         SciUsdc
     }
 
+    ///*** MODIFIER ***///
+    modifier notTerminated() {
+        if (terminated) revert ContractTerminated(_msgSender(), block.number);
+        _;
+    }
+
     /*** EVENTS ***/
     event Proposed(uint256 indexed id, ProjectInfo details);
     event Voted(uint256 indexed id, bool indexed support, uint256 amount);
@@ -105,6 +113,7 @@ contract Governor is AccessControl, ReentrancyGuard {
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Completed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
+    event Terminated(address admin, uint256 blockNumber);
 
     constructor(
         address stakingAddress_,
@@ -144,7 +153,7 @@ contract Governor is AccessControl, ReentrancyGuard {
     function setStakedSciThreshold(
         uint256 thresholdDDMember,
         uint256 thresholdOpMember
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         ddThreshold = thresholdDDMember;
         opThreshold = thresholdOpMember;
     }
@@ -155,7 +164,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function addDueDiligenceMember(
         address member
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         IStaking staking = IStaking(stakingAddress);
         if (staking.getStakedSci(member) > ddThreshold) {
             grantRole(DUE_DILIGENCE_ROLE, member);
@@ -170,7 +179,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function removeDueDiligenceMember(
         address member
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         revokeRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -180,7 +189,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function addOperationsMember(
         address member
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         IStaking staking = IStaking(stakingAddress);
         if (staking.getStakedSci(member) > opThreshold) {
             grantRole(OPERATIONS_ROLE, member);
@@ -195,7 +204,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function removeOperationsMember(
         address member
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         revokeRole(OPERATIONS_ROLE, member);
     }
 
@@ -204,7 +213,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function setTreasuryWallet(
         address newTreasuryWallet
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         treasuryWallet = newTreasuryWallet;
     }
 
@@ -213,7 +222,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function setDonationWallet(
         address newDonationWallet
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         donationWallet = newDonationWallet;
     }
 
@@ -222,7 +231,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function setStakingAddress(
         address _newStakingAddress
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         stakingAddress = _newStakingAddress;
     }
 
@@ -230,14 +239,18 @@ contract Governor is AccessControl, ReentrancyGuard {
      * @dev sets the participation phase to live
      * @param _status the status of the participation phase, must be 1 to activate
      */
-    function setPoPhase(uint8 _status) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPoPhase(
+        uint8 _status
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         poLive = _status;
     }
 
     /**
      * @dev sets the PO token address and interface
      */
-    function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPoToken(
+        address po_
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         _po = IParticipation(po_);
     }
 
@@ -249,7 +262,7 @@ contract Governor is AccessControl, ReentrancyGuard {
     function govParams(
         bytes32 _param,
         uint256 _data
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_param == "proposalLifeTime") proposalLifeTime = _data;
         if (_param == "quorum") quorum = _data;
         if (_param == "voteLockTime") voteLockTime = _data;
@@ -270,7 +283,13 @@ contract Governor is AccessControl, ReentrancyGuard {
         uint256 amountUsdc, //6 decimals
         uint256 amountCoin, //18 decimals
         uint256 amountSci //18 decimals
-    ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) returns (uint256) {
+    )
+        external
+        nonReentrant
+        notTerminated
+        onlyRole(DUE_DILIGENCE_ROLE)
+        returns (uint256)
+    {
         IStaking staking = IStaking(stakingAddress);
 
         if (staking.getStakedSci(_msgSender()) < ddThreshold)
@@ -342,13 +361,15 @@ contract Governor is AccessControl, ReentrancyGuard {
         uint256 amountCoin, //18 decimals
         uint256 amountSci, //18 decimals
         bool executable
-    ) external nonReentrant returns (uint256) {
-        if (!executable) {
-            require(
-                (amountUsdc == 0 || amountCoin == 0 || amountSci == 0) &&
-                    receivingWallet == address(0),
-                "Incorrect input values"
-            );
+    ) external notTerminated nonReentrant returns (uint256) {
+        if (
+            !executable &&
+            (amountUsdc > 0 ||
+                amountCoin > 0 ||
+                amountSci > 0 ||
+                receivingWallet != address(0))
+        ) {
+            revert WrongInput();
         }
 
         IStaking staking = IStaking(stakingAddress);
@@ -362,24 +383,24 @@ contract Governor is AccessControl, ReentrancyGuard {
         Payment payment;
         uint256 amount;
         uint256 sciAmount;
-
-        if (amountUsdc > 0 && (amountCoin + amountSci == 0)) {
-            amount = amountUsdc;
-            payment = Payment.Usdc;
-        } else if (amountCoin > 0 && (amountUsdc + amountSci == 0)) {
-            amount = amountCoin;
-            payment = Payment.Coin;
-        } else if (amountSci > 0 && (amountCoin + amountUsdc == 0)) {
-            sciAmount = amountSci;
-            payment = Payment.Sci;
-        } else if (amountUsdc > 0 && amountSci > 0 && amountCoin == 0) {
-            amount = amountUsdc;
-            sciAmount = amountSci;
-            payment = Payment.SciUsdc;
-        } else {
-            revert WrongInput();
+        if (executable) {
+            if (amountUsdc > 0 && (amountCoin + amountSci == 0)) {
+                amount = amountUsdc;
+                payment = Payment.Usdc;
+            } else if (amountCoin > 0 && (amountUsdc + amountSci == 0)) {
+                amount = amountCoin;
+                payment = Payment.Coin;
+            } else if (amountSci > 0 && (amountCoin + amountUsdc == 0)) {
+                sciAmount = amountSci;
+                payment = Payment.Sci;
+            } else if (amountUsdc > 0 && amountSci > 0 && amountCoin == 0) {
+                amount = amountUsdc;
+                sciAmount = amountSci;
+                payment = Payment.SciUsdc;
+            } else {
+                revert WrongInput();
+            }
         }
-
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
             receivingWallet,
@@ -422,8 +443,8 @@ contract Governor is AccessControl, ReentrancyGuard {
         uint256 id,
         address user,
         bool support
-    ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+    ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
         IStaking staking = IStaking(stakingAddress);
 
@@ -476,8 +497,8 @@ contract Governor is AccessControl, ReentrancyGuard {
         address user,
         bool support,
         uint256 votes
-    ) external nonReentrant {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+    ) external notTerminated nonReentrant {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
         IStaking staking = IStaking(stakingAddress);
 
@@ -534,7 +555,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function finalizeVotingResearchProposal(
         uint256 id
-    ) external onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
 
         if (researchProposals[id].status != ProposalStatus.Active)
@@ -555,7 +576,9 @@ contract Governor is AccessControl, ReentrancyGuard {
      * @dev finalizes the voting phase for a research proposal
      * @param id the index of the proposal of interest
      */
-    function finalizeVotingOperationsProposal(uint256 id) external {
+    function finalizeVotingOperationsProposal(
+        uint256 id
+    ) external notTerminated {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
 
@@ -584,7 +607,7 @@ contract Governor is AccessControl, ReentrancyGuard {
     function executeResearchProposal(
         uint256 id,
         bool donated
-    ) external payable nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         //check if proposal exists
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
 
@@ -678,7 +701,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function executeOperationsProposal(
         uint256 id
-    ) external payable nonReentrant {
+    ) external payable notTerminated nonReentrant {
         //check if proposal exists
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
@@ -728,7 +751,7 @@ contract Governor is AccessControl, ReentrancyGuard {
 
     function completeOperationsProposal(
         uint256 id
-    ) external onlyRole(OPERATIONS_ROLE) {
+    ) external notTerminated onlyRole(OPERATIONS_ROLE) {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
 
@@ -746,7 +769,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function cancelResearchProposal(
         uint256 id
-    ) external onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
 
         if (researchProposals[id].status != ProposalStatus.Active)
@@ -763,7 +786,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      */
     function cancelOperationsProposal(
         uint256 id
-    ) external onlyRole(OPERATIONS_ROLE) {
+    ) external notTerminated onlyRole(OPERATIONS_ROLE) {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
 
@@ -784,7 +807,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      * @param id the proposal id
      */
     function getVotedResearch(uint256 id) external view returns (uint8) {
-        return votedResearch[id][msg.sender];
+        return votedResearch[id][_msgSender()];
     }
 
     /**
@@ -792,7 +815,7 @@ contract Governor is AccessControl, ReentrancyGuard {
      * @param id the proposal id
      */
     function getVotedOperations(uint256 id) external view returns (uint8) {
-        return votedOperations[id][msg.sender];
+        return votedOperations[id][_msgSender()];
     }
 
     /**
@@ -885,5 +908,20 @@ contract Governor is AccessControl, ReentrancyGuard {
             operationsProposals[id].details.payment,
             operationsProposals[id].details.amount
         );
+    }
+
+    /**
+     * @dev terminates the governance and staking smart contracts
+     */
+    function terminate()
+        external
+        notTerminated
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        IStaking staking = IStaking(stakingAddress);
+        staking.terminate(_msgSender());
+        terminated = true;
+        emit Terminated(_msgSender(), block.number);
     }
 }
