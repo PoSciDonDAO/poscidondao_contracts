@@ -3,15 +3,17 @@ pragma solidity ^0.8.19;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Participation.sol";
-import "contracts/tokens/SCI.sol";
+import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
-import "contracts/governance/Governor.sol";
+import "contracts/governance/GovernorOperations.sol";
+import "contracts/governance/GovernorResearch.sol";
 
 contract StakingTest is Test {
-    Governor public gov;
+    GovernorOperations public govOps;
+    GovernorResearch public govRes;
     Participation public po;
-    SCI public sci;
+    Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
 
@@ -30,13 +32,21 @@ contract StakingTest is Test {
         usdc = new MockUsdc(10000000e18);
 
         vm.startPrank(treasuryWallet);
-        sci = new SCI(treasuryWallet);
+        sci = new Sci(treasuryWallet);
 
         staking = new Staking(treasuryWallet, address(sci));
 
         po = new Participation("", treasuryWallet, address(staking));
 
-        gov = new Governor(
+        govOps = new GovernorOperations(
+            address(staking),
+            treasuryWallet,
+            donationWallet,
+            address(usdc),
+            address(sci)
+        );
+        
+        govRes = new GovernorResearch(
             address(staking),
             treasuryWallet,
             donationWallet,
@@ -46,13 +56,14 @@ contract StakingTest is Test {
 
         staking.setPoToken(address(po));
         staking.setSciToken(address(sci));
-        staking.setGov(address(gov));
-        gov.setPoPhase(1);
-        gov.setPoToken(address(po));
-        gov.govParams("proposalLifeTime", 4 weeks);
-        gov.govParams("quorum", 1000e18);
-        gov.govParams("voteLockEnd", 2 weeks);
-        po.setGov(address(gov));
+        staking.setGovOps(address(govOps));
+        staking.setGovRes(address(govRes));
+        govOps.setPoPhase(1);
+        govOps.setPoToken(address(po));
+        govOps.govParams("proposalLifeTime", 4 weeks);
+        govOps.govParams("quorum", 1000e18);
+        govOps.govParams("voteLockEnd", 2 weeks);
+        po.setGov(address(govOps));
         vm.stopPrank();
 
         deal(address(usdc), treasuryWallet, 10000e18);
@@ -128,7 +139,7 @@ contract StakingTest is Test {
     function test_LockPoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        gov.proposeOperation(
+        govOps.proposeOperation(
             "Introduction",
             treasuryWallet,
             5000000e6,
@@ -139,8 +150,8 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
-        uint256 id = gov.getOperationsProposalIndex();
-        gov.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
+        uint256 id = govOps.getOperationsProposalIndex();
+        govOps.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
         staking.lock(address(po), addr2, 1);
         assertEq(staking.getStakedPo(addr2), 1);
         vm.stopPrank();
@@ -149,7 +160,7 @@ contract StakingTest is Test {
     function test_FreePoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        gov.proposeOperation(
+        govOps.proposeOperation(
             "Introduction",
             treasuryWallet,
             5000000e6,
@@ -160,8 +171,8 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
-        uint256 id = gov.getOperationsProposalIndex();
-        gov.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
+        uint256 id = govOps.getOperationsProposalIndex();
+        govOps.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
         staking.lock(address(po), addr2, 1);
         staking.free(address(po), addr2, 1);
         assertEq(staking.getStakedPo(addr2), 0);

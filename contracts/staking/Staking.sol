@@ -19,7 +19,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error NotGovernanceContract(address govAddress);
+    error NotGovernanceContract();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
     error UnauthorizedDelegation(
@@ -51,14 +51,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     bool public terminated = false;
-    address public govContract;
+    address public govOpsContract;
+    address public govResContract;
     uint256 private totStaked;
-    mapping(address => uint8) public wards;
     mapping(address => User) public users;
 
     ///*** MODIFIERS ***///
     modifier gov() {
-        if (msg.sender != govContract) revert Unauthorized(msg.sender);
+        if (_msgSender() != govOpsContract || _msgSender() != govResContract) revert Unauthorized(_msgSender());
         _;
     }
 
@@ -92,7 +92,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
     constructor(address treasuryWallet_, address sci_) {
-        _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         _sci = IERC20(sci_);
     }
@@ -116,10 +116,17 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the address of the governance smart contract
+     * @dev sets the address of the operations governance smart contract
      */
-    function setGov(address newGov) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govContract = newGov;
+    function setGovOps(address newGovOps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govOpsContract = newGovOps;
+    }
+
+    /**
+     * @dev sets the address of the operations governance smart contract
+     */
+    function setGovRes(address newGovRes) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govResContract = newGovRes;
     }
 
     /**
@@ -137,8 +144,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         //check if function caller can change delegation
         if (
-            !(owner == msg.sender ||
-                (oldDelegate == msg.sender && newDelegate == address(0)))
+            !(owner == _msgSender() ||
+                (oldDelegate == _msgSender() && newDelegate == address(0)))
         ) revert UnauthorizedDelegation(owner, oldDelegate, newDelegate);
 
         users[owner].delegate = newDelegate;
@@ -184,7 +191,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address user,
         uint256 amount
     ) external notTerminated nonReentrant {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
         if (src == address(_sci)) {
             //Retrieve SCI tokens from user wallet but user needs to approve transfer first
@@ -244,7 +251,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address user,
         uint256 amount
     ) external nonReentrant {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
         if (
             src == address(_sci) &&

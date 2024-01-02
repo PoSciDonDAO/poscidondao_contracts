@@ -2,19 +2,19 @@
 pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/governance/Governor.sol";
+import "contracts/governance/GovernorOperations.sol";
 import "contracts/tokens/Participation.sol";
 import "contracts/test/MockUsdc.sol";
-import "contracts/tokens/SCI.sol";
+import "contracts/tokens/Sci.sol";
 import "contracts/staking/Staking.sol";
 
 contract ParticipationTest is Test {
     
-    Governor public gov;
+    GovernorOperations public gov;
     Participation public po;
     MockUsdc public usdc;
     Staking public staking;
-    SCI public sci;
+    Sci public sci;
 
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
@@ -29,7 +29,7 @@ contract ParticipationTest is Test {
         usdc = new MockUsdc(10000000e6);
 
         vm.startPrank(treasuryWallet);
-            sci = new SCI(
+            sci = new Sci(
                 treasuryWallet
             );
 
@@ -44,7 +44,7 @@ contract ParticipationTest is Test {
                 address(staking)
             );
                 
-            gov = new Governor(
+            gov = new GovernorOperations(
                 address(staking), 
                 treasuryWallet,
                 donationWallet,

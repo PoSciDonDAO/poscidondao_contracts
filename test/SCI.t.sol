@@ -2,11 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/tokens/SCI.sol";
+import "contracts/tokens/Sci.sol";
 
 contract SCITest is Test {
 
-    SCI public sci;
+    Sci public sci;
 
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
@@ -20,7 +20,7 @@ contract SCITest is Test {
     function setUp() public {
         vm.startPrank(treasuryWallet);
 
-            sci = new SCI(
+            sci = new Sci(
                 treasuryWallet
             );
 
