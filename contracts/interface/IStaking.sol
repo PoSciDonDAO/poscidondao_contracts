@@ -18,7 +18,11 @@ interface IStaking {
 
     function lock(address src, address user, uint256 amount) external;
 
-    function terminate(address admin) external;
+    function terminateOperations(address admin) external;
 
-    function voted(address user, uint256 voteLockEnd) external returns (bool);
+    function terminateResearch(address admin) external;
+
+    function votedOperations(address user, uint256 voteLockEnd) external returns (bool);
+    
+    function votedResearch(address user, uint256 voteLockEnd) external returns (bool);
 }

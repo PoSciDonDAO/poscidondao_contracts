@@ -13,16 +13,19 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** ERRORS ***///
     error AlreadyActiveProposal();
-    error ContractTerminated(address admin, uint256 blockNumber);
+    error ContractTerminated(uint256 blockNumber);
     error EmptyOptions();
     error IncorrectCoinValue();
     error IncorrectBlockNumber();
-    error IncorrectOption();
+    error IncorrectPaymentOption();
     error IncorrectCurrency();
     error IncorrectPhase(ProposalStatus);
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
+    error InvalidInputForExecutable();
+    error InvalidInputForNonExecutable();
+    error InvalidInfo();
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalIsNotExecutable();
     error ProposalLifeTimePassed();
@@ -96,7 +99,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** MODIFIER ***///
     modifier notTerminated() {
-        if (terminated) revert ContractTerminated(_msgSender(), block.number);
+        if (terminated) revert ContractTerminated(block.number);
         _;
     }
 
@@ -157,7 +160,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (staking.getStakedSci(member) > opThreshold) {
             grantRole(OPERATIONS_ROLE, member);
         } else {
-            revert InsufficientBalance(staking.getStakedSci(member), 1000e18);
+            revert InsufficientBalance(
+                staking.getStakedSci(member),
+                opThreshold
+            );
         }
     }
 
@@ -248,14 +254,29 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountSci, //18 decimals
         bool executable
     ) external notTerminated nonReentrant returns (uint256) {
-        if (
-            !executable &&
-            (amountUsdc > 0 ||
-                amountCoin > 0 ||
-                amountSci > 0 ||
-                receivingWallet != address(0))
-        ) {
-            revert WrongInput();
+        if (bytes(info).length == 0) {
+            revert InvalidInfo();
+        }
+
+        if (executable) {
+            if (
+                receivingWallet == address(0) ||
+                (amountUsdc > 0 ? 1 : 0) +
+                    (amountCoin > 0 ? 1 : 0) +
+                    (amountSci > 0 ? 1 : 0) !=
+                1
+            ) {
+                revert InvalidInputForExecutable();
+            }
+        } else {
+            if (
+                receivingWallet != address(0) ||
+                amountUsdc != 0 ||
+                amountCoin != 0 ||
+                amountSci != 0
+            ) {
+                revert InvalidInputForNonExecutable();
+            }
         }
 
         IStaking staking = IStaking(stakingAddress);
@@ -270,23 +291,30 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amount;
         uint256 sciAmount;
         if (executable) {
-            if (amountUsdc > 0 && (amountCoin + amountSci == 0)) {
-                amount = amountUsdc;
-                payment = Payment.Usdc;
-            } else if (amountCoin > 0 && (amountUsdc + amountSci == 0)) {
-                amount = amountCoin;
-                payment = Payment.Coin;
-            } else if (amountSci > 0 && (amountCoin + amountUsdc == 0)) {
-                sciAmount = amountSci;
-                payment = Payment.Sci;
-            } else if (amountUsdc > 0 && amountSci > 0 && amountCoin == 0) {
+            uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
+                (amountCoin > 0 ? 1 : 0) +
+                (amountSci > 0 ? 1 : 0);
+
+            if (paymentOptions == 1) {
+                if (amountUsdc > 0) {
+                    amount = amountUsdc;
+                    payment = Payment.Usdc;
+                } else if (amountCoin > 0) {
+                    amount = amountCoin;
+                    payment = Payment.Coin;
+                } else if (amountSci > 0) {
+                    sciAmount = amountSci;
+                    payment = Payment.Sci;
+                }
+            } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
                 amount = amountUsdc;
                 sciAmount = amountSci;
                 payment = Payment.SciUsdc;
             } else {
-                revert WrongInput();
+                revert IncorrectPaymentOption();
             }
         }
+
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
             receivingWallet,
@@ -372,7 +400,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         votedOperations[id][user] = 1;
 
         //set the lock time in the staking contract
-        staking.voted(user, block.timestamp + voteLockTime);
+        staking.votedOperations(user, block.timestamp + voteLockTime);
 
         //mint a participation token if live
         if (poLive == 1) {
@@ -500,7 +528,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return address(_po);
     }
 
-
     /**
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
@@ -559,14 +586,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the governance and staking smart contracts
      */
-    function terminate()
+    function terminateOperations()
         external
         notTerminated
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         IStaking staking = IStaking(stakingAddress);
-        staking.terminate(_msgSender());
+        staking.terminateOperations(_msgSender());
         terminated = true;
         emit Terminated(_msgSender(), block.number);
     }

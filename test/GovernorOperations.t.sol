@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/governance/GovernorOperations.sol";
+import "contracts/governance/GovernorResearch.sol";
 import "contracts/tokens/Participation.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
@@ -10,6 +11,7 @@ import "contracts/staking/Staking.sol";
 
 contract GovernorOperationsTest is Test {
     GovernorOperations public govOps;
+    GovernorResearch public govRes;
     Participation public po;
     Sci public sci;
     MockUsdc public usdc;
@@ -59,9 +61,17 @@ contract GovernorOperationsTest is Test {
             address(sci)
         );
 
+        govRes = new GovernorResearch(
+            address(staking),
+            treasuryWallet,
+            donationWallet,
+            address(usdc),
+            address(sci)
+        );
+
         govOps.setPoToken(address(po));
         staking.setGovOps(address(govOps));
-
+        staking.setGovRes(address(govRes));
         govOps.govParams("proposalLifeTime", 4 weeks);
         govOps.govParams("quorum", 100e18);
         govOps.govParams("voteLockTime", 2 weeks);
@@ -579,9 +589,26 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
+    function test_RevertProposalIfInfoEmpty() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        bytes4 selector = bytes4(keccak256("InvalidInfo()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        govOps.proposeOperation(
+            "",
+            operationsWallet,
+            500000e6,
+            0,
+            0,
+            false
+        );
+        vm.stopPrank();
+    }
+
     function test_RevertNonExecutableProposalIfPaymentProvided() public {
         vm.startPrank(addr1);
-        bytes4 selector = bytes4(keccak256("WrongInput()"));
+        staking.lock(address(sci), addr1, 2000e18);
+        bytes4 selector = bytes4(keccak256("InvalidInputForNonExecutable()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
         govOps.proposeOperation(
             "Introduction",
@@ -594,19 +621,55 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
+    function test_RevertExecutableProposalIfNoPaymentAndWalletProvided() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        bytes4 selector = bytes4(keccak256("InvalidInputForExecutable()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        govOps.proposeOperation(
+            "Introduction",
+            address(0),
+            0,
+            0,
+            0,
+            true
+        );
+        vm.stopPrank();
+    }
+
+    function test_RevertExecutableProposalIfNoPaymentButWalletProvided() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        bytes4 selector = bytes4(keccak256("InvalidInputForExecutable()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        govOps.proposeOperation(
+            "Introduction",
+            operationsWallet,
+            0,
+            0,
+            0,
+            true
+        );
+        vm.stopPrank();
+    }
+
     function test_TerminateGovernorAndStakingSmartContracts() public {
         vm.startPrank(treasuryWallet);
-        govOps.terminate();
+        govOps.terminateOperations();
+        govRes.terminateResearch();
         vm.stopPrank();
         assertEq(govOps.terminated(), true);
+        assertEq(govRes.terminated(), true);
         vm.startPrank(addr1);
         bytes4 selector = bytes4(
-            keccak256("ContractTerminated(address,uint256)")
+            keccak256("ContractsTerminated()")
         );
-        vm.expectRevert(abi.encodeWithSelector(selector, addr1, block.number));
+        vm.expectRevert(abi.encodeWithSelector(selector));
         staking.lock(address(sci), addr1, 2000e18);
-
-        vm.expectRevert(abi.encodeWithSelector(selector, addr1, block.number));
+        bytes4 selector1 = bytes4(
+            keccak256("ContractTerminated(uint256)")
+        );
+        vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
         govOps.proposeOperation(
             "Introduction",
             operationsWallet,
@@ -627,7 +690,8 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
-        govOps.terminate();
+        govOps.terminateOperations();
+        govRes.terminateResearch();
         vm.stopPrank();
 
         vm.startPrank(addr1);

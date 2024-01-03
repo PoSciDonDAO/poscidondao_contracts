@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./../interface/IParticipation.sol";
 import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -13,18 +12,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** ERRORS ***///
     error AlreadyActiveProposal();
-    error ContractTerminated(address admin, uint256 blockNumber);
+    error ContractTerminated(uint256 blockNumber);
     error EmptyOptions();
     error IncorrectCoinValue();
     error IncorrectBlockNumber();
-    error IncorrectOption();
-    error IncorrectCurrency();
+    error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
-    error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
+    error InvalidInput();
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
-    error ProposalIsNotExecutable();
     error ProposalLifeTimePassed();
     error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
@@ -32,7 +29,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error Unauthorized(address user);
     error VoteLock();
     error WrongToken();
-    error WrongInput();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -93,7 +89,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** MODIFIER ***///
     modifier notTerminated() {
-        if (terminated) revert ContractTerminated(_msgSender(), block.number);
+        if (terminated) revert ContractTerminated(block.number);
         _;
     }
 
@@ -121,8 +117,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         ddThreshold = 1000e18;
 
-        proposalLifeTime = 2 weeks;
-        quorum = 2;
+        proposalLifeTime = 4 weeks;
+        quorum = 1;
         voteLockTime = 2 weeks;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
@@ -213,14 +209,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev proposes a research project in need of funding
      *      at least one option needs to be proposed
      * @param info ipfs hash of project proposal
-     * @param wallet the address of the research group receiving funds if proposal passed
+     * @param receivingWallet the address of the research group receiving funds if proposal passed
      * @param amountUsdc the amount of USDC
      * @param amountCoin the amount of Coin
      * @param amountSci the amount of SCI tokens
      */
     function proposeResearch(
         string memory info,
-        address wallet,
+        address receivingWallet,
         uint256 amountUsdc, //6 decimals
         uint256 amountCoin, //18 decimals
         uint256 amountSci //18 decimals
@@ -231,6 +227,17 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DUE_DILIGENCE_ROLE)
         returns (uint256)
     {
+        if (
+            bytes(info).length == 0 ||
+            receivingWallet == address(0) ||
+            (amountUsdc > 0 ? 1 : 0) +
+                (amountCoin > 0 ? 1 : 0) +
+                (amountSci > 0 ? 1 : 0) !=
+            1
+        ) {
+            revert InvalidInput();
+        }
+
         IStaking staking = IStaking(stakingAddress);
 
         if (staking.getStakedSci(_msgSender()) < ddThreshold)
@@ -253,11 +260,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             amount = amountUsdc;
             sciAmount = amountSci;
             payment = Payment.SciUsdc;
+        } else {
+            revert IncorrectPaymentOption();
         }
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
-            wallet,
+            receivingWallet,
             payment,
             amount,
             amountSci,
@@ -332,7 +341,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         votedResearch[id][user] = 1;
 
         //set the lock time in the staking contract
-        staking.voted(user, block.timestamp + voteLockTime);
+        staking.votedResearch(user, block.timestamp + voteLockTime);
 
         //emit Voted events
         emit Voted(id, support, 1);
@@ -370,91 +379,74 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 id,
         bool donated
     ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        //check if proposal exists
+        // Check if proposal exists and has finalized voting
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
-
-        //check if proposal has finalized voting
         if (researchProposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(researchProposals[id].status);
 
+        // Extract proposal details
         address receivingWallet = researchProposals[id].details.receivingWallet;
-
         uint256 amount = researchProposals[id].details.amount;
         uint256 amountSci = researchProposals[id].details.amountSci;
-
         Payment payment = researchProposals[id].details.payment;
 
-        if (donated) {
-            if (payment == Payment.Usdc) {
-                IERC20(usdc).safeTransferFrom(
-                    donationWallet,
-                    receivingWallet,
-                    amount
-                );
-            } else if (payment == Payment.Sci) {
-                IERC20(sci).safeTransferFrom(
-                    donationWallet,
-                    receivingWallet,
-                    amountSci
-                );
-            } else if (payment == Payment.Coin) {
-                if (_msgSender() != donationWallet)
-                    revert Unauthorized(_msgSender());
-                if (msg.value == 0 || msg.value != amount)
-                    revert IncorrectCoinValue();
-                (bool sent, ) = receivingWallet.call{value: msg.value}("");
-                require(sent, "Failed to transfer");
-            } else if (payment == Payment.SciUsdc) {
-                IERC20(sci).safeTransferFrom(
-                    donationWallet,
-                    receivingWallet,
-                    amountSci
-                );
+        // Determine the source wallet based on the 'donated' flag
+        address sourceWallet = donated ? donationWallet : treasuryWallet;
 
-                IERC20(usdc).safeTransferFrom(
-                    donationWallet,
-                    receivingWallet,
-                    amount
-                );
-            }
-        } else {
-            if (payment == Payment.Usdc) {
-                IERC20(usdc).safeTransferFrom(
-                    treasuryWallet,
-                    receivingWallet,
-                    amount
-                );
-            } else if (payment == Payment.Sci) {
-                IERC20(sci).safeTransferFrom(
-                    treasuryWallet,
-                    receivingWallet,
-                    amountSci
-                );
-            } else if (payment == Payment.Coin) {
-                if (_msgSender() != treasuryWallet)
-                    revert Unauthorized(_msgSender());
-                if (msg.value == 0 || msg.value != amount)
-                    revert IncorrectCoinValue();
-                (bool sent, ) = receivingWallet.call{value: msg.value}("");
-                require(sent, "Failed to transfer");
-            } else if (payment == Payment.SciUsdc) {
-                IERC20(sci).safeTransferFrom(
-                    treasuryWallet,
-                    receivingWallet,
-                    amountSci
-                );
-
-                IERC20(usdc).safeTransferFrom(
-                    treasuryWallet,
-                    receivingWallet,
-                    amount
-                );
-            }
+        // Transfer funds based on payment type
+        if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
+            transferToken(IERC20(usdc), sourceWallet, receivingWallet, amount);
+        }
+        if (payment == Payment.Sci || payment == Payment.SciUsdc) {
+            transferToken(
+                IERC20(sci),
+                sourceWallet,
+                receivingWallet,
+                amountSci
+            );
+        }
+        if (payment == Payment.Coin) {
+            transferCoin(sourceWallet, receivingWallet, amount);
         }
 
         researchProposals[id].status = ProposalStatus.Executed;
-
         emit Executed(id, donated, amount);
+    }
+
+    /**
+     * @dev Transfers ERC20 tokens from one address to another.
+     *      Uses the safeTransferFrom function from the SafeERC20 library
+     *      to securely transfer tokens.
+     * @param token The ERC20 token to be transferred.
+     * @param from The address from which the tokens will be transferred.
+     * @param to The address to which the tokens will be transferred.
+     * @param amount The amount of tokens to transfer.
+     */
+    function transferToken(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
+        if (amount > 0) {
+            token.safeTransferFrom(from, to, amount);
+        }
+    }
+
+    /**
+     * @dev Transfers ETH coin from one address to another.
+     *      Requires that the function caller is the same as the 'from' address.
+     *      Reverts if the transferred amount does not match the provided value
+     *      or if the sender is unauthorized.
+     * @param from The address from which the coins will be transferred. Must match the message sender.
+     * @param to The address to which the coins will be transferred.
+     * @param amount The amount of coins to transfer.
+     */
+    function transferCoin(address from, address to, uint256 amount) internal {
+        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
+        (bool sent, ) = to.call{value: msg.value}("");
+        require(sent, "Failed to transfer");
     }
 
     /**
@@ -530,14 +522,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the governance and staking smart contracts
      */
-    function terminate()
+    function terminateResearch()
         external
         notTerminated
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         IStaking staking = IStaking(stakingAddress);
-        staking.terminate(_msgSender());
+        staking.terminateResearch(_msgSender());
         terminated = true;
         emit Terminated(_msgSender(), block.number);
     }

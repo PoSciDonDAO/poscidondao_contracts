@@ -15,7 +15,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotClaim();
-    error ContractTerminated(address admin, uint256 blockNumber);
+    error ContractsTerminated();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
@@ -50,20 +50,26 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
-    bool public terminated = false;
+    bool public terminatedGovOps = false;
+    bool public terminatedGovRes = false;
     address public govOpsContract;
     address public govResContract;
     uint256 private totStaked;
     mapping(address => User) public users;
 
     ///*** MODIFIERS ***///
-    modifier gov() {
-        if (_msgSender() != govOpsContract || _msgSender() != govResContract) revert Unauthorized(_msgSender());
+    modifier govOps() {
+        if (_msgSender() != govOpsContract) revert Unauthorized(_msgSender());
+        _;
+    }
+
+    modifier govRes() {
+        if (_msgSender() != govResContract) revert Unauthorized(_msgSender());
         _;
     }
 
     modifier notTerminated() {
-        if (terminated) revert ContractTerminated(_msgSender(), block.number);
+        if (terminatedGovOps && terminatedGovRes) revert ContractsTerminated();
         _;
     }
 
@@ -256,7 +262,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         if (
             src == address(_sci) &&
             users[user].voteLockEnd > block.timestamp &&
-            !terminated
+            !(terminatedGovOps && terminatedGovRes)
         ) {
             revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
         } else {
@@ -282,7 +288,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
                 //check if delegate did not vote recently
                 if (
                     users[delegated].voteLockEnd > block.timestamp &&
-                    !terminated
+                    !(terminatedGovOps && terminatedGovRes)
                 ) {
                     revert TokensStillLocked(
                         users[delegated].voteLockEnd,
@@ -327,10 +333,25 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @param user the user's address holding SCI or DON tokens
      * @param voteLockEnd the block number where the vote lock ends
      */
-    function voted(
+    function votedOperations(
         address user,
         uint256 voteLockEnd
-    ) external gov returns (bool) {
+    ) external govOps returns (bool) {
+        if (users[user].voteLockEnd < voteLockEnd) {
+            users[user].voteLockEnd = voteLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, voteLockEnd);
+        return true;
+    }
+    /**
+     * @dev is called by gov contract upon voting
+     * @param user the user's address holding SCI or DON tokens
+     * @param voteLockEnd the block number where the vote lock ends
+     */
+    function votedResearch(
+        address user,
+        uint256 voteLockEnd
+    ) external govRes returns (bool) {
         if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
@@ -341,11 +362,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the staking smart contract
      */
-    function terminate(address admin) external gov notTerminated nonReentrant {
-        terminated = true;
+    function terminateOperations(address admin) external govOps notTerminated nonReentrant {
+        terminatedGovOps = true;
         emit Terminated(admin, block.number);
     }
 
+    /**
+     * @dev terminates the staking smart contract
+     */
+    function terminateResearch(address admin) external govRes notTerminated nonReentrant {
+        terminatedGovRes = true;
+        emit Terminated(admin, block.number);
+    }
     /**
      * @dev return the timestamp where the lock after voting ends
      */
