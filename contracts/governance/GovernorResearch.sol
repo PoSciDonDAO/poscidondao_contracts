@@ -150,7 +150,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (staking.getStakedSci(member) > ddThreshold) {
             grantRole(DUE_DILIGENCE_ROLE, member);
         } else {
-            revert InsufficientBalance(staking.getStakedSci(member), 1000e18);
+            revert InsufficientBalance(staking.getStakedSci(member), ddThreshold);
         }
     }
 
@@ -230,10 +230,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (
             bytes(info).length == 0 ||
             receivingWallet == address(0) ||
-            (amountUsdc > 0 ? 1 : 0) +
-                (amountCoin > 0 ? 1 : 0) +
-                (amountSci > 0 ? 1 : 0) !=
-            1
+            !((amountUsdc > 0 &&
+                amountCoin == 0 &&
+                (amountSci == 0 || amountSci > 0)) ||
+                (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                (amountSci > 0 &&
+                    amountCoin == 0 &&
+                    (amountUsdc == 0 || amountUsdc > 0)))
         ) {
             revert InvalidInput();
         }
@@ -250,13 +253,22 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 amount;
         uint256 sciAmount;
 
-        if (amountUsdc > 0) {
-            amount = amountUsdc;
-            payment = Payment.Usdc;
-        } else if (amountCoin > 0) {
-            amount = amountCoin;
-            payment = Payment.Coin;
-        } else if (amountUsdc > 0 && amountSci > 0) {
+        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
+            (amountCoin > 0 ? 1 : 0) +
+            (amountSci > 0 ? 1 : 0);
+
+        if (paymentOptions == 1) {
+            if (amountUsdc > 0) {
+                amount = amountUsdc;
+                payment = Payment.Usdc;
+            } else if (amountCoin > 0) {
+                amount = amountCoin;
+                payment = Payment.Coin;
+            } else if (amountSci > 0) {
+                sciAmount = amountSci;
+                payment = Payment.Sci;
+            }
+        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
             amount = amountUsdc;
             sciAmount = amountSci;
             payment = Payment.SciUsdc;
@@ -364,6 +376,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 block.timestamp,
                 researchProposals[id].endTimeStamp
             );
+        if (researchProposals[id].totalVotes < quorum)
+            revert QuorumNotReached();
 
         researchProposals[id].status = ProposalStatus.Scheduled;
 
@@ -411,42 +425,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         researchProposals[id].status = ProposalStatus.Executed;
         emit Executed(id, donated, amount);
-    }
-
-    /**
-     * @dev Transfers ERC20 tokens from one address to another.
-     *      Uses the safeTransferFrom function from the SafeERC20 library
-     *      to securely transfer tokens.
-     * @param token The ERC20 token to be transferred.
-     * @param from The address from which the tokens will be transferred.
-     * @param to The address to which the tokens will be transferred.
-     * @param amount The amount of tokens to transfer.
-     */
-    function transferToken(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal {
-        if (amount > 0) {
-            token.safeTransferFrom(from, to, amount);
-        }
-    }
-
-    /**
-     * @dev Transfers ETH coin from one address to another.
-     *      Requires that the function caller is the same as the 'from' address.
-     *      Reverts if the transferred amount does not match the provided value
-     *      or if the sender is unauthorized.
-     * @param from The address from which the coins will be transferred. Must match the message sender.
-     * @param to The address to which the coins will be transferred.
-     * @param amount The amount of coins to transfer.
-     */
-    function transferCoin(address from, address to, uint256 amount) internal {
-        if (_msgSender() != from) revert Unauthorized(_msgSender());
-        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
-        (bool sent, ) = to.call{value: msg.value}("");
-        require(sent, "Failed to transfer");
     }
 
     /**
@@ -532,5 +510,41 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         staking.terminateResearch(_msgSender());
         terminated = true;
         emit Terminated(_msgSender(), block.number);
+    }
+
+    /**
+     * @dev Transfers ERC20 tokens from one address to another.
+     *      Uses the safeTransferFrom function from the SafeERC20 library
+     *      to securely transfer tokens.
+     * @param token The ERC20 token to be transferred.
+     * @param from The address from which the tokens will be transferred.
+     * @param to The address to which the tokens will be transferred.
+     * @param amount The amount of tokens to transfer.
+     */
+    function transferToken(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
+        if (amount > 0) {
+            token.safeTransferFrom(from, to, amount);
+        }
+    }
+
+    /**
+     * @dev Transfers ETH coin from one address to another.
+     *      Requires that the function caller is the same as the 'from' address.
+     *      Reverts if the transferred amount does not match the provided value
+     *      or if the sender is unauthorized.
+     * @param from The address from which the coins will be transferred. Must match the message sender.
+     * @param to The address to which the coins will be transferred.
+     * @param amount The amount of coins to transfer.
+     */
+    function transferCoin(address from, address to, uint256 amount) internal {
+        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
+        (bool sent, ) = to.call{value: msg.value}("");
+        require(sent, "Failed to transfer");
     }
 }

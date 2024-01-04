@@ -261,10 +261,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (executable) {
             if (
                 receivingWallet == address(0) ||
-                (amountUsdc > 0 ? 1 : 0) +
-                    (amountCoin > 0 ? 1 : 0) +
-                    (amountSci > 0 ? 1 : 0) !=
-                1
+                !((amountUsdc > 0 && amountCoin == 0 && (amountSci >= 0)) ||
+                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                    (amountSci > 0 && amountCoin == 0 && (amountUsdc >= 0)))
             ) {
                 revert InvalidInputForExecutable();
             }
@@ -286,6 +285,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 staking.getStakedSci(_msgSender()),
                 opThreshold
             );
+
+        // if (staking.pr)
 
         Payment payment;
         uint256 amount;
@@ -386,7 +387,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //check if user already voted for this proposal
         if (votedOperations[id][user] == 1) revert VoteLock();
 
-        //vote for, against or abstain
+        //vote for or against
         if (support) {
             operationsProposals[id].votesFor += votes;
         } else {
@@ -462,26 +463,24 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             uint256 amountSci = operationsProposals[id].details.amountSci;
 
             Payment payment = operationsProposals[id].details.payment;
-
-            if (payment == Payment.Usdc) {
-                IERC20(usdc).safeTransferFrom(
+            if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
+                transferToken(
+                    IERC20(usdc),
                     treasuryWallet,
                     receivingWallet,
                     amount
                 );
-            } else if (payment == Payment.Sci) {
-                IERC20(sci).safeTransferFrom(
+            }
+            if (payment == Payment.Sci || payment == Payment.SciUsdc) {
+                transferToken(
+                    IERC20(sci),
                     treasuryWallet,
                     receivingWallet,
                     amountSci
                 );
-            } else if (payment == Payment.Coin) {
-                if (_msgSender() != treasuryWallet)
-                    revert Unauthorized(_msgSender());
-                if (msg.value == 0 || msg.value != amount)
-                    revert IncorrectCoinValue();
-                (bool sent, ) = receivingWallet.call{value: msg.value}("");
-                require(sent, "Failed to transfer");
+            }
+            if (payment == Payment.Coin) {
+                transferCoin(treasuryWallet, receivingWallet, amount);
             }
 
             operationsProposals[id].status = ProposalStatus.Executed;
@@ -596,5 +595,41 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         staking.terminateOperations(_msgSender());
         terminated = true;
         emit Terminated(_msgSender(), block.number);
+    }
+
+    /**
+     * @dev Transfers ERC20 tokens from one address to another.
+     *      Uses the safeTransferFrom function from the SafeERC20 library
+     *      to securely transfer tokens.
+     * @param token The ERC20 token to be transferred.
+     * @param from The address from which the tokens will be transferred.
+     * @param to The address to which the tokens will be transferred.
+     * @param amount The amount of tokens to transfer.
+     */
+    function transferToken(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
+        if (amount > 0) {
+            token.safeTransferFrom(from, to, amount);
+        }
+    }
+
+    /**
+     * @dev Transfers ETH coin from one address to another.
+     *      Requires that the function caller is the same as the 'from' address.
+     *      Reverts if the transferred amount does not match the provided value
+     *      or if the sender is unauthorized.
+     * @param from The address from which the coins will be transferred. Must match the message sender.
+     * @param to The address to which the coins will be transferred.
+     * @param amount The amount of coins to transfer.
+     */
+    function transferCoin(address from, address to, uint256 amount) internal {
+        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
+        (bool sent, ) = to.call{value: msg.value}("");
+        require(sent, "Failed to transfer");
     }
 }

@@ -18,6 +18,8 @@ interface IStaking {
 
     function lock(address src, address user, uint256 amount) external;
 
+    function proposedOperations(address user, uint256 proposeLockEnd) external;
+
     function terminateOperations(address admin) external;
 
     function terminateResearch(address admin) external;

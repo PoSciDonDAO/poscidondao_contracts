@@ -38,7 +38,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 stakedPo; //PO deposited
         uint256 stakedSci; //SCI deposited
         uint256 votingRights; //Voting rights for Operation proposals
-        uint256 voteLockEnd; //Time before tokens can be unlocked after voting
+        uint256 proposeLockEnd; //Time before token unlock after proposing
+        uint256 voteLockEnd; //Time before token unlock after voting
         uint256 amtSnapshots; //Amount of snapshots
         address delegate; //Address of the delegate
         mapping(uint256 => Snapshot) snapshots; //Index => snapshot
@@ -330,7 +331,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev is called by gov contract upon voting
-     * @param user the user's address holding SCI or DON tokens
+     * @param user the user's address holding SCI tokens
      * @param voteLockEnd the block number where the vote lock ends
      */
     function votedOperations(
@@ -343,9 +344,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         emit VoteLockTimeUpdated(user, voteLockEnd);
         return true;
     }
+
     /**
      * @dev is called by gov contract upon voting
-     * @param user the user's address holding SCI or DON tokens
+     * @param user the user's address holding SCI tokens
      * @param voteLockEnd the block number where the vote lock ends
      */
     function votedResearch(
@@ -356,6 +358,22 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[user].voteLockEnd = voteLockEnd;
         }
         emit VoteLockTimeUpdated(user, voteLockEnd);
+        return true;
+    }
+
+    /**
+     * @dev is called by govOps contract upon proposing
+     * @param user the user's address holding SCI tokens
+     * @param proposeLockEnd the block number where the vote lock ends
+     */
+    function proposedOperations(
+        address user,
+        uint256 proposeLockEnd
+    ) external govRes returns (bool) {
+        if (users[user].proposeLockEnd < proposeLockEnd) {
+            users[user].proposeLockEnd = proposeLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, proposeLockEnd);
         return true;
     }
 
