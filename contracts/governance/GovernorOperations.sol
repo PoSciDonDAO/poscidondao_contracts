@@ -47,6 +47,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 totalVotes;
+        bool quadraticVoting;
     }
 
     struct ProjectInfo {
@@ -265,7 +266,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountUsdc, //6 decimals
         uint256 amountCoin, //18 decimals
         uint256 amountSci, //18 decimals
-        bool executable
+        bool executable,
+        bool quadraticVoting
     ) external notTerminated nonReentrant returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInfo();
 
@@ -344,7 +346,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             projectInfo,
             0,
             0,
-            0
+            0,
+            quadraticVoting
         );
 
         //increment proposal index
@@ -393,26 +396,35 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (block.timestamp > operationsProposals[id].endTimeStamp)
             revert ProposalLifeTimePassed();
 
-        IStaking staking = IStaking(stakingAddress);
-        //get latest voting rights
-        uint256 _votingRights = staking.getLatestUserRights(user);
-
-        //check if user has enough voting rights
-        if (votes > _votingRights)
-            revert InsufficientVotingRights(_votingRights, votes);
-
         //check if user already voted for this proposal
         if (votedOperations[id][user] == 1) revert VoteLock();
 
+        IStaking staking = IStaking(stakingAddress);
+        //get latest voting rights
+        uint256 votingRights = staking.getLatestUserRights(user);
+
+        //check if user has enough voting rights
+        if (votes > votingRights)
+            revert InsufficientVotingRights(votingRights, votes);
+
+        uint256 actualVotes;
+
+        if (operationsProposals[id].quadraticVoting) {
+            // Calculate the actual number of votes (square root of the voting rights)
+            actualVotes = sqrt(votes);
+        } else {
+            actualVotes = votes;
+        }
+
         //vote for or against
         if (support) {
-            operationsProposals[id].votesFor += votes;
+            operationsProposals[id].votesFor += actualVotes;
         } else {
-            operationsProposals[id].votesAgainst += votes;
+            operationsProposals[id].votesAgainst += actualVotes;
         }
 
         //add to the total votes
-        operationsProposals[id].totalVotes += votes;
+        operationsProposals[id].totalVotes += actualVotes;
 
         //set user as voted for proposal
         votedOperations[id][user] = 1;
@@ -426,7 +438,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
 
         //emit Voted events
-        emit Voted(id, support, votes);
+        emit Voted(id, support, actualVotes);
     }
 
     /**
@@ -568,7 +580,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     )
         external
         view
-        returns (uint256, uint256, ProposalStatus, uint256, uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            ProposalStatus,
+            uint256,
+            uint256,
+            uint256,
+            bool
+        )
     {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
@@ -578,7 +598,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             operationsProposals[id].status,
             operationsProposals[id].votesFor,
             operationsProposals[id].votesAgainst,
-            operationsProposals[id].totalVotes
+            operationsProposals[id].totalVotes,
+            operationsProposals[id].quadraticVoting
         );
     }
 
@@ -588,14 +609,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getOperationsProposalProjectInfo(
         uint256 id
-    ) external view returns (string memory, address, Payment, uint256) {
+    ) external view returns (string memory, address, Payment, uint256, bool) {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
         return (
             operationsProposals[id].details.info,
             operationsProposals[id].details.receivingWallet,
             operationsProposals[id].details.payment,
-            operationsProposals[id].details.amount
+            operationsProposals[id].details.amount,
+            operationsProposals[id].details.executable
         );
     }
 
@@ -612,6 +634,27 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         staking.terminateOperations(_msgSender());
         terminated = true;
         emit Terminated(_msgSender(), block.number);
+    }
+
+    /**
+     * @dev calculates the square root of given x 
+            adjusted for values with 18 decimals
+     */
+    function sqrt(uint256 x) internal pure returns (uint256 y) {
+        if (x == 0) return 0; // Return 0 for 0 input
+
+        // Normalize x by dividing by 1e18
+        uint256 normalizedX = x / 1e18;
+
+        uint256 z = (normalizedX + 1) / 2;
+        y = normalizedX;
+        while (z < y) {
+            y = z;
+            z = (normalizedX / z + z) / 2;
+        }
+
+        // Convert the result back to wei scale by multiplying with 1e18
+        return y * 1e18;
     }
 
     /**

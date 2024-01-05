@@ -45,7 +45,7 @@ contract StakingTest is Test {
             address(usdc),
             address(sci)
         );
-        
+
         govRes = new GovernorResearch(
             address(staking),
             treasuryWallet,
@@ -141,19 +141,12 @@ contract StakingTest is Test {
     function test_LockPoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        govOps.proposeOperation(
-            "Introduction",
-            treasuryWallet,
-            5000000e6,
-            0,
-            0,
-            true
-        );
+        govOps.proposeOperation("Info", treasuryWallet, 500e6, 0, 0, true, false);
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
         uint256 id = govOps.getOperationsProposalIndex();
-        govOps.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
+        govOps.voteOnOperations(id, addr2, true, 150e18);
         staking.lock(address(po), addr2, 1);
         assertEq(staking.getStakedPo(addr2), 1);
         vm.stopPrank();
@@ -162,19 +155,12 @@ contract StakingTest is Test {
     function test_FreePoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        govOps.proposeOperation(
-            "Introduction",
-            treasuryWallet,
-            5000000e6,
-            0,
-            0,
-            true
-        );
+        govOps.proposeOperation("Info", treasuryWallet, 500e6, 0, 0, true, false);
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
         uint256 id = govOps.getOperationsProposalIndex();
-        govOps.voteOnOperations(id, addr2, true, 150e18); //can we vote on our own proposal?
+        govOps.voteOnOperations(id, addr2, true, 150e18);
         staking.lock(address(po), addr2, 1);
         staking.free(address(po), addr2, 1);
         assertEq(staking.getStakedPo(addr2), 0);

@@ -341,11 +341,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         if (_msgSender() != user) revert Unauthorized(_msgSender());
 
-        IStaking staking = IStaking(stakingAddress);
-        //check if DD member/voter still has enough tokens staked
-        if (staking.getStakedSci(user) < ddThreshold)
-            revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
-
         //check if proposal exists
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
 
@@ -359,6 +354,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         //check if user already voted for this proposal
         if (votedResearch[id][user] == 1) revert VoteLock();
+
+        IStaking staking = IStaking(stakingAddress);
+        
+        //check if DD member/voter still has enough tokens staked
+        if (staking.getStakedSci(user) < ddThreshold)
+            revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
 
         //vote for, against or abstain
         if (support) {

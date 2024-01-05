@@ -125,14 +125,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev sets the address of the operations governance smart contract
      */
-    function setGovOps(address newGovOps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGovOps(
+        address newGovOps
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govOpsContract = newGovOps;
     }
 
     /**
      * @dev sets the address of the operations governance smart contract
      */
-    function setGovRes(address newGovRes) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGovRes(
+        address newGovRes
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govResContract = newGovRes;
     }
 
@@ -397,7 +401,9 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the staking smart contract
      */
-    function terminateOperations(address admin) external govOps notTerminated nonReentrant {
+    function terminateOperations(
+        address admin
+    ) external govOps notTerminated nonReentrant {
         terminatedGovOps = true;
         emit Terminated(admin, block.number);
     }
@@ -405,15 +411,25 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the staking smart contract
      */
-    function terminateResearch(address admin) external govRes notTerminated nonReentrant {
+    function terminateResearch(
+        address admin
+    ) external govRes notTerminated nonReentrant {
         terminatedGovRes = true;
         emit Terminated(admin, block.number);
     }
+
     /**
      * @dev return the timestamp where the lock after voting ends
      */
     function getVoteLockEnd(address user) external view returns (uint256) {
         return users[user].voteLockEnd;
+    }
+
+    /**
+     * @dev return the timestamp where the lock after proposing ends
+     */
+    function getProposalLockEnd(address user) external view returns (uint256) {
+        return users[user].proposalLockEnd;
     }
 
     /**

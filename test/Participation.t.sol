@@ -107,7 +107,7 @@ contract ParticipationTest is Test {
     function test_ReceiveParticipationTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true);        
+            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true, false);        
             uint256 id = gov.getOperationsProposalIndex();
             gov.voteOnOperations(id, addr1, true, 1000e18); 
             uint256 balance = po.balanceOf(addr1); 
@@ -118,7 +118,7 @@ contract ParticipationTest is Test {
     function test_StakeParticipationTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true);
+            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true, false);
             uint256 id = gov.getOperationsProposalIndex();
         vm.stopPrank();
 
@@ -133,7 +133,7 @@ contract ParticipationTest is Test {
     function test_UnstakeParticipationTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true);
+            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true, false);
             uint256 id = gov.getOperationsProposalIndex();
             gov.voteOnOperations(id, addr1, true, 1000e18);
             
@@ -155,13 +155,13 @@ contract ParticipationTest is Test {
     function test_StakeMultipleParticipationTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction", operationsWallet, 0, 0, 5000000e18, true);
+            gov.proposeOperation("Introduction", operationsWallet, 0, 0, 5000000e18, true, false);
         vm.stopPrank();
         vm.startPrank(addr2);
             uint256 id = gov.getOperationsProposalIndex();
             staking.lock(address(sci), addr2, 1000e18);
             gov.voteOnOperations(id, addr2, true, 1000e18);
-            gov.proposeOperation("Introduction2", operationsWallet, 5000000e6, 0, 0, true);
+            gov.proposeOperation("Introduction2", operationsWallet, 5000000e6, 0, 0, true, false);
             uint256 id2 = gov.getOperationsProposalIndex();
             gov.voteOnOperations(id2, addr2, true, 1000e18);
             assertEq(po.balanceOf(addr2), 2);
