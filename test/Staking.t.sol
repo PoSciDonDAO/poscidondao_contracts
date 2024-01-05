@@ -95,6 +95,7 @@ contract StakingTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
@@ -103,6 +104,7 @@ contract StakingTest is Test {
         assertEq(stakedSci, sci.balanceOf(address(staking)));
         assertEq(votingRights, 500e18);
         assertEq(voteLockEnd, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, address(0));
 
@@ -202,6 +204,7 @@ contract StakingTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
@@ -211,6 +214,7 @@ contract StakingTest is Test {
         assertEq(stakedSci, 300e18);
         assertEq(votingRights, 300e18);
         assertEq(voteLockEnd, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
     }
@@ -227,6 +231,7 @@ contract StakingTest is Test {
             uint256 stakedSci1,
             uint256 votingRights1,
             uint256 voteLockEnd1,
+            uint256 proposalLockEnd1,
             uint256 amtSnapshots1,
             address delegate1
         ) = staking.users(addr1);
@@ -237,6 +242,7 @@ contract StakingTest is Test {
         assertEq(stakedSci1, 500e18);
         assertEq(votingRights1, 0);
         assertEq(voteLockEnd1, 0);
+        assertEq(proposalLockEnd1, 0);
         assertEq(amtSnapshots1, 2);
         assertEq(delegate1, addr2);
 
@@ -245,6 +251,7 @@ contract StakingTest is Test {
             uint256 stakedSci2,
             uint256 votingRights2,
             uint256 voteLockEnd2,
+            uint256 proposalLockEnd2,
             uint256 amtSnapshots2,
             address delegate2
         ) = staking.users(addr2);
@@ -254,6 +261,7 @@ contract StakingTest is Test {
         assertEq(stakedSci2, 0);
         assertEq(votingRights2, 500e18);
         assertEq(voteLockEnd2, 0);
+        assertEq(proposalLockEnd2, 0);
         assertEq(amtSnapshots2, 1);
         assertEq(delegate2, address(0));
     }
@@ -275,6 +283,7 @@ contract StakingTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
@@ -283,6 +292,7 @@ contract StakingTest is Test {
         assertEq(stakedSci, 500e18);
         assertEq(votingRights, 500e18);
         assertEq(voteLockEnd, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
     }
@@ -300,6 +310,7 @@ contract StakingTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
@@ -308,6 +319,7 @@ contract StakingTest is Test {
         assertEq(stakedSci, 500e18);
         assertEq(votingRights, 0);
         assertEq(voteLockEnd, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, addr2);
 
@@ -315,6 +327,7 @@ contract StakingTest is Test {
             ,
             uint256 stakedSci1,
             uint256 votingRights1,
+            ,
             ,
             uint256 amtSnapshots1,
             address delegate1
@@ -343,6 +356,7 @@ contract StakingTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
@@ -351,6 +365,7 @@ contract StakingTest is Test {
         assertEq(stakedSci, 200e18);
         assertEq(votingRights, 0);
         assertEq(voteLockEnd, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, addr2);
 
@@ -358,6 +373,7 @@ contract StakingTest is Test {
             ,
             uint256 stakedSci1,
             uint256 votingRights1,
+            ,
             ,
             uint256 amtSnapshots1,
             address delegate1
@@ -374,7 +390,7 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        (, , , , , address delegate) = staking.users(addr1);
+        (, , , , , , address delegate) = staking.users(addr1);
         bytes4 selector = bytes4(
             keccak256("UnauthorizedDelegation(address,address,address)")
         );

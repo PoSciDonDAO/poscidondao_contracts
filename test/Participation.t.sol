@@ -23,7 +23,7 @@ contract ParticipationTest is Test {
     address addr5 = vm.addr(5);
     address treasuryWallet = vm.addr(6);
     address donationWallet = vm.addr(7);
-    address royaltyAddress = vm.addr(8);
+    address operationsWallet = vm.addr(8);
 
     function setUp() public {
         usdc = new MockUsdc(10000000e6);
@@ -155,20 +155,14 @@ contract ParticipationTest is Test {
     function test_StakeMultipleParticipationTokens() public {
         vm.startPrank(addr1);
             staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction", treasuryWallet, 5000000e6, 0, 0, true);
+            gov.proposeOperation("Introduction", operationsWallet, 0, 0, 5000000e18, true);
         vm.stopPrank();
         vm.startPrank(addr2);
             uint256 id = gov.getOperationsProposalIndex();
             staking.lock(address(sci), addr2, 1000e18);
             gov.voteOnOperations(id, addr2, true, 1000e18);
-        vm.stopPrank();
-        vm.startPrank(addr1);
-            staking.lock(address(sci), addr1, 1000e18);
-            gov.proposeOperation("Introduction2", treasuryWallet, 5000000e6, 0, 0, true);
-        vm.stopPrank();
-        vm.startPrank(addr2);
+            gov.proposeOperation("Introduction2", operationsWallet, 5000000e6, 0, 0, true);
             uint256 id2 = gov.getOperationsProposalIndex();
-            staking.lock(address(sci), addr2, 1000e18);
             gov.voteOnOperations(id2, addr2, true, 1000e18);
             assertEq(po.balanceOf(addr2), 2);
             staking.lock(address(po), addr2, po.balanceOf(addr2));
@@ -176,26 +170,4 @@ contract ParticipationTest is Test {
          vm.stopPrank();
 
     }
-
-    // function test_StakeMultipleParticipationTokens() public {
-    //     lock();
-    //     for(uint256 i = 0; i < 5; i++) {
-    //         proposeOperation();
-    //         vote();
-    //     }
-
-    //     vm.startPrank(addr1);
-    //         uint256[] memory balanceStaked = po.getStakedBalance(addr1);
-    //         uint256[] memory balanceHeld = po.getHeldBalance(addr1);
-    //         assertEq(balanceStaked.length, 0);
-    //         assertEq(balanceHeld.length, 5);
-    //         staking.lock(address(po), addr1, 5);
-    //         (uint256 stakedPo,,,,) = staking.users(addr1);
-    //         assertEq(stakedPo, 5);
-    //         uint256[] memory balanceStaked2 = po.getStakedBalance(addr1);
-    //         uint256[] memory balanceHeld2 = po.getHeldBalance(addr1);
-    //         assertEq(balanceStaked2.length, 5);
-    //         assertEq(balanceHeld2.length, 0);
-    //     vm.stopPrank();
-    // }
 }

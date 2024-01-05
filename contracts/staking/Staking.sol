@@ -38,7 +38,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 stakedPo; //PO deposited
         uint256 stakedSci; //SCI deposited
         uint256 votingRights; //Voting rights for Operation proposals
-        uint256 proposeLockEnd; //Time before token unlock after proposing
+        uint256 proposalLockEnd; //Time before token unlock after proposing
         uint256 voteLockEnd; //Time before token unlock after voting
         uint256 amtSnapshots; //Amount of snapshots
         address delegate; //Address of the delegate
@@ -268,6 +268,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
         } else {
             users[user].voteLockEnd = 0;
+            users[user].proposalLockEnd = 0;
         }
 
         if (src == address(_sci)) {
@@ -364,16 +365,32 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev is called by govOps contract upon proposing
      * @param user the user's address holding SCI tokens
-     * @param proposeLockEnd the block number where the vote lock ends
+     * @param proposalLockEnd the block number where the vote lock ends
      */
     function proposedOperations(
         address user,
-        uint256 proposeLockEnd
-    ) external govRes returns (bool) {
-        if (users[user].proposeLockEnd < proposeLockEnd) {
-            users[user].proposeLockEnd = proposeLockEnd;
+        uint256 proposalLockEnd
+    ) external govOps returns (bool) {
+        if (users[user].proposalLockEnd < proposalLockEnd) {
+            users[user].proposalLockEnd = proposalLockEnd;
         }
-        emit VoteLockTimeUpdated(user, proposeLockEnd);
+        emit VoteLockTimeUpdated(user, proposalLockEnd);
+        return true;
+    }
+
+    /**
+     * @dev is called by govOps contract upon proposing
+     * @param user the user's address holding SCI tokens
+     * @param proposalLockEnd the block number where the vote lock ends
+     */
+    function proposedResearch(
+        address user,
+        uint256 proposalLockEnd
+    ) external govRes returns (bool) {
+        if (users[user].proposalLockEnd < proposalLockEnd) {
+            users[user].proposalLockEnd = proposalLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, proposalLockEnd);
         return true;
     }
 

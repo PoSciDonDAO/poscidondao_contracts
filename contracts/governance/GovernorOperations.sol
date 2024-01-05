@@ -29,6 +29,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalIsNotExecutable();
     error ProposalLifeTimePassed();
+    error ProposalLock();
     error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
@@ -63,6 +64,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
+    uint256 public proposalLockTime;
     uint256 public voteLockTime;
 
     ///*** KEY ADDRESSES ***///
@@ -80,6 +82,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     mapping(uint256 => Proposal) private operationsProposals;
     mapping(uint256 => mapping(address => uint8)) private votedOperations;
+    mapping(address => uint8) private proposedOperations;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -104,7 +107,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Proposed(uint256 indexed id, ProjectInfo details);
+    event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
     event Voted(uint256 indexed id, bool indexed support, uint256 amount);
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
@@ -128,8 +131,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         opThreshold = 100e18;
 
         proposalLifeTime = 2 weeks;
-        quorum = (IERC20(sci).totalSupply() / 100) * 3; //3% of circulating supply
+        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 2 weeks;
+        proposalLockTime = 4 weeks;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
@@ -141,7 +145,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the threshold for DD and non-DD members to propose
+     * @dev sets the threshold for members to propose
      */
     function setStakedSciThreshold(
         uint256 thresholdOpMember
@@ -232,9 +236,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 _param,
         uint256 _data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        //the duration of the proposal
         if (_param == "proposalLifeTime") proposalLifeTime = _data;
+
+        //the amount of tokens needed to pass a proposal
+        //provide a percentage of the total supply
         if (_param == "quorum") quorum = _data;
+
+        //the lock time of your tokens after voting
         if (_param == "voteLockTime") voteLockTime = _data;
+
+        //the lock time of your tokens and ability to propose after proposing
+        if (_param == "proposalLockTime") proposalLockTime = _data;
     }
 
     /**
@@ -254,9 +267,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountSci, //18 decimals
         bool executable
     ) external notTerminated nonReentrant returns (uint256) {
-        if (bytes(info).length == 0) {
-            revert InvalidInfo();
-        }
+        if (bytes(info).length == 0) revert InvalidInfo();
 
         if (executable) {
             if (
@@ -286,7 +297,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 opThreshold
             );
 
-        // if (staking.pr)
+        if (proposedOperations[_msgSender()] == 1) revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -342,8 +353,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         operationsProposals[_operationsProposalIndex] = proposal;
 
+        staking.proposedOperations(
+            _msgSender(),
+            block.timestamp + proposalLockTime
+        );
+
+        proposedOperations[_msgSender()] = 1;
+
         //emit Proposed event
-        emit Proposed(_operationsProposalIndex, projectInfo);
+        emit Proposed(_operationsProposalIndex, _msgSender(), projectInfo);
 
         return _operationsProposalIndex;
     }
@@ -363,8 +381,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) external notTerminated nonReentrant {
         if (_msgSender() != user) revert Unauthorized(_msgSender());
 
-        IStaking staking = IStaking(stakingAddress);
-
         //check if proposal exists
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
@@ -377,6 +393,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (block.timestamp > operationsProposals[id].endTimeStamp)
             revert ProposalLifeTimePassed();
 
+        IStaking staking = IStaking(stakingAddress);
         //get latest voting rights
         uint256 _votingRights = staking.getLatestUserRights(user);
 
@@ -464,7 +481,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             Payment payment = operationsProposals[id].details.payment;
             if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-                transferToken(
+                _transferToken(
                     IERC20(usdc),
                     treasuryWallet,
                     receivingWallet,
@@ -472,7 +489,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             }
             if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-                transferToken(
+                _transferToken(
                     IERC20(sci),
                     treasuryWallet,
                     receivingWallet,
@@ -480,7 +497,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             }
             if (payment == Payment.Coin) {
-                transferCoin(treasuryWallet, receivingWallet, amount);
+                _transferCoin(treasuryWallet, receivingWallet, amount);
             }
 
             operationsProposals[id].status = ProposalStatus.Executed;
@@ -606,7 +623,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param to The address to which the tokens will be transferred.
      * @param amount The amount of tokens to transfer.
      */
-    function transferToken(
+    function _transferToken(
         IERC20 token,
         address from,
         address to,
@@ -626,7 +643,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param to The address to which the coins will be transferred.
      * @param amount The amount of coins to transfer.
      */
-    function transferCoin(address from, address to, uint256 amount) internal {
+    function _transferCoin(address from, address to, uint256 amount) internal {
         if (_msgSender() != from) revert Unauthorized(_msgSender());
         if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
         (bool sent, ) = to.call{value: msg.value}("");

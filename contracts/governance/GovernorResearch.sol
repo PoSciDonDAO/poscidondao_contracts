@@ -23,6 +23,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidInput();
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalLifeTimePassed();
+    error ProposalLock();
     error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
@@ -53,6 +54,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
+    uint256 public proposalLockTime;
     uint256 public voteLockTime;
 
     ///*** KEY ADDRESSES ***///
@@ -70,6 +72,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     mapping(uint256 => Proposal) private researchProposals;
     mapping(uint256 => mapping(address => uint8)) private votedResearch;
+    mapping(address => uint8) private proposedResearch;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -94,7 +97,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Proposed(uint256 indexed id, ProjectInfo details);
+    event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
     event Voted(uint256 indexed id, bool indexed support, uint256 amount);
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
@@ -131,7 +134,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the threshold for DD and non-DD members to propose
+     * @dev sets the threshold for DD members to propose
      */
     function setStakedSciThreshold(
         uint256 thresholdDDMember
@@ -200,9 +203,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 _param,
         uint256 _data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        //the duration of the proposal
         if (_param == "proposalLifeTime") proposalLifeTime = _data;
+
+        //the amount of tokens needed to pass a proposal
+        //provide a percentage of the total supply
         if (_param == "quorum") quorum = _data;
+
+        //the lock time of your tokens after voting
         if (_param == "voteLockTime") voteLockTime = _data;
+
+        //the lock time of your tokens and ability to propose after proposing
+        if (_param == "proposalLockTime") proposalLockTime = _data;
     }
 
     /**
@@ -248,6 +260,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 staking.getStakedSci(_msgSender()),
                 ddThreshold
             );
+        
+        if (proposedResearch[_msgSender()] == 1) revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -301,8 +315,15 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         researchProposals[_researchProposalIndex] = proposal;
 
+        staking.proposedResearch(
+            _msgSender(),
+            block.timestamp + proposalLockTime
+        );
+
+        proposedResearch[_msgSender()] = 1;
+
         //emit Proposed event
-        emit Proposed(_researchProposalIndex, projectInfo);
+        emit Proposed(_researchProposalIndex, _msgSender(), projectInfo);
 
         return _researchProposalIndex;
     }
@@ -321,7 +342,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (_msgSender() != user) revert Unauthorized(_msgSender());
 
         IStaking staking = IStaking(stakingAddress);
-
+        //check if DD member/voter still has enough tokens staked
         if (staking.getStakedSci(user) < ddThreshold)
             revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
 
@@ -409,10 +430,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         // Transfer funds based on payment type
         if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-            transferToken(IERC20(usdc), sourceWallet, receivingWallet, amount);
+            _transferToken(IERC20(usdc), sourceWallet, receivingWallet, amount);
         }
         if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-            transferToken(
+            _transferToken(
                 IERC20(sci),
                 sourceWallet,
                 receivingWallet,
@@ -420,7 +441,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             );
         }
         if (payment == Payment.Coin) {
-            transferCoin(sourceWallet, receivingWallet, amount);
+            _transferCoin(sourceWallet, receivingWallet, amount);
         }
 
         researchProposals[id].status = ProposalStatus.Executed;
@@ -521,7 +542,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param to The address to which the tokens will be transferred.
      * @param amount The amount of tokens to transfer.
      */
-    function transferToken(
+    function _transferToken(
         IERC20 token,
         address from,
         address to,
@@ -541,7 +562,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param to The address to which the coins will be transferred.
      * @param amount The amount of coins to transfer.
      */
-    function transferCoin(address from, address to, uint256 amount) internal {
+    function _transferCoin(address from, address to, uint256 amount) internal {
         if (_msgSender() != from) revert Unauthorized(_msgSender());
         if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
         (bool sent, ) = to.call{value: msg.value}("");

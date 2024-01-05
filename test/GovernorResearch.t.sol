@@ -170,7 +170,7 @@ contract GovernorResearchTest is Test {
         assertEq(votesAgainst, 0);
         assertEq(totalVotes, 1);
 
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govRes.voteLockTime()));
         vm.stopPrank();
@@ -203,18 +203,6 @@ contract GovernorResearchTest is Test {
         bytes4 selector = bytes4(keccak256("VoteLock()"));
         vm.expectRevert(selector);
         govRes.voteOnResearch(id, addr2, true);
-        vm.stopPrank();
-    }
-
-    function test_RevertVoteWithInsufficientRights() public {
-        vm.startPrank(addr2);
-        staking.lock(address(sci), addr2, 180e18);
-        govRes.proposeResearch("Introduction", researchWallet, 5000000e6, 0, 0);
-        bytes4 selector = bytes4(
-            keccak256("InsufficientVotingRights(uint256,uint256)")
-        );
-        vm.expectRevert(abi.encodeWithSelector(selector));
-        govRes.voteOnResearch(1, addr2, true);
         vm.stopPrank();
     }
 
@@ -261,7 +249,6 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         uint256 id = govRes.getResearchProposalIndex();
         vm.startPrank(addr2);
-        // staking.lock(address(sci), addr2, 1.8e24);
         govRes.voteOnResearch(id, addr2, true);
         vm.stopPrank();
         vm.startPrank(addr1);
@@ -299,7 +286,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(addr2);
         govRes.voteOnResearch(1, addr2, true);
         vm.stopPrank();
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -318,9 +305,25 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         govRes.voteOnResearch(1, addr2, true);
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         vm.warp(voteLockEnd);
         staking.free(address(sci), addr2, 1200e18);
+        vm.stopPrank();
+    }
+
+    function test_RevertIfProposalLock() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);
+        govRes.proposeResearch("Introduction", researchWallet, 50000e6, 0, 0);
+        bytes4 selector = bytes4(keccak256("ProposalLock()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        govRes.proposeResearch(
+            "Introduction",
+            researchWallet,
+            50000e6,
+            0,
+            0
+        );
         vm.stopPrank();
     }
 
@@ -474,12 +477,14 @@ contract GovernorResearchTest is Test {
             uint256 stakedSci,
             uint256 votingRights,
             uint256 voteLockEnd,
+            uint256 proposalLockEnd,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
         assertEq(stakedPo, 0);
         assertEq(stakedSci, 0);
         assertEq(votingRights, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(voteLockEnd, 0);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, address(0));

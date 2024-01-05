@@ -203,7 +203,7 @@ contract GovernorOperationsTest is Test {
         assertEq(votesAgainst, 0);
         assertEq(totalVotes, 100e18);
 
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
@@ -396,7 +396,7 @@ contract GovernorOperationsTest is Test {
         staking.lock(address(sci), addr2, 1800e18);
         govOps.voteOnOperations(1, addr2, true, 1800e18);
         vm.stopPrank();
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -423,7 +423,7 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 1800e18);
         govOps.voteOnOperations(1, addr2, true, 1800e18);
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         vm.warp(voteLockEnd);
         staking.free(address(sci), addr2, 1800e18);
         vm.stopPrank();
@@ -670,6 +670,16 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
+    function test_RevertIfProposalLock() public {
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 2000e18);        
+        govOps.proposeOperation("Introduction", address(0), 0, 0, 0, false);
+        bytes4 selector = bytes4(keccak256("ProposalLock()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        govOps.proposeOperation("Introduction", operationsWallet, 50000e6, 0, 0, true);
+        vm.stopPrank();
+    }
+
     function test_RevertExecutableProposalIfNoPaymentAndWalletProvided()
         public
     {
@@ -743,6 +753,7 @@ contract GovernorOperationsTest is Test {
             uint256 stakedPo,
             uint256 stakedSci,
             uint256 votingRights,
+            uint256 proposalLockEnd,
             uint256 voteLockEnd,
             uint256 amtSnapshots,
             address delegate
@@ -751,6 +762,7 @@ contract GovernorOperationsTest is Test {
         assertEq(stakedPo, 0);
         assertEq(stakedSci, 0);
         assertEq(votingRights, 0);
+        assertEq(proposalLockEnd, 0);
         assertEq(voteLockEnd, 0);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, address(0));
