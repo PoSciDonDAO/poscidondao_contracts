@@ -1,150 +1,196 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./../interface/IParticipation.sol";
 import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
-contract GovernorResearch {
+contract GovernorResearch is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    error AlreadyActiveProposal();
-    error EmptyOptions();
+    error ContractTerminated(uint256 blockNumber);
+    error IncorrectCoinValue();
     error IncorrectBlockNumber();
-    error IncorrectOption();
+    error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
-    error IncorrectSnapshotIndex();
-    error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
-    error TokensStillLocked(uint256 voteLockTimeStamp, uint256 currentTimeStamp);
+    error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error InvalidInput();
+    error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalLifeTimePassed();
+    error ProposalLock();
+    error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
     error Unauthorized(address user);
     error VoteLock();
-    error WrongToken();
 
     ///*** STRUCTS ***///
     struct Proposal {
-        uint256                     startBlockNum;
-        uint256                     endTimeStamp;
-        ProposalStatus              status; 
-        ProjectInfo                 details; 
-        uint256                     votesFor;
-        uint256                     votesAgainst;
-        uint256                     totalVotes;        
+        uint256 startBlockNum;
+        uint256 endTimeStamp;
+        ProposalStatus status;
+        ProjectInfo details;
+        uint256 votesFor;
+        uint256 votesAgainst;
+        uint256 totalVotes;
     }
 
     struct ProjectInfo {
-        string                      info; //IPFS link
-        address                     researchWallet; //wallet address to send funds to
-        uint256                     amountUsdc; //amount of funds in Usdc
-        uint256                     amountEth; //amount of funds in Eth
+        string info; //IPFS link
+        address receivingWallet; //wallet address to send funds to
+        Payment payment;
+        uint256 amount; //amount of usdc or coin
+        uint256 amountSci; //amount of sci token
+        bool executable;
     }
 
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
+    uint256 public proposalLockTime;
     uint256 public voteLockTime;
 
+    ///*** KEY ADDRESSES ***///
+    address public stakingAddress;
+    address public treasuryWallet;
+    address public donationWallet;
+    address public usdc;
+    address public sci;
+
     ///*** STORAGE & MAPPINGS ***///
-    address                                         public      stakingAddress;
-    address                                         public      treasuryWallet;
-    address                                         public      usdc;
-    uint256                                         private     _proposalIndex;
-    address                                         public      po;
-    IParticipation                                  public      poToken;
-    uint8                                           public      poLive;
-    mapping(address => uint8)                       public      wards;
-    mapping(uint256 => Proposal)                    private     proposals;
-    mapping(uint256 => mapping(address => uint8))   private     voted;
+    uint256 public ddThreshold;
+    uint256 private _researchProposalIndex;
+    bytes32 public constant DUE_DILIGENCE_ROLE =
+        keccak256("DUE_DILIGENCE_ROLE");
+    bool public terminated = false;
+    mapping(uint256 => Proposal) private researchProposals;
+    mapping(uint256 => mapping(address => uint8)) private votedResearch;
+    mapping(address => uint8) private proposedResearch;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
-        Active, Scheduled, Executed, Cancelled 
+        Active,
+        Scheduled,
+        Executed,
+        Completed, //Completed status only for proposals that cannot be executed
+        Cancelled
     }
 
-    enum Vote {
-        No, Yes
+    enum Payment {
+        Usdc,
+        Sci,
+        Coin,
+        SciUsdc
     }
 
     ///*** MODIFIER ***///
-    modifier dao() {
-        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
+    modifier notTerminated() {
+        if (terminated) revert ContractTerminated(block.number);
         _;
     }
 
     /*** EVENTS ***/
-    event RelyOn(address indexed _user);
-    event Denied(address indexed _user);
-    event Proposed(uint256 indexed id, ProjectInfo _details);
-    event Voted(uint256 indexed id, Vote indexed _vote, uint256 _amount);
-    event Scheduled(uint256 indexed id);
-    event Executed(uint256 indexed id);
+    event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
+    event Voted(uint256 indexed id, bool indexed support, uint256 amount);
+    event Scheduled(uint256 indexed id, bool indexed research);
+    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
+    event Completed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
-
+    event Terminated(address admin, uint256 blockNumber);
 
     constructor(
         address stakingAddress_,
         address treasuryWallet_,
-        address usdc_
+        address donationWallet_,
+        address usdc_,
+        address sci_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
+        donationWallet = donationWallet_;
         usdc = usdc_;
+        sci = sci_;
 
+        ddThreshold = 1000e18;
 
-        wards[msg.sender] = 1;
-        wards[treasuryWallet_] = 1;
-        emit RelyOn(msg.sender);
+        proposalLifeTime = 4 weeks;
+        quorum = 1;
+        voteLockTime = 2 weeks;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
+
+        _grantRole(DUE_DILIGENCE_ROLE, treasuryWallet_);
+        _setRoleAdmin(DUE_DILIGENCE_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
+     * @dev sets the threshold for DD members to propose
+     */
+    function setStakedSciThreshold(
+        uint256 thresholdDDMember
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        ddThreshold = thresholdDDMember;
+    }
+
+    /**
+     * @dev allows the DAO to add a member to the Due Diligence Crew
+     * @param member the address of the member that will be added to the DD crew
+     */
+    function addDueDiligenceMember(
+        address member
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        IStaking staking = IStaking(stakingAddress);
+        if (staking.getStakedSci(member) > ddThreshold) {
+            grantRole(DUE_DILIGENCE_ROLE, member);
+        } else {
+            revert InsufficientBalance(
+                staking.getStakedSci(member),
+                ddThreshold
+            );
+        }
+    }
+
+    /**
+     * @dev allows the DAO to add a member to the Due Diligence Crew
+     * @param member the address of the member that will be added to the DD crew
+     */
+    function removeDueDiligenceMember(
+        address member
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        revokeRole(DUE_DILIGENCE_ROLE, member);
+    }
+
+    /**
+     * @dev sets the treasury wallet address
+     */
+    function setTreasuryWallet(
+        address newTreasuryWallet
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        treasuryWallet = newTreasuryWallet;
+    }
+
+    /**
+     * @dev sets the donation wallet address
+     */
+    function setDonationWallet(
+        address newDonationWallet
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        donationWallet = newDonationWallet;
+    }
+
+    /**
      * @dev sets the staking address
      */
-    function setStakingAddress(address _newStakingAddress) external dao {
+    function setStakingAddress(
+        address _newStakingAddress
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         stakingAddress = _newStakingAddress;
-    }
-
-    /**
-     * @dev sets the participation phase to live
-     * @param _status the status of the participation phase, must be 1 to activate
-     */
-    function setPoPhase(uint8 _status) external dao {
-        poLive = _status;
-    }
-
-    /**
-     * @dev sets the PO token address and interface
-     */
-    function setPoToken(address po_) external dao {
-        po = po_;
-        poToken = IParticipation(po_);
-    }
-
-    /**
-     * @dev adds a gov
-     * @param _user the user that is eligible to become a gov
-     */
-    function addWard(address _user) external dao {
-        wards[_user] = 1;
-        emit RelyOn(_user);
-    }
-
-    /**
-     * @dev removes a gov
-     * @param _user the user that will be removed as a gov
-     */
-    function removeWard(address _user) external dao {
-        if(wards[_user] != 1) {
-            revert Unauthorized(msg.sender);
-        }
-        delete wards[_user];
-        emit Denied(_user);
     }
 
     /**
@@ -153,213 +199,375 @@ contract GovernorResearch {
      * @param _data the data assigned to the parameter
      */
     function govParams(
-        bytes32 _param, 
+        bytes32 _param,
         uint256 _data
-        ) external dao {
-        if(_param == "proposalLifeTime") proposalLifeTime = _data;
-        if(_param == "quorum") quorum = _data;                     
-        if(_param == "voteLockTime") voteLockTime = _data;          
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        //the duration of the proposal
+        if (_param == "proposalLifeTime") proposalLifeTime = _data;
+
+        //the amount of tokens needed to pass a proposal
+        //provide a percentage of the total supply
+        if (_param == "quorum") quorum = _data;
+
+        //the lock time of your tokens after voting
+        if (_param == "voteLockTime") voteLockTime = _data;
+
+        //the lock time of your tokens and ability to propose after proposing
+        if (_param == "proposalLockTime") proposalLockTime = _data;
     }
 
-
     /**
-     * @dev creates a proposal with three different research projects
+     * @dev proposes a research project in need of funding
      *      at least one option needs to be proposed
-     * @param _info ipfs hash of project proposal
-     * @param _wallet the address of the research group receiving funds if proposal passed
-     * @param _amountUsdc the amount of funding in usdc; should be 0 if _amountEth > 0
-     * @param _amountEth the amount of funding in Eth; should be 0 if _amountUsdc > 0
+     * @param info ipfs hash of project proposal
+     * @param receivingWallet the address of the research group receiving funds if proposal passed
+     * @param amountUsdc the amount of USDC
+     * @param amountCoin the amount of Coin
+     * @param amountSci the amount of SCI tokens
      */
-    function propose(
-            string memory _info,
-            address _wallet,
-            uint256 _amountUsdc,
-            uint256 _amountEth
-        ) external dao returns (uint256) {
-        ProjectInfo memory _projectInfo = ProjectInfo(
-            _info,
-            _wallet,
-            _amountUsdc,
-            _amountEth
+    function proposeResearch(
+        string memory info,
+        address receivingWallet,
+        uint256 amountUsdc, //6 decimals
+        uint256 amountCoin, //18 decimals
+        uint256 amountSci //18 decimals
+    )
+        external
+        nonReentrant
+        notTerminated
+        onlyRole(DUE_DILIGENCE_ROLE)
+        returns (uint256)
+    {
+        if (
+            bytes(info).length == 0 ||
+            receivingWallet == address(0) ||
+            !((amountUsdc > 0 &&
+                amountCoin == 0 &&
+                (amountSci == 0 || amountSci > 0)) ||
+                (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                (amountSci > 0 &&
+                    amountCoin == 0 &&
+                    (amountUsdc == 0 || amountUsdc > 0)))
+        ) {
+            revert InvalidInput();
+        }
+
+        IStaking staking = IStaking(stakingAddress);
+
+        if (staking.getStakedSci(_msgSender()) < ddThreshold)
+            revert InsufficientBalance(
+                staking.getStakedSci(_msgSender()),
+                ddThreshold
+            );
+
+        if (proposedResearch[_msgSender()] == 1) revert ProposalLock();
+
+        Payment payment;
+        uint256 amount;
+        uint256 sciAmount;
+
+        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
+            (amountCoin > 0 ? 1 : 0) +
+            (amountSci > 0 ? 1 : 0);
+
+        if (paymentOptions == 1) {
+            if (amountUsdc > 0) {
+                amount = amountUsdc;
+                payment = Payment.Usdc;
+            } else if (amountCoin > 0) {
+                amount = amountCoin;
+                payment = Payment.Coin;
+            } else if (amountSci > 0) {
+                sciAmount = amountSci;
+                payment = Payment.Sci;
+            }
+        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
+            amount = amountUsdc;
+            sciAmount = amountSci;
+            payment = Payment.SciUsdc;
+        } else {
+            revert IncorrectPaymentOption();
+        }
+
+        ProjectInfo memory projectInfo = ProjectInfo(
+            info,
+            receivingWallet,
+            payment,
+            amount,
+            amountSci,
+            true
         );
         //Initiate and specify each parameter of the proposal
-        Proposal memory _proposal = Proposal(
+        Proposal memory proposal = Proposal(
             block.number,
             block.timestamp + proposalLifeTime,
             ProposalStatus.Active,
-            _projectInfo,
+            projectInfo,
             0,
             0,
             0
         );
 
         //increment proposal index
-        _proposalIndex += 1;
+        _researchProposalIndex += 1;
 
         //store proposal at the given index
-        proposals[_proposalIndex] = _proposal;
+        researchProposals[_researchProposalIndex] = proposal;
+
+        staking.proposedResearch(
+            _msgSender(),
+            block.timestamp + proposalLockTime
+        );
+
+        proposedResearch[_msgSender()] = 1;
 
         //emit Proposed event
-        emit Proposed(_proposalIndex, _projectInfo);
+        emit Proposed(_researchProposalIndex, _msgSender(), projectInfo);
 
-        return _proposalIndex;
+        return _researchProposalIndex;
     }
 
     /**
-     * @dev vote for an of option of a given proposal 
+     * @dev vote for an of option of a given proposal
      *      using the rights from the most recent snapshot
      * @param id the index of the proposal
-     * @param _user the address of the voting users
-     * @param _votes the amount of votes given to the chosen research project
+     * @param user the address of the voting users
      */
-    function vote(
-        uint256 id, 
-        address _user,  
-        Vote _vote, 
-        uint256 _votes) external {
-        
-        if (msg.sender != _user) revert Unauthorized(msg.sender);
+    function voteOnResearch(
+        uint256 id,
+        address user,
+        bool support
+    ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
-        IStaking staking = IStaking(stakingAddress);
-        
         //check if proposal exists
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-        
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+
         //check if proposal is still active
-        if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status); 
-        
+        if (researchProposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(researchProposals[id].status);
+
         //check if proposal life time has not passed
-        if(block.timestamp > proposals[id].endTimeStamp) revert ProposalLifeTimePassed();
-
-        //get latest voting rights
-        uint256 _votingRights = staking.getLatestUserRights(_user);
-
-        //check if user has enough voting rights
-        if(_votes > _votingRights) revert InsufficientVotingRights(_votingRights, _votes);
+        if (block.timestamp > researchProposals[id].endTimeStamp)
+            revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if(voted[id][_user] == 1) revert VoteLock();
-        
-        //vote for, against or abstain
-        if(_vote == Vote.Yes) {
-            proposals[id].votesFor += _votes;
+        if (votedResearch[id][user] == 1) revert VoteLock();
 
-        } else if(_vote == Vote.No) {
-            proposals[id].votesAgainst += _votes;
+        IStaking staking = IStaking(stakingAddress);
+
+        //check if DD member/voter still has enough tokens staked
+        if (staking.getStakedSci(user) < ddThreshold)
+            revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
+
+        //vote for, against or abstain
+        if (support) {
+            researchProposals[id].votesFor += 1;
+        } else {
+            researchProposals[id].votesAgainst += 1;
         }
 
         //add to the total votes
-        proposals[id].totalVotes += _votes;
+        researchProposals[id].totalVotes += 1;
 
         //set user as voted for proposal
-        voted[id][_user] = 1;
+        votedResearch[id][user] = 1;
 
-        //mint a participation token if live
-        if (poLive == 1) {
-            poToken.mint(_user);
-        }
-        staking.voted(_user, block.timestamp + voteLockTime);
+        //set the lock time in the staking contract
+        staking.votedResearch(user, block.timestamp + voteLockTime);
 
         //emit Voted events
-        emit Voted(id, _vote, _votes);
+        emit Voted(id, support, 1);
     }
 
     /**
-     * @dev finalizes the voting phase
+     * @dev finalizes the voting phase for a research proposal
      * @param id the index of the proposal of interest
      */
-    function finalizeVoting(uint256 id) external dao {
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-        if(proposals[id].totalVotes < quorum) revert QuorumNotReached();
-        if(proposals[id].status != ProposalStatus.Active) revert IncorrectPhase(proposals[id].status);
-        proposals[id].status = ProposalStatus.Scheduled;
-        emit Scheduled(id);
+    function finalizeVotingResearchProposal(
+        uint256 id
+    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+
+        if (researchProposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(researchProposals[id].status);
+
+        if (block.timestamp < researchProposals[id].endTimeStamp)
+            revert ProposalOngoing(
+                block.timestamp,
+                researchProposals[id].endTimeStamp
+            );
+        if (researchProposals[id].totalVotes < quorum)
+            revert QuorumNotReached();
+
+        researchProposals[id].status = ProposalStatus.Scheduled;
+
+        emit Scheduled(id, true);
     }
 
     /**
-     * @dev executes the proposal
+     * @dev executes the proposal using USDC
      * @param id the index of the proposal of interest
+     * @param donated set to true if funds are derived from the donation wallet
      */
-    function executeProposal(uint256 id) external payable dao {
+    function executeResearchProposal(
+        uint256 id,
+        bool donated
+    ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
+        // Check if proposal exists and has finalized voting
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (researchProposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(researchProposals[id].status);
 
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+        // Extract proposal details
+        address receivingWallet = researchProposals[id].details.receivingWallet;
+        uint256 amount = researchProposals[id].details.amount;
+        uint256 amountSci = researchProposals[id].details.amountSci;
+        Payment payment = researchProposals[id].details.payment;
 
-        if(proposals[id].status != ProposalStatus.Scheduled) revert IncorrectPhase(proposals[id].status);
+        // Determine the source wallet based on the 'donated' flag
+        address sourceWallet = donated ? donationWallet : treasuryWallet;
 
-        if(proposals[id].details.amountUsdc > 0) {
-            IERC20(usdc).safeTransferFrom(treasuryWallet, proposals[id].details.researchWallet, proposals[id].details.amountUsdc);
-        
-        } else if(proposals[id].details.amountEth > 0) {
-            address _researchWallet = proposals[id].details.researchWallet;
-            (bool sent,) = _researchWallet.call{value: proposals[id].details.amountEth}("");
-            require(sent);
+        // Transfer funds based on payment type
+        if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
+            _transferToken(IERC20(usdc), sourceWallet, receivingWallet, amount);
         }
-        
-        proposals[id].status = ProposalStatus.Executed;
-        
-        emit Executed(id);
+        if (payment == Payment.Sci || payment == Payment.SciUsdc) {
+            _transferToken(
+                IERC20(sci),
+                sourceWallet,
+                receivingWallet,
+                amountSci
+            );
+        }
+        if (payment == Payment.Coin) {
+            _transferCoin(sourceWallet, receivingWallet, amount);
+        }
+
+        researchProposals[id].status = ProposalStatus.Executed;
+        emit Executed(id, donated, amount);
     }
-    
+
     /**
      * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancelProposal(uint256 id) external dao {
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
-        proposals[id].status = ProposalStatus.Cancelled;
+    function cancelResearchProposal(
+        uint256 id
+    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+
+        if (researchProposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(researchProposals[id].status);
+
+        researchProposals[id].status = ProposalStatus.Cancelled;
+
         emit Cancelled(id);
     }
-    
+
+    /**
+     * @dev terminates the governance and staking smart contracts
+     */
+    function terminateResearch()
+        external
+        notTerminated
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        IStaking staking = IStaking(stakingAddress);
+        staking.terminateResearch(_msgSender());
+        terminated = true;
+        emit Terminated(_msgSender(), block.number);
+    }
+
     /**
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
-    function getVoted(uint256 id) external view returns (uint8) {
-        return voted[id][msg.sender];
+    function getVotedResearch(uint256 id) external view returns (uint8) {
+        return votedResearch[id][_msgSender()];
     }
 
     /**
-     * @dev returns the proposal index 
+     * @dev returns the proposal index
      */
-    function getProposalIndex() external view returns (uint256) {
-        return _proposalIndex;
+    function getResearchProposalIndex() external view returns (uint256) {
+        return _researchProposalIndex;
     }
 
     /**
      * @dev returns proposal information
      * @param id the index of the proposal of interest
      */
-    function getProposalInfo(uint256 id) external view returns (
-        uint256,
-        uint256,
-        ProposalStatus,
-        uint256,
-        uint256,
-        uint256
-    ) {
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+    function getResearchProposalInfo(
+        uint256 id
+    )
+        external
+        view
+        returns (uint256, uint256, ProposalStatus, uint256, uint256, uint256)
+    {
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
         return (
-            proposals[id].startBlockNum,
-            proposals[id].endTimeStamp,
-            proposals[id].status,
-            proposals[id].votesFor,
-            proposals[id].votesAgainst,
-            proposals[id].totalVotes
+            researchProposals[id].startBlockNum,
+            researchProposals[id].endTimeStamp,
+            researchProposals[id].status,
+            researchProposals[id].votesFor,
+            researchProposals[id].votesAgainst,
+            researchProposals[id].totalVotes
         );
     }
 
-    function getProposalProjectInfo(uint256 id) external view returns (
-        string memory,
-        address,
-        uint256,
-        uint256
-    ) {
-        if(id > _proposalIndex || id < 1) revert ProposalInexistent();
+    /**
+     * @dev returns research project info information
+     * @param id the index of the proposal of interest
+     */
+    function getResearchProposalProjectInfo(
+        uint256 id
+    ) external view returns (string memory, address, Payment, uint256) {
+        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
         return (
-            proposals[id].details.info,
-            proposals[id].details.researchWallet,
-            proposals[id].details.amountUsdc,
-            proposals[id].details.amountEth
+            researchProposals[id].details.info,
+            researchProposals[id].details.receivingWallet,
+            researchProposals[id].details.payment,
+            researchProposals[id].details.amount
         );
+    }
+
+    ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Transfers ERC20 tokens from one address to another.
+     *      Uses the safeTransferFrom function from the SafeERC20 library
+     *      to securely transfer tokens.
+     * @param token The ERC20 token to be transferred.
+     * @param from The address from which the tokens will be transferred.
+     * @param to The address to which the tokens will be transferred.
+     * @param amount The amount of tokens to transfer.
+     */
+    function _transferToken(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount
+    ) internal {
+        if (amount > 0) {
+            token.safeTransferFrom(from, to, amount);
+        }
+    }
+
+    /**
+     * @dev Transfers ETH coin from one address to another.
+     *      Requires that the function caller is the same as the 'from' address.
+     *      Reverts if the transferred amount does not match the provided value
+     *      or if the sender is unauthorized.
+     * @param from The address from which the coins will be transferred. Must match the message sender.
+     * @param to The address to which the coins will be transferred.
+     * @param amount The amount of coins to transfer.
+     */
+    function _transferCoin(address from, address to, uint256 amount) internal {
+        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
+        (bool sent, ) = to.call{value: msg.value}("");
+        require(sent, "Failed to transfer");
     }
 }

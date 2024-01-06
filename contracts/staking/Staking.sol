@@ -5,41 +5,45 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IStaking} from "contracts/interface/IStaking.sol";
-import {IDonation} from "contracts/interface/IDonation.sol";
 import {IParticipation} from "contracts/interface/IParticipation.sol";
+import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 
-contract Staking is IStaking, ReentrancyGuard {
+contract Staking is IStaking, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error AlreadyDelegated();
     error CannotClaim();
+    error ContractsTerminated();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error NotGovernanceContract(address govAddress);
+    error NotGovernanceContract();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
-    error VoteLock();
+    error UnauthorizedDelegation(
+        address owner,
+        address oldDelegate,
+        address newDelegate
+    );
     error WrongToken();
 
-
     ///*** TOKENS ***//
-    address        private _po;
-    address        private _sci;
-    address        private _don;
-    IParticipation public  poToken;
-    IDonation      public  donToken;
+    IERC20 private _sci;
+    IParticipation private _po;
 
     ///*** STRUCTS ***///
     struct User {
-        uint256                      stakedPo;      //PO deposited
-        uint256                      stakedSci;     //SCI deposited
-        uint256                      stakedDon;     //DON deposited
-        uint256                      votingRights;  //Voting rights   
-        uint256                      voteLockEnd;   //Time before tokens can be unlocked during voting
-        uint256                      amtSnapshots;  //Amount of snapshots
-        mapping(uint256 => Snapshot) snapshots;     //Index => snapshot
-    } 
+        uint256 stakedPo; //PO deposited
+        uint256 stakedSci; //SCI deposited
+        uint256 votingRights; //Voting rights for Operation proposals
+        uint256 proposalLockEnd; //Time before token unlock after proposing
+        uint256 voteLockEnd; //Time before token unlock after voting
+        uint256 amtSnapshots; //Amount of snapshots
+        address delegate; //Address of the delegate
+        mapping(uint256 => Snapshot) snapshots; //Index => snapshot
+    }
 
     struct Snapshot {
         uint256 atBlock;
@@ -47,105 +51,144 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
-    uint256                                         private     totStaked;
-    mapping(address => uint8)                       public      wards;
-    mapping(address => User)                        public      users;
-    uint256                                         public      numerator;    
-    uint256                                         public      denominator;       
-    address                                         public      govRes;
-    address                                         public      govOps;
+    bool public terminatedGovOps = false;
+    bool public terminatedGovRes = false;
+    address public govOpsContract;
+    address public govResContract;
+    uint256 private totStaked;
+    mapping(address => User) public users;
 
-    ///*** MODIFIER ***///
-    modifier dao() {
-        if(wards[msg.sender] != 1) revert Unauthorized(msg.sender);
+    ///*** MODIFIERS ***///
+    modifier govOps() {
+        if (_msgSender() != govOpsContract) revert Unauthorized(_msgSender());
         _;
     }
 
-    modifier gov() {
-        if(msg.sender != govRes && msg.sender != govOps) revert Unauthorized(msg.sender);
+    modifier govRes() {
+        if (_msgSender() != govResContract) revert Unauthorized(_msgSender());
+        _;
+    }
+
+    modifier notTerminated() {
+        if (terminatedGovOps && terminatedGovRes) revert ContractsTerminated();
         _;
     }
 
     /*** EVENTS ***/
-    event RelyOn(address indexed user);
-    event Denied(address indexed user);
-    event Locked(address indexed token, address indexed user, uint256 amount, uint256 votes);
-    event Freed(address indexed token, address indexed user, uint256 amount, uint256 remainingVotes);
+    event Delegated(
+        address indexed owner,
+        address indexed oldDelegate,
+        address indexed newDelegate
+    );
+    event Freed(
+        address indexed token,
+        address indexed user,
+        uint256 amountFreed
+    );
+    event Locked(
+        address indexed token,
+        address indexed user,
+        uint256 amountLocked
+    );
+    event Snapshotted(
+        address indexed owner,
+        uint256 votingRights,
+        uint256 indexed blockNumber
+    );
+    event Terminated(address admin, uint256 blockNumber);
     event VoteLockTimeUpdated(address user, uint256 voteLockEndTime);
 
-    constructor(
-        address don,
-        address _dao
-    ) {
-        donToken = IDonation(don);
-        _don = don;
+    constructor(address treasuryWallet_, address sci_) {
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
-        numerator = 10;
-        denominator = 10;
-
-        wards[_dao] = 1;
+        _sci = IERC20(sci_);
     }
-    
+
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
      * @dev sets the PO token address and interface
      * @param po the address of the participation ($PO) token
      */
-    function setPoToken(address po) external dao {
-        _po = po;
-        poToken = IParticipation(po);
+    function setPoToken(address po) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _po = IParticipation(po);
     }
 
     /**
      * @dev sets the sci token address.
      * @param sci the address of the tradable ($SCI) token
      */
-    function setSciToken(address sci) external dao {
-        _sci = sci;
-    }   
-
-    /**
-     * @dev sets the address of the research funding governance smart contract
-     */
-    function setGovRes(address newGovRes) external dao {
-        govRes = newGovRes;
+    function setSciToken(address sci) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _sci = IERC20(sci);
     }
 
     /**
-     * @dev sets the address of the operations funding governance smart contract
+     * @dev sets the address of the operations governance smart contract
      */
-    function setGovOps(address newGovOps) external dao {
-        govOps = newGovOps;
+    function setGovOps(
+        address newGovOps
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govOpsContract = newGovOps;
     }
 
     /**
-     * @dev set the numerator and denominator us
+     * @dev sets the address of the operations governance smart contract
      */
-    function setNandD(uint256 n, uint256 d) external dao {
-        numerator = n;
-        denominator = d;
+    function setGovRes(
+        address newGovRes
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govResContract = newGovRes;
     }
 
     /**
-     * @dev adds a gov
-     * @param user the user that is eligible to become a gov
+     * @dev delegates the owner's voting rights
+     * @param owner the owner of the delegated voting rights
+     * @param newDelegate user that will receive the delegated voting rights
      */
-    function addWard(address user) external dao {
-        wards[user] = 1;
-        emit RelyOn(user);
-    }
+    function delegate(
+        address owner,
+        address newDelegate
+    ) external notTerminated {
+        address oldDelegate = users[owner].delegate;
 
-    /**
-     * @dev removes a gov
-     * @param user the user that will be removed as a gov
-     */
-    function removeWard(address user) external dao {
-        if(wards[user] != 1) {
-            revert Unauthorized(msg.sender);
+        if (oldDelegate == newDelegate) revert AlreadyDelegated();
+
+        //check if function caller can change delegation
+        if (
+            !(owner == _msgSender() ||
+                (oldDelegate == _msgSender() && newDelegate == address(0)))
+        ) revert UnauthorizedDelegation(owner, oldDelegate, newDelegate);
+
+        users[owner].delegate = newDelegate;
+
+        //update vote unlock time
+        if (oldDelegate != address(0)) {
+            users[owner].voteLockEnd = Math.max(
+                users[owner].voteLockEnd,
+                users[oldDelegate].voteLockEnd
+            );
+
+            users[oldDelegate].votingRights -= users[owner].stakedSci;
+
+            _snapshot(oldDelegate, users[oldDelegate].votingRights);
+
+            users[owner].votingRights += users[owner].stakedSci;
+
+            _snapshot(owner, users[owner].votingRights);
         }
-        delete wards[user];
-        emit Denied(user);
+
+        //update voting rights for delegate
+        if (newDelegate != address(0)) {
+            users[newDelegate].votingRights += users[owner].stakedSci;
+
+            _snapshot(newDelegate, users[newDelegate].votingRights);
+            //update owner's voting power
+            users[owner].votingRights = 0;
+
+            _snapshot(owner, users[owner].votingRights);
+        }
+
+        emit Delegated(owner, oldDelegate, newDelegate);
     }
 
     /**
@@ -154,27 +197,15 @@ contract Staking is IStaking, ReentrancyGuard {
      * @param user the user that wants to lock tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lock(address src, address user, uint256 amount) external nonReentrant {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+    function lock(
+        address src,
+        address user,
+        uint256 amount
+    ) external notTerminated nonReentrant {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
-        if (src == _don) {
-            //Retrieve DON tokens from wallet
-            donToken.push(user, amount);
-
-            //add to total staked amount
-            totStaked += amount;
-
-            //Adds amount of deposited DON tokens
-            users[user].stakedDon += amount;
-
-            //in this case the amount deposited in DON tokens is equal to voting rights
-            users[user].votingRights += amount;
-
-            //emit event
-            emit Locked(_don, user, amount, amount);
-            
-        } else if (src == _sci) {
-            //Retrieve SCI tokens from user wallet but user needs to approve transfer first 
+        if (src == address(_sci)) {
+            //Retrieve SCI tokens from user wallet but user needs to approve transfer first
             IERC20(_sci).safeTransferFrom(user, address(this), amount);
 
             //add to total staked amount
@@ -183,38 +214,41 @@ contract Staking is IStaking, ReentrancyGuard {
             //Adds amount of deposited SCI tokens
             users[user].stakedSci += amount;
 
-            //SCI holders get more votes per locked token 
-            //based on amount of DON tokens in circulation
-            uint256 votes = _calcVotes(amount);
+            address delegated = users[user].delegate;
+            if (delegated != address(0)) {
+                //update voting rights for delegated address
+                users[delegated].votingRights += amount;
+                //snapshot of delegate's voting rights
+                _snapshot(delegated, users[delegated].votingRights);
 
-            //calculated votes are added as voting rights
-            users[user].votingRights = votes;
+                emit Locked(address(_sci), user, amount);
+            } else {
+                //update voting rights for user
+                users[user].votingRights += amount;
+                //snapshot of voting rights
+                _snapshot(user, users[user].votingRights);
 
-            emit Locked(_sci, user, amount, votes);
-
-        } else if(src == _po) {
+                emit Locked(address(_sci), user, amount);
+            }
+        } else if (src == address(_po)) {
             //retrieve balance of user
-            uint256[] memory balance = poToken.getHeldBalance(user);
+            uint256 balance = _po.balanceOf(user);
 
             //check if user has enough PO tokens
-            if(balance.length < amount) revert InsufficientBalance(balance.length, amount);
-            
-            //Retrieve PO token from user wallet 
-            poToken.push(user, amount);
+            if (balance < amount) revert InsufficientBalance(balance, amount);
+
+            //Retrieve PO token from user wallet
+            _po.push(user, amount);
 
             //update staked PO balance
             users[user].stakedPo += amount;
-            
+
             //emit locked event
-            emit Locked(_po, user, amount, 0);
-        
+            emit Locked(address(_po), user, amount);
         } else {
             //Revert if the wrong token is chosen
             revert WrongToken();
         }
-
-        //snapshot of voting rights
-        _snapshot(user);
     }
 
     /**
@@ -223,33 +257,28 @@ contract Staking is IStaking, ReentrancyGuard {
      * @param user the user's address holding SCI or DON tokens
      * @param amount the amount of tokens that will be freed
      */
-    function free(address src, address user, uint256 amount) external nonReentrant {
-        if (msg.sender != user) revert Unauthorized(msg.sender);
+    function free(
+        address src,
+        address user,
+        uint256 amount
+    ) external nonReentrant {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
 
-        if((src == _don || src == _sci) && users[user].voteLockEnd > block.timestamp) revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
+        if (
+            src == address(_sci) &&
+            users[user].voteLockEnd > block.timestamp &&
+            !(terminatedGovOps && terminatedGovRes)
+        ) {
+            revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
+        } else {
+            users[user].voteLockEnd = 0;
+            users[user].proposalLockEnd = 0;
+        }
 
-        if (src == _don) {
-            //check if amount is lower than deposited DON tokens 
-            if(users[user].stakedDon < amount) revert InsufficientBalance(users[user].stakedDon, amount);
-            
-            //pulls DON tokens from gov to user's wallet
-            donToken.pull(user, amount);
-            
-            //update total staked
-            totStaked -= amount;
-
-            //Removes the amount of deposited DON tokens
-            users[user].stakedDon -= amount;
-            
-            //removes amount from voting rights
-            users[user].votingRights -= amount;
-
-            //emit event
-            emit Freed(_don, user, amount, amount);
-
-        } else if (src == _sci) {
-            //check if amount is lower than deposited SCI tokens 
-            if(users[user].stakedSci < amount) revert InsufficientBalance(users[user].stakedSci, amount);
+        if (src == address(_sci)) {
+            //check if amount is lower than deposited SCI tokens
+            if (users[user].stakedSci < amount)
+                revert InsufficientBalance(users[user].stakedSci, amount);
 
             //return SCI tokens
             IERC20(_sci).safeTransfer(user, amount);
@@ -260,41 +289,61 @@ contract Staking is IStaking, ReentrancyGuard {
             //remove amount from deposited amount
             users[user].stakedSci -= amount;
 
-            //recalculates the votes based on the remaining deposited amount
-            uint256 votes = _calcVotes(users[user].stakedSci);
+            address delegated = users[user].delegate;
+            if (delegated != address(0)) {
+                //check if delegate did not vote recently
+                if (
+                    users[delegated].voteLockEnd > block.timestamp &&
+                    !(terminatedGovOps && terminatedGovRes)
+                ) {
+                    revert TokensStillLocked(
+                        users[delegated].voteLockEnd,
+                        block.timestamp
+                    );
+                } else {
+                    users[delegated].voteLockEnd = 0;
+                }
 
-            //add new amount of votes as rights
-            users[user].votingRights = votes;
+                //remove delegate voting rights
+                users[delegated].votingRights -= amount;
 
-            emit Freed(_sci, user, amount, votes);
+                _snapshot(delegated, users[delegated].votingRights);
+            } else {
+                //add new amount of votes as rights
+                users[user].votingRights -= amount;
 
-        } else if (src == _po) {
+                //snapshot of voting rights
+                _snapshot(user, users[user].votingRights);
+            }
+
+            emit Freed(address(_sci), user, amount);
+        } else if (src == address(_po)) {
             //check if amount is lower than deposited PO tokens
-            if(users[user].stakedPo < amount) revert InsufficientBalance(users[user].stakedPo, amount);
+            if (users[user].stakedPo < amount)
+                revert InsufficientBalance(users[user].stakedPo, amount);
 
-            //Retrieve PO token from staking contract 
-            poToken.pull(user, amount);
+            //Retrieve PO token from staking contract
+            _po.pull(user, amount);
 
             //update staked PO balance
-            users[user].stakedPo -= amount; 
+            users[user].stakedPo -= amount;
 
-            emit Freed(_po, user, amount, 0);  
-
+            emit Freed(address(_po), user, amount);
         } else {
             revert WrongToken();
         }
-
-        //make a new snapshot
-        _snapshot(user);
     }
 
     /**
      * @dev is called by gov contract upon voting
-     * @param user the user's address holding SCI or DON tokens
+     * @param user the user's address holding SCI tokens
      * @param voteLockEnd the block number where the vote lock ends
-     */ 
-    function voted(address user, uint256 voteLockEnd) external gov returns (bool) {
-        if(users[user].voteLockEnd < voteLockEnd) {
+     */
+    function votedOperations(
+        address user,
+        uint256 voteLockEnd
+    ) external govOps returns (bool) {
+        if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
         emit VoteLockTimeUpdated(user, voteLockEnd);
@@ -302,12 +351,108 @@ contract Staking is IStaking, ReentrancyGuard {
     }
 
     /**
+     * @dev is called by gov contract upon voting
+     * @param user the user's address holding SCI tokens
+     * @param voteLockEnd the block number where the vote lock ends
+     */
+    function votedResearch(
+        address user,
+        uint256 voteLockEnd
+    ) external govRes returns (bool) {
+        if (users[user].voteLockEnd < voteLockEnd) {
+            users[user].voteLockEnd = voteLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, voteLockEnd);
+        return true;
+    }
+
+    /**
+     * @dev is called by govOps contract upon proposing
+     * @param user the user's address holding SCI tokens
+     * @param proposalLockEnd the block number where the vote lock ends
+     */
+    function proposedOperations(
+        address user,
+        uint256 proposalLockEnd
+    ) external govOps returns (bool) {
+        if (users[user].proposalLockEnd < proposalLockEnd) {
+            users[user].proposalLockEnd = proposalLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, proposalLockEnd);
+        return true;
+    }
+
+    /**
+     * @dev is called by govOps contract upon proposing
+     * @param user the user's address holding SCI tokens
+     * @param proposalLockEnd the block number where the vote lock ends
+     */
+    function proposedResearch(
+        address user,
+        uint256 proposalLockEnd
+    ) external govRes returns (bool) {
+        if (users[user].proposalLockEnd < proposalLockEnd) {
+            users[user].proposalLockEnd = proposalLockEnd;
+        }
+        emit VoteLockTimeUpdated(user, proposalLockEnd);
+        return true;
+    }
+
+    /**
+     * @dev terminates the staking smart contract
+     */
+    function terminateOperations(
+        address admin
+    ) external govOps notTerminated nonReentrant {
+        terminatedGovOps = true;
+        emit Terminated(admin, block.number);
+    }
+
+    /**
+     * @dev terminates the staking smart contract
+     */
+    function terminateResearch(
+        address admin
+    ) external govRes notTerminated nonReentrant {
+        terminatedGovRes = true;
+        emit Terminated(admin, block.number);
+    }
+
+    /**
+     * @dev return the timestamp where the lock after voting ends
+     */
+    function getVoteLockEnd(address user) external view returns (uint256) {
+        return users[user].voteLockEnd;
+    }
+
+    /**
+     * @dev return the timestamp where the lock after proposing ends
+     */
+    function getProposalLockEnd(address user) external view returns (uint256) {
+        return users[user].proposalLockEnd;
+    }
+
+    /**
      * @dev returns the user rights from the latest taken snapshot
-     * @param user the user address     
+     * @param user the user address
      */
     function getLatestUserRights(address user) external view returns (uint256) {
-        uint256 latestSnapshot = users[user].amtSnapshots;
-        return getUserRights(user, latestSnapshot, block.number);
+        uint256 latestSnapshotIndex = users[user].amtSnapshots;
+        return getUserRights(user, latestSnapshotIndex, block.number);
+    }
+
+    /**
+     * @dev returns the address for the Participation (PO) token
+     */
+    function getPoAddress() external view returns (address) {
+        return address(_po);
+    }
+
+    /**
+     * @dev returns the address for the Participation (PO) token
+     */
+    function getSciAddress() external view returns (address) {
+        return address(_sci);
     }
 
     /**
@@ -320,37 +465,30 @@ contract Staking is IStaking, ReentrancyGuard {
     /**
      * @dev returns the amount of staked PO tokens of a given user
      */
-    function getPoStaked(address user) external view returns (uint256) {
+    function getStakedPo(address user) external view returns (uint256) {
         return users[user].stakedPo;
     }
 
     /**
      * @dev returns the amount of staked SCI tokens of a given user
      */
-    function getSciStaked(address user) external view returns (uint256) {
+    function getStakedSci(address user) external view returns (uint256) {
         return users[user].stakedSci;
-    }
-
-    /**
-     * @dev returns the amount of staked DON tokens of a given user
-     */
-    function getDonStaked(address user) external view returns (uint256) {
-        return users[user].stakedDon;
     }
 
     ///*** PUBLIC FUNCTION ***///
 
     /**
      * @dev Return the voting rights of a user at a certain snapshot
-     * @param user the user address 
+     * @param user the user address
      * @param snapshotIndex the index of the snapshots the user has
      * @param blockNum the highest block.number at which the user rights will be retrieved
      */
     function getUserRights(
-        address user, 
-        uint256 snapshotIndex, 
+        address user,
+        uint256 snapshotIndex,
         uint256 blockNum
-        ) public view returns (uint256) {
+    ) public view returns (uint256) {
         uint256 index = users[user].amtSnapshots;
         if (snapshotIndex > index) revert IncorrectSnapshotIndex();
         Snapshot memory snap = users[user].snapshots[snapshotIndex];
@@ -364,21 +502,14 @@ contract Staking is IStaking, ReentrancyGuard {
      * @dev a snaphshot of the current voting rights of a given user
      * @param user the address that is being snapshotted
      */
-    function _snapshot(address user) internal {
+    function _snapshot(address user, uint256 votingRights) internal {
         uint256 index = users[user].amtSnapshots;
         if (index > 0 && users[user].snapshots[index].atBlock == block.number) {
-            users[user].snapshots[index].rights = users[user].votingRights;
+            users[user].snapshots[index].rights = votingRights;
         } else {
             users[user].amtSnapshots = index += 1;
-            users[user].snapshots[index] = Snapshot(block.number, users[user].votingRights);
+            users[user].snapshots[index] = Snapshot(block.number, votingRights);
         }
-    }
-
-    /**
-     * @dev calculate the votes for users that have donated e.g. amount * 12/10  
-     * @param amount of deposited DON tokens that will be multiplied with n / d
-     */
-    function _calcVotes(uint256 amount) internal view returns (uint256 votingPower) {
-        return votingPower = amount * numerator / denominator;
+        emit Snapshotted(user, votingRights, block.number);
     }
 }

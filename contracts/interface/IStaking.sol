@@ -2,10 +2,31 @@
 pragma solidity ^0.8.19;
 
 interface IStaking {
-    function getUserRights(address _user, uint256 _snapshotIndex, uint256 _blockNum) external view returns (uint256);
-    function getLatestUserRights(address _user) external view returns (uint256);
-    function lock(address _src, address _user, uint256 _amount) external;
-    function free(address _src, address _user, uint256 _amount) external;
+    function free(address src, address user, uint256 amount) external;
+
+    function getLatestUserRights(address user) external view returns (uint256);
+
+    function getStakedSci(address user) external view returns (uint256);
+
     function getTotalStaked() external returns (uint256);
-    function voted(address _user, uint256 _voteLockEnd) external returns (bool);
+
+    function getUserRights(
+        address user,
+        uint256 snapshotIndex,
+        uint256 blockNum
+    ) external view returns (uint256);
+
+    function lock(address src, address user, uint256 amount) external;
+
+    function proposedOperations(address user, uint256 proposalLockEnd) external returns (bool);
+
+    function proposedResearch(address user, uint256 proposalLockEnd) external returns (bool);
+
+    function terminateOperations(address admin) external;
+
+    function terminateResearch(address admin) external;
+
+    function votedOperations(address user, uint256 voteLockEnd) external returns (bool);
+    
+    function votedResearch(address user, uint256 voteLockEnd) external returns (bool);
 }

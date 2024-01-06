@@ -16,21 +16,18 @@ if (!PRIVATE_KEY)
 
 // An example of a deploy script that will deploy and call a simple contract.
 export default async function (hre: HardhatRuntimeEnvironment) {
-  console.log(`Running deploy script for the GovernorResearch contract`);
+  console.log(`Running deploy script for the Sci token contract`);
 
   // Initialize the wallet.
   const wallet = new Wallet(PRIVATE_KEY);
 
   // Create deployer object and load the artifact of the contract you want to deploy.
   const deployer = new Deployer(hre, wallet);
-  const artifact = await deployer.loadArtifact("GovernorResearch");
+  const artifact = await deployer.loadArtifact("Sci");
 
   // Estimate contract deployment fee
-  const stakingAddress = "0xB5e2DB6Fe0096225fB41E9784899f29d22e42d2a";
-  const treasuryWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-
-  const deploymentFee = await deployer.estimateDeployFee(artifact, [stakingAddress, treasuryWallet, usdc]);
+  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const deploymentFee = await deployer.estimateDeployFee(artifact, [treasuryWallet]);
 
   // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2
   // const depositHandle = await deployer.zkWallet.deposit({
@@ -46,18 +43,19 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   const parsedFee = ethers.utils.formatEther(deploymentFee.toString());
   console.log(`The deployment is estimated to cost ${parsedFee} ETH`);
 
-  const govResContract = await deployer.deploy(artifact, [stakingAddress, treasuryWallet, usdc]);
+  const tradingContract = await deployer.deploy(artifact, [treasuryWallet]);
 
   //obtain the Constructor Arguments
   console.log(
-    "constructor args:" + govResContract.interface.encodeDeploy([stakingAddress, treasuryWallet, usdc])
+    "constructor args:" + tradingContract.interface.encodeDeploy([treasuryWallet])
   );
 
   // Show the contract info.
-  const contractAddress = govResContract.address;
+  const contractAddress = tradingContract.address;
   console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
   await run("verify:verify", {
     address: contractAddress,
-    constructorArguments: [stakingAddress, treasuryWallet, usdc],
+    constructorArguments: [treasuryWallet],
   });
+
 }
