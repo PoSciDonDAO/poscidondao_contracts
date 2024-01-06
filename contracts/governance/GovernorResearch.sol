@@ -11,14 +11,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    error AlreadyActiveProposal();
     error ContractTerminated(uint256 blockNumber);
-    error EmptyOptions();
     error IncorrectCoinValue();
     error IncorrectBlockNumber();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
-    error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInput();
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
@@ -29,7 +26,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error QuorumNotReached();
     error Unauthorized(address user);
     error VoteLock();
-    error WrongToken();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -153,7 +149,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (staking.getStakedSci(member) > ddThreshold) {
             grantRole(DUE_DILIGENCE_ROLE, member);
         } else {
-            revert InsufficientBalance(staking.getStakedSci(member), ddThreshold);
+            revert InsufficientBalance(
+                staking.getStakedSci(member),
+                ddThreshold
+            );
         }
     }
 
@@ -260,7 +259,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 staking.getStakedSci(_msgSender()),
                 ddThreshold
             );
-        
+
         if (proposedResearch[_msgSender()] == 1) revert ProposalLock();
 
         Payment payment;
@@ -356,7 +355,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (votedResearch[id][user] == 1) revert VoteLock();
 
         IStaking staking = IStaking(stakingAddress);
-        
+
         //check if DD member/voter still has enough tokens staked
         if (staking.getStakedSci(user) < ddThreshold)
             revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
@@ -467,6 +466,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev terminates the governance and staking smart contracts
+     */
+    function terminateResearch()
+        external
+        notTerminated
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        IStaking staking = IStaking(stakingAddress);
+        staking.terminateResearch(_msgSender());
+        terminated = true;
+        emit Terminated(_msgSender(), block.number);
+    }
+
+    /**
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
@@ -519,20 +533,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         );
     }
 
-    /**
-     * @dev terminates the governance and staking smart contracts
-     */
-    function terminateResearch()
-        external
-        notTerminated
-        nonReentrant
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        IStaking staking = IStaking(stakingAddress);
-        staking.terminateResearch(_msgSender());
-        terminated = true;
-        emit Terminated(_msgSender(), block.number);
-    }
+    ///*** INTERNAL FUNCTIONS ***///
 
     /**
      * @dev Transfers ERC20 tokens from one address to another.

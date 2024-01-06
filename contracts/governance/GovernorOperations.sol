@@ -12,15 +12,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    error AlreadyActiveProposal();
     error ContractTerminated(uint256 blockNumber);
-    error EmptyOptions();
     error IncorrectCoinValue();
-    error IncorrectBlockNumber();
     error IncorrectPaymentOption();
-    error IncorrectCurrency();
     error IncorrectPhase(ProposalStatus);
-    error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
     error InvalidInputForExecutable();
@@ -35,8 +30,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error QuorumNotReached();
     error Unauthorized(address user);
     error VoteLock();
-    error WrongToken();
-    error WrongInput();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -552,6 +545,25 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         emit Cancelled(id);
     }
 
+    /**
+     * @dev terminates the governance and staking smart contracts
+     */
+    function terminateOperations()
+        external
+        notTerminated
+        nonReentrant
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        IStaking staking = IStaking(stakingAddress);
+        staking.terminateOperations(_msgSender());
+        terminated = true;
+        emit Terminated(_msgSender(), block.number);
+    }
+
+
+    /**
+     * @dev returns the PO token address
+     */
     function getPoToken() external view returns (address) {
         return address(_po);
     }
@@ -621,20 +633,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         );
     }
 
-    /**
-     * @dev terminates the governance and staking smart contracts
-     */
-    function terminateOperations()
-        external
-        notTerminated
-        nonReentrant
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        IStaking staking = IStaking(stakingAddress);
-        staking.terminateOperations(_msgSender());
-        terminated = true;
-        emit Terminated(_msgSender(), block.number);
-    }
+    ///*** INTERNAL FUNCTIONS ***///
 
     /**
      * @dev calculates the square root of given x 
