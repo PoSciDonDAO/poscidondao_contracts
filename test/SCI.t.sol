@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Sci.sol";
 
-contract SCITest is Test {
+contract SciTest is Test {
 
     Sci public sci;
 

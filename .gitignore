@@ -23,11 +23,9 @@ node_modules
 .gitmodules
 src/
 
-argumentsDonation.js
-argumentsGovRes.js
-argumentsTrading.js
 broadcast/
 artifacts
 artifacts-zk/
 abis/
 .DS_Store
+.github/
