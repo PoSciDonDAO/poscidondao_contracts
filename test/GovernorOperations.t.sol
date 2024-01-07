@@ -69,6 +69,7 @@ contract GovernorOperationsTest is Test {
             address(sci)
         );
 
+        po.setGovOps(address(govOps));
         govOps.setPoToken(address(po));
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));

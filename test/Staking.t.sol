@@ -63,7 +63,7 @@ contract StakingTest is Test {
         govOps.govParams("proposalLifeTime", 4 weeks);
         govOps.govParams("quorum", 1000e18);
         govOps.govParams("voteLockEnd", 2 weeks);
-        po.setGov(address(govOps));
+        po.setGovOps(address(govOps));
         vm.stopPrank();
 
         deal(address(usdc), treasuryWallet, 10000e18);
@@ -141,7 +141,15 @@ contract StakingTest is Test {
     function test_LockPoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        govOps.proposeOperation("Info", treasuryWallet, 500e6, 0, 0, true, false);
+        govOps.proposeOperation(
+            "Info",
+            treasuryWallet,
+            500e6,
+            0,
+            0,
+            true,
+            false
+        );
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
@@ -155,7 +163,15 @@ contract StakingTest is Test {
     function test_FreePoTokens() public {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 1000e18);
-        govOps.proposeOperation("Info", treasuryWallet, 500e6, 0, 0, true, false);
+        govOps.proposeOperation(
+            "Info",
+            treasuryWallet,
+            500e6,
+            0,
+            0,
+            true,
+            false
+        );
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(address(sci), addr2, 200e18);
@@ -203,6 +219,22 @@ contract StakingTest is Test {
         assertEq(proposalLockEnd, 0);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
+    }
+
+    function test_ReturnUserRights() public {
+        assertEq(staking.getLatestUserRights(addr1), 0);
+        assertEq(staking.getUserRights(addr1, 0, block.number), 0);
+        vm.startPrank(addr1);
+        staking.lock(address(sci), addr1, 100e18);
+        vm.stopPrank();
+        assertEq(staking.getLatestUserRights(addr1), 100e18);
+        assertEq(staking.getUserRights(addr1, 1, block.number), 100e18);
+        vm.roll(block.number + 2);
+        vm.startPrank(addr1);
+        staking.free(address(sci), addr1, 100e18);
+        vm.stopPrank();
+        assertEq(staking.getLatestUserRights(addr1), 0);
+        assertEq(staking.getUserRights(addr1, 2, block.number), 0);
     }
 
     function test_DelegateVotingRightsIfOwner() public {
@@ -332,8 +364,6 @@ contract StakingTest is Test {
         vm.startPrank(addr1);
         staking.lock(address(sci), addr1, 500e18); //delegates 500 voting rights after locking
         vm.stopPrank();
-        // vm.roll(block.number + 2);
-        // vm.warp(1 days);
         vm.startPrank(addr1);
         staking.free(address(sci), addr1, 300e18); //delegates 500 voting rights after locking
         vm.stopPrank();
