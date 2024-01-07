@@ -4,7 +4,7 @@
 PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to streamlining and democratizing the funding and acceleration of personalized medicine research. Utilizing the advanced zkSync Era blockchain, PoSciDonDAO implements a suite of smart contracts designed to facilitate transparent, democratic, and efficient governance of DAO operations and  personalized medicine research funding.
 
 ## Contracts in the Repository
-- **GovernorOperations.sol**: Manages operational aspects of the DAO, including administrative and financial proposals.
+- **GovernorOperations.sol**: Manages operational aspects of the DAO, including administrative, tokenomics, marketing and financial proposals.
 - **GovernorResearch.sol**: Focuses on scientific research proposals, particularly in personalized medicine.
 - **Staking.sol**: Handles the staking of tokens necessary for participation in governance activities.
 - **Participation.sol**: An ERC1155 token contract representing active engagement in DAO governance.
@@ -44,5 +44,58 @@ foundryup
 3. Compile Contracts: ```npx hardhat compile```
 4. Run Tests: ```npx hardhat test```
 
+# Deployment on zkSync Era Sepolia Testnet using Hardhat
 
+This guide will walk you through the process of deploying smart contracts on the zkSync Era Sepolia testnet using Hardhat.
+
+## Prerequisites
+Before proceeding, make sure you have the following prerequisites installed and set up:
+- Node.js and npm
+- Hardhat
+- An Ethereum wallet (like MetaMask) with funds on the Sepolia testnet
+
+## Steps for Deployment
+
+### Setting Up Your Hardhat Project
+If you haven't already set up a Hardhat project, start by initializing one:
+```bash
+mkdir my-zksync-project
+cd my-zksync-project
+npm init -y
+npm install --save-dev hardhat
+npx hardhat
+```
+### Install zkSync Hardhat Plugin
+Install the zkSync Hardhat plugin which facilitates interactions with zkSync networks: 
+```bash
+npm install @matterlabs/hardhat-zksync-deploy
+```
+
+### Setup environment file
+Copy .env.example and save it as .env. Fill out the .env file with your wallet private key. 
+
+### Configue Hardhat
+Edit your hardhat.config.js to include the zkSync Era Sepolia testnet configuration:
+```javascript
+  networks: {
+    zkTestnet: {
+      url: "https://sepolia.era.zksync.dev", // The testnet RPC URL of zkSync Era network.
+      ethNetwork: "sepolia", // The Ethereum Web3 RPC URL, or the identifier of the network (e.g. `mainnet` or `goerli`)
+      zksync: true,
+      verifyURL: 'https://explorer.sepolia.era.zksync.dev/contract_verification'
+    },
+}
+```
+
+### Deployment script
+Use one of the scripts in the deploy folder as an example to write your own deployment script. 
+
+### Run the deployment script 
+```bash
+npx hardhat deploy-zksync --script exampleScript.ts --network zkTestnet
+```
+### Post-deployment
+After successful deployment, your contract's address will be printed on the console. You can use this address to interact with your contract on the zkSync Era Sepolia testnet (https://sepolia.explorer.zksync.io/).
+
+Remember to test thoroughly and ensure your smart contracts are secure and efficient before deploying them to a live environment.
 
