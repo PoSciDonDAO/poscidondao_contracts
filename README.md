@@ -1,7 +1,7 @@
 # PoSciDonDAO Protocol
 
 ## Overview
-PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to streamlining and democratizing the funding and management of personalized medicine research. Utilizing the advanced zkSync Era blockchain, PoSciDonDAO implements a suite of smart contracts designed to facilitate transparent, democratic, and efficient governance of DAO operations and funding of personalized medicine research.
+PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to streamlining and democratizing the funding and acceleration of personalized medicine research. Utilizing the advanced zkSync Era blockchain, PoSciDonDAO implements a suite of smart contracts designed to facilitate transparent, democratic, and efficient governance of DAO operations and  personalized medicine research funding.
 
 ## Contracts in the Repository
 - **GovernorOperations.sol**: Manages operational aspects of the DAO, including administrative and financial proposals.
