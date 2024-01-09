@@ -13,12 +13,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error ContractTerminated(uint256 blockNumber);
     error IncorrectCoinValue();
-    error IncorrectBlockNumber();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInput();
-    error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalLifeTimePassed();
     error ProposalLock();
     error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
@@ -566,7 +564,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function _transferCoin(address from, address to, uint256 amount) internal {
         if (_msgSender() != from) revert Unauthorized(_msgSender());
-        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
+        if (msg.value != amount) revert IncorrectCoinValue();
         (bool sent, ) = to.call{value: msg.value}("");
         require(sent, "Failed to transfer");
     }

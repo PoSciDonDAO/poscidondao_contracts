@@ -2,7 +2,9 @@
 pragma solidity ^0.8.19;
 
 interface IStaking {
-    function free(address src, address user, uint256 amount) external;
+    function freePo(address user, uint256 amount) external;
+
+    function freeSci(address user, uint256 amount) external;
 
     function getLatestUserRights(address user) external view returns (uint256);
 
@@ -16,17 +18,31 @@ interface IStaking {
         uint256 blockNum
     ) external view returns (uint256);
 
-    function lock(address src, address user, uint256 amount) external;
+    function lockPo(address user, uint256 amount) external;
 
-    function proposedOperations(address user, uint256 proposalLockEnd) external returns (bool);
+    function lockSci(address user, uint256 amount) external;
 
-    function proposedResearch(address user, uint256 proposalLockEnd) external returns (bool);
+    function proposedOperations(
+        address user,
+        uint256 proposalLockEnd
+    ) external returns (bool);
+
+    function proposedResearch(
+        address user,
+        uint256 proposalLockEnd
+    ) external returns (bool);
 
     function terminateOperations(address admin) external;
 
     function terminateResearch(address admin) external;
 
-    function votedOperations(address user, uint256 voteLockEnd) external returns (bool);
-    
-    function votedResearch(address user, uint256 voteLockEnd) external returns (bool);
+    function votedOperations(
+        address user,
+        uint256 voteLockEnd
+    ) external returns (bool);
+
+    function votedResearch(
+        address user,
+        uint256 voteLockEnd
+    ) external returns (bool);
 }

@@ -1,46 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/ERC1155.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/Counters.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 // import "contracts/tokens/ImpactNft.sol";
 
 contract Participation is AccessControl {
-    using Counters for Counters.Counter;
-    Counters.Counter public tokenIdCounter;
 
     error LengthMismatch();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
     error IncorrectAddress(address _chosenAddress);
-    error NotGovernanceContract(address _govAddress);
     error Unauthorized(address user);
 
-    address private _admin;
-    address private _gov;
+    address public treasuryWallet;
+    address public govOps;
+    address public staking;
     string public name = "Participation Token";
     string public symbol = "PO";
-    bool internal _frozen = false;
+    bool internal frozen = false;
     string private _uri;
-    address private _staking;
+    uint256 public constant PARTICIPATION_TOKEN_ID = 0;
+    uint256 public constant MINT_AMOUNT = 1;
 
     mapping(uint256 => mapping(address => uint256)) private _balances;
 
     modifier onlyGov() {
-        if (msg.sender != _gov) revert Unauthorized(msg.sender);
+        if (msg.sender != govOps) revert Unauthorized(msg.sender);
         _;
     }
 
     modifier onlyStake() {
-        if (msg.sender != _staking) revert Unauthorized(msg.sender);
+        if (msg.sender != staking) revert Unauthorized(msg.sender);
         _;
     }
 
     event Push(address indexed user, uint256 amount, uint256 tokenId);
     event Pull(address indexed user, uint256 amount, uint256 tokenId);
     event MintedTokenInfo(address receiver, uint256 tokenId, uint256 amount);
+    event BurnedTokenInfo(address burner, uint256 tokenId, uint256 amount);
     event TransferSingle(
         address indexed operator,
         address indexed from,
@@ -49,11 +47,15 @@ contract Participation is AccessControl {
         uint256 value
     );
 
-    constructor(string memory baseURI_, address admin_, address staking_) {
-        _admin = admin_;
-        _staking = staking_;
+    constructor(
+        string memory baseURI_,
+        address treasuryWallet_,
+        address staking_
+    ) {
+        treasuryWallet = treasuryWallet_;
+        staking = staking_;
         _setURI(baseURI_);
-        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -64,21 +66,21 @@ contract Participation is AccessControl {
     function setStaking(
         address _newStaking
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _staking = _newStaking;
+        staking = _newStaking;
     }
 
     /**
      * @dev sets the address of the governance smart contract
      */
-    function setGov(address newGov) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _gov = newGov;
+    function setGovOps(address newGovOps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govOps = newGovOps;
     }
 
     /**
      * @dev freezes the current base URI
      */
     function freeze() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _frozen = true;
+        frozen = true;
     }
 
     /**
@@ -86,7 +88,7 @@ contract Participation is AccessControl {
      */
     function push(address user, uint256 amount) external onlyStake {
         //transfer tokens from user to staking contract
-        _safeTransferFrom(user, _staking, 0, amount, "");
+        _safeTransferFrom(user, staking, PARTICIPATION_TOKEN_ID, amount, "");
 
         emit Push(user, amount, 1);
     }
@@ -96,7 +98,7 @@ contract Participation is AccessControl {
      */
     function pull(address user, uint256 amount) external onlyStake {
         //transfer tokens from staking contract to user
-        _safeTransferFrom(_staking, user, 0, amount, "");
+        _safeTransferFrom(staking, user, PARTICIPATION_TOKEN_ID, amount, "");
 
         //emit Pull event
         emit Pull(user, amount, 1);
@@ -108,20 +110,19 @@ contract Participation is AccessControl {
      */
     function mint(address user) external onlyGov {
         //mint token
-        _mint(user, 0, 1, "");
+        _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
 
         //emit event
-        emit MintedTokenInfo(user, 0, 1);
+        emit MintedTokenInfo(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT);
     }
 
-    /**
-     * @dev returns the staking contract address
-     */
-    function getStaking() external view returns (address) {
-        return _staking;
+    function burn(address user, uint256 amount) external {
+        if (_msgSender() != user) revert Unauthorized(_msgSender());
+        //burn token
+        _burn(user, PARTICIPATION_TOKEN_ID, amount);
+        //emit event
+        emit BurnedTokenInfo(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT);
     }
-
-    ///*** PUBLIC FUNCTIONS ***///
 
     /**
      * @dev sets the base URI
@@ -130,9 +131,11 @@ contract Participation is AccessControl {
     function setURI(
         string memory baseURI
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(!_frozen);
+        require(!frozen);
         _setURI(baseURI);
     }
+
+    ///*** PUBLIC FUNCTIONS ***///
 
     /**
      * @dev See {IERC1155-balanceOf}.
@@ -145,6 +148,8 @@ contract Participation is AccessControl {
         if (account == address(0)) revert IncorrectAddress(account);
         return _balances[0][account];
     }
+
+    ///*** PUBLIC FUNCTION ***///
 
     /**
      *@dev   This function allows the generation of a URI for a specific token Id with the format {baseUri}/{id}/
@@ -197,8 +202,8 @@ contract Participation is AccessControl {
         emit TransferSingle(operator, from, to, id, amount);
     }
 
-    function _setURI(string memory newuri) internal {
-        _uri = newuri;
+    function _setURI(string memory newUri) internal {
+        _uri = newUri;
     }
 
     /**
@@ -241,7 +246,7 @@ contract Participation is AccessControl {
      * - `from` must have at least `amount` tokens of token type `id`.
      */
     function _burn(address from, uint256 id, uint256 amount) internal virtual {
-        require(from != address(0), "ERC1155: burn from the zero address");
+        if (from == address(0)) revert IncorrectAddress(from);
 
         address operator = msg.sender;
         uint256[] memory ids = _asSingletonArray(id);
