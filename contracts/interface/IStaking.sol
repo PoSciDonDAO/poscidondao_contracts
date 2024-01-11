@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 interface IStaking {
-    function freePo(address user, uint256 amount) external;
+    function freePo(uint256 amount) external;
 
-    function freeSci(address user, uint256 amount) external;
+    function freeSci(uint256 amount) external;
 
     function getLatestUserRights(address user) external view returns (uint256);
 
@@ -18,9 +18,9 @@ interface IStaking {
         uint256 blockNum
     ) external view returns (uint256);
 
-    function lockPo(address user, uint256 amount) external;
+    function lockPo(uint256 amount) external;
 
-    function lockSci(address user, uint256 amount) external;
+    function lockSci(uint256 amount) external;
 
     function proposedOperations(
         address user,

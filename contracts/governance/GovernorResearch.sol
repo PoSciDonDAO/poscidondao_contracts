@@ -64,6 +64,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
     bool public terminated = false;
+    uint256 constant VOTE = 1;
     mapping(uint256 => Proposal) private researchProposals;
     mapping(uint256 => mapping(address => uint8)) private votedResearch;
     mapping(address => uint8) private proposedResearch;
@@ -92,7 +93,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
-    event Voted(uint256 indexed id, bool indexed support, uint256 amount);
+    event Voted(uint256 indexed id, address indexed voter, bool indexed support, uint256 amount);
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Completed(uint256 indexed id);
@@ -329,15 +330,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev vote for an of option of a given proposal
      *      using the rights from the most recent snapshot
      * @param id the index of the proposal
-     * @param user the address of the voting users
+     * @param support true if in support of proposal
      */
     function voteOnResearch(
         uint256 id,
-        address user,
         bool support
     ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
-
         //check if proposal exists
         if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
 
@@ -350,32 +348,32 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (votedResearch[id][user] == 1) revert VoteLock();
+        if (votedResearch[id][msg.sender] == 1) revert VoteLock();
 
         IStaking staking = IStaking(stakingAddress);
 
         //check if DD member/voter still has enough tokens staked
-        if (staking.getStakedSci(user) < ddThreshold)
-            revert InsufficientBalance(staking.getStakedSci(user), ddThreshold);
+        if (staking.getStakedSci(msg.sender) < ddThreshold)
+            revert InsufficientBalance(staking.getStakedSci(msg.sender), ddThreshold);
 
         //vote for, against or abstain
         if (support) {
-            researchProposals[id].votesFor += 1;
+            researchProposals[id].votesFor += VOTE;
         } else {
-            researchProposals[id].votesAgainst += 1;
+            researchProposals[id].votesAgainst += VOTE;
         }
 
         //add to the total votes
         researchProposals[id].totalVotes += 1;
 
         //set user as voted for proposal
-        votedResearch[id][user] = 1;
+        votedResearch[id][msg.sender] = 1;
 
         //set the lock time in the staking contract
-        staking.votedResearch(user, block.timestamp + voteLockTime);
+        staking.votedResearch(msg.sender, block.timestamp + voteLockTime);
 
         //emit Voted events
-        emit Voted(id, support, 1);
+        emit Voted(id, msg.sender, support, VOTE);
     }
 
     /**

@@ -102,7 +102,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
-    event Voted(uint256 indexed id, bool indexed support, uint256 amount);
+    event Voted(
+        uint256 indexed id,
+        address indexed voter,
+        bool indexed support,
+        uint256 amount
+    );
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Completed(uint256 indexed id);
@@ -366,17 +371,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev vote for an of option of a given proposal
      *      using the rights from the most recent snapshot
      * @param id the index of the proposal
-     * @param user the address of the voting users
      * @param votes the amount of votes given to the chosen research project
      */
     function voteOnOperations(
         uint256 id,
-        address user,
         bool support,
         uint256 votes
     ) external notTerminated nonReentrant {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
-
         //check if proposal exists
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
@@ -390,11 +391,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (votedOperations[id][user] == 1) revert VoteLock();
+        if (votedOperations[id][msg.sender] == 1) revert VoteLock();
 
         IStaking staking = IStaking(stakingAddress);
         //get latest voting rights
-        uint256 votingRights = staking.getLatestUserRights(user);
+        uint256 votingRights = staking.getLatestUserRights(msg.sender);
 
         //check if user has enough voting rights
         if (votes > votingRights)
@@ -420,18 +421,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         operationsProposals[id].totalVotes += actualVotes;
 
         //set user as voted for proposal
-        votedOperations[id][user] = 1;
+        votedOperations[id][msg.sender] = 1;
 
         //set the lock time in the staking contract
-        staking.votedOperations(user, block.timestamp + voteLockTime);
+        staking.votedOperations(msg.sender, block.timestamp + voteLockTime);
 
         //mint a participation token if live
         if (poLive == 1) {
-            _po.mint(user);
+            _po.mint(msg.sender);
         }
 
         //emit Voted events
-        emit Voted(id, support, actualVotes);
+        emit Voted(id, msg.sender, support, actualVotes);
     }
 
     /**
@@ -559,7 +560,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         terminated = true;
         emit Terminated(_msgSender(), block.number);
     }
-
 
     /**
      * @dev returns the PO token address
