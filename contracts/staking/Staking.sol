@@ -192,100 +192,86 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev locks a given amount of SCI tokens
-     * @param user the user that wants to lock tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lockSci(
-        address user,
-        uint256 amount
-    ) external notTerminated nonReentrant {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
-
+    function lockSci(uint256 amount) external notTerminated nonReentrant {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
-        IERC20(_sci).safeTransferFrom(user, address(this), amount);
+        IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
 
         //add to total staked amount
         totStaked += amount;
 
         //Adds amount of deposited SCI tokens
-        users[user].stakedSci += amount;
+        users[msg.sender].stakedSci += amount;
 
-        address delegated = users[user].delegate;
+        address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
             //update voting rights for delegated address
             users[delegated].votingRights += amount;
             //snapshot of delegate's voting rights
             _snapshot(delegated, users[delegated].votingRights);
 
-            emit Locked(address(_sci), user, amount);
+            emit Locked(address(_sci), msg.sender, amount);
         } else {
             //update voting rights for user
-            users[user].votingRights += amount;
+            users[msg.sender].votingRights += amount;
             //snapshot of voting rights
-            _snapshot(user, users[user].votingRights);
+            _snapshot(msg.sender, users[msg.sender].votingRights);
 
-            emit Locked(address(_sci), user, amount);
+            emit Locked(address(_sci), msg.sender, amount);
         }
     }
 
     /**
      * @dev locks a given amount PO tokens
-     * @param user the user that wants to lock tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lockPo(
-        address user,
-        uint256 amount
-    ) external notTerminated nonReentrant {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
+    function lockPo(uint256 amount) external notTerminated nonReentrant {
         //retrieve balance of user
-        uint256 balance = _po.balanceOf(user);
+        uint256 balance = _po.balanceOf(msg.sender);
 
         //check if user has enough PO tokens
         if (balance < amount) revert InsufficientBalance(balance, amount);
 
         //Retrieve PO token from user wallet
-        _po.push(user, amount);
+        _po.push(msg.sender, amount);
 
         //update staked PO balance
-        users[user].stakedPo += amount;
+        users[msg.sender].stakedPo += amount;
 
         //emit locked event
-        emit Locked(address(_po), user, amount);
+        emit Locked(address(_po), msg.sender, amount);
     }
 
     /**
      * @dev frees locked tokens after voteLockEnd has passed
-     * @param user the user's address holding SCI or DON tokens
      * @param amount the amount of tokens that will be freed
      */
-    function freeSci(address user, uint256 amount) external nonReentrant {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
-
+    function freeSci(uint256 amount) external nonReentrant {
         if (
-            users[user].voteLockEnd > block.timestamp &&
+            users[msg.sender].voteLockEnd > block.timestamp &&
             !(terminatedGovOps && terminatedGovRes)
         ) {
-            revert TokensStillLocked(users[user].voteLockEnd, block.timestamp);
+            revert TokensStillLocked(users[msg.sender].voteLockEnd, block.timestamp);
         } else {
-            users[user].voteLockEnd = 0;
-            users[user].proposalLockEnd = 0;
+            users[msg.sender].voteLockEnd = 0;
+            users[msg.sender].proposalLockEnd = 0;
         }
 
         //check if amount is lower than deposited SCI tokens
-        if (users[user].stakedSci < amount)
-            revert InsufficientBalance(users[user].stakedSci, amount);
+        if (users[msg.sender].stakedSci < amount)
+            revert InsufficientBalance(users[msg.sender].stakedSci, amount);
 
         //return SCI tokens
-        IERC20(_sci).safeTransfer(user, amount);
+        IERC20(_sci).safeTransfer(msg.sender, amount);
 
         //deduct amount from total staked
         totStaked -= amount;
 
         //remove amount from deposited amount
-        users[user].stakedSci -= amount;
+        users[msg.sender].stakedSci -= amount;
 
-        address delegated = users[user].delegate;
+        address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
             //check if delegate did not vote recently
             if (
@@ -306,37 +292,31 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(delegated, users[delegated].votingRights);
         } else {
             //add new amount of votes as rights
-            users[user].votingRights -= amount;
+            users[msg.sender].votingRights -= amount;
 
             //snapshot of voting rights
-            _snapshot(user, users[user].votingRights);
+            _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Freed(address(_sci), user, amount);
+        emit Freed(address(_sci), msg.sender, amount);
     }
 
     /**
      * @dev frees locked tokens after voteLockEnd has passed
-     * @param user the user's address holding SCI or DON tokens
      * @param amount the amount of tokens that will be freed
      */
-    function freePo(
-        address user,
-        uint256 amount
-    ) external nonReentrant {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
-
+    function freePo(uint256 amount) external nonReentrant {
         //check if amount is lower than deposited PO tokens
-        if (users[user].stakedPo < amount)
-            revert InsufficientBalance(users[user].stakedPo, amount);
+        if (users[msg.sender].stakedPo < amount)
+            revert InsufficientBalance(users[msg.sender].stakedPo, amount);
 
         //Retrieve PO token from staking contract
-        _po.pull(user, amount);
+        _po.pull(msg.sender, amount);
 
         //update staked PO balance
-        users[user].stakedPo -= amount;
+        users[msg.sender].stakedPo -= amount;
 
-        emit Freed(address(_po), user, amount);
+        emit Freed(address(_po), msg.sender, amount);
     }
 
     /**
