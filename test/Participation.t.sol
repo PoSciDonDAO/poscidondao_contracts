@@ -150,7 +150,6 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        uint256 id = gov.getOperationsProposalIndex();
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -205,7 +204,6 @@ contract ParticipationTest is Test {
         );
         vm.stopPrank();
         vm.startPrank(addr2);
-        uint256 id = gov.getOperationsProposalIndex();
         staking.lockSci(1000e18);
         gov.voteOnOperations(1, true, 1000e18);
         gov.proposeOperation(

@@ -313,7 +313,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         researchProposals[_researchProposalIndex] = proposal;
 
-        staking.proposedResearch(
+        staking.proposed(
             _msgSender(),
             block.timestamp + proposalLockTime
         );
@@ -370,7 +370,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         votedResearch[id][msg.sender] = 1;
 
         //set the lock time in the staking contract
-        staking.votedResearch(msg.sender, block.timestamp + voteLockTime);
+        staking.voted(msg.sender, block.timestamp + voteLockTime);
 
         //emit Voted events
         emit Voted(id, msg.sender, support, VOTE);
@@ -471,9 +471,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         IStaking staking = IStaking(stakingAddress);
-        staking.terminateResearch(_msgSender());
+        staking.terminate(msg.sender);
         terminated = true;
-        emit Terminated(_msgSender(), block.number);
+        emit Terminated(msg.sender, block.number);
     }
 
     /**

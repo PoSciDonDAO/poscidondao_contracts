@@ -589,10 +589,8 @@ contract GovernorOperationsTest is Test {
     function test_TerminateGovernorAndStakingSmartContracts() public {
         vm.startPrank(treasuryWallet);
         govOps.terminateOperations();
-        govRes.terminateResearch();
         vm.stopPrank();
         assertEq(govOps.terminated(), true);
-        assertEq(govRes.terminated(), true);
         vm.startPrank(addr1);
         bytes4 selector = bytes4(keccak256("ContractsTerminated()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
@@ -613,7 +611,6 @@ contract GovernorOperationsTest is Test {
 
         vm.startPrank(treasuryWallet);
         govOps.terminateOperations();
-        govRes.terminateResearch();
         vm.stopPrank();
 
         vm.startPrank(addr1);

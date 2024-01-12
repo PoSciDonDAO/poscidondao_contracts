@@ -50,26 +50,20 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
-    bool public terminatedGovOps = false;
-    bool public terminatedGovRes = false;
+    bool public terminated = false;
     address public govOpsContract;
     address public govResContract;
     uint256 private totStaked;
     mapping(address => User) public users;
 
     ///*** MODIFIERS ***///
-    modifier govOps() {
-        if (_msgSender() != govOpsContract) revert Unauthorized(_msgSender());
-        _;
-    }
-
-    modifier govRes() {
-        if (_msgSender() != govResContract) revert Unauthorized(_msgSender());
+    modifier gov() {
+        if (!(msg.sender == govOpsContract || msg.sender == govResContract)) revert Unauthorized(_msgSender());
         _;
     }
 
     modifier notTerminated() {
-        if (terminatedGovOps && terminatedGovRes) revert ContractsTerminated();
+        if (terminated) revert ContractsTerminated();
         _;
     }
 
@@ -211,15 +205,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             //snapshot of delegate's voting rights
             _snapshot(delegated, users[delegated].votingRights);
 
-            emit Locked(address(_sci), msg.sender, amount);
         } else {
             //update voting rights for user
             users[msg.sender].votingRights += amount;
             //snapshot of voting rights
             _snapshot(msg.sender, users[msg.sender].votingRights);
-
-            emit Locked(address(_sci), msg.sender, amount);
         }
+
+        emit Locked(address(_sci), msg.sender, amount);
     }
 
     /**
@@ -250,7 +243,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function freeSci(uint256 amount) external nonReentrant {
         if (
             users[msg.sender].voteLockEnd > block.timestamp &&
-            !(terminatedGovOps && terminatedGovRes)
+            !(terminated)
         ) {
             revert TokensStillLocked(users[msg.sender].voteLockEnd, block.timestamp);
         } else {
@@ -276,7 +269,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             //check if delegate did not vote recently
             if (
                 users[delegated].voteLockEnd > block.timestamp &&
-                !(terminatedGovOps && terminatedGovRes)
+                !(terminated)
             ) {
                 revert TokensStillLocked(
                     users[delegated].voteLockEnd,
@@ -320,14 +313,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev is called by gov contract upon voting
+     * @dev is called by gov contracts upon voting
      * @param user the user's address holding SCI tokens
      * @param voteLockEnd the block number where the vote lock ends
      */
-    function votedOperations(
+    function voted(
         address user,
         uint256 voteLockEnd
-    ) external govOps returns (bool) {
+    ) external gov returns (bool) {
         if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
@@ -336,46 +329,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev is called by gov contract upon voting
-     * @param user the user's address holding SCI tokens
-     * @param voteLockEnd the block number where the vote lock ends
-     */
-    function votedResearch(
-        address user,
-        uint256 voteLockEnd
-    ) external govRes returns (bool) {
-        if (users[user].voteLockEnd < voteLockEnd) {
-            users[user].voteLockEnd = voteLockEnd;
-        }
-        emit VoteLockTimeUpdated(user, voteLockEnd);
-        return true;
-    }
-
-    /**
-     * @dev is called by govOps contract upon proposing
+     * @dev is called by gov contracts upon proposing
      * @param user the user's address holding SCI tokens
      * @param proposalLockEnd the block number where the vote lock ends
      */
-    function proposedOperations(
+    function proposed(
         address user,
         uint256 proposalLockEnd
-    ) external govOps returns (bool) {
-        if (users[user].proposalLockEnd < proposalLockEnd) {
-            users[user].proposalLockEnd = proposalLockEnd;
-        }
-        emit VoteLockTimeUpdated(user, proposalLockEnd);
-        return true;
-    }
-
-    /**
-     * @dev is called by govOps contract upon proposing
-     * @param user the user's address holding SCI tokens
-     * @param proposalLockEnd the block number where the vote lock ends
-     */
-    function proposedResearch(
-        address user,
-        uint256 proposalLockEnd
-    ) external govRes returns (bool) {
+    ) external gov returns (bool) {
         if (users[user].proposalLockEnd < proposalLockEnd) {
             users[user].proposalLockEnd = proposalLockEnd;
         }
@@ -386,35 +347,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev terminates the staking smart contract
      */
-    function terminateOperations(
+    function terminate(
         address admin
-    ) external govOps notTerminated nonReentrant {
-        terminatedGovOps = true;
+    ) external gov notTerminated nonReentrant {
+        terminated = true;
         emit Terminated(admin, block.number);
-    }
-
-    /**
-     * @dev terminates the staking smart contract
-     */
-    function terminateResearch(
-        address admin
-    ) external govRes notTerminated nonReentrant {
-        terminatedGovRes = true;
-        emit Terminated(admin, block.number);
-    }
-
-    /**
-     * @dev return the timestamp where the lock after voting ends
-     */
-    function getVoteLockEnd(address user) external view returns (uint256) {
-        return users[user].voteLockEnd;
-    }
-
-    /**
-     * @dev return the timestamp where the lock after proposing ends
-     */
-    function getProposalLockEnd(address user) external view returns (uint256) {
-        return users[user].proposalLockEnd;
     }
 
     /**

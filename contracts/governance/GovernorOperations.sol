@@ -291,13 +291,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         IStaking staking = IStaking(stakingAddress);
 
-        if (staking.getStakedSci(_msgSender()) < opThreshold)
+        if (staking.getStakedSci(msg.sender) < opThreshold)
             revert InsufficientBalance(
-                staking.getStakedSci(_msgSender()),
+                staking.getStakedSci(msg.sender),
                 opThreshold
             );
 
-        if (proposedOperations[_msgSender()] == 1) revert ProposalLock();
+        if (proposedOperations[msg.sender] == 1) revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -354,15 +354,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         operationsProposals[_operationsProposalIndex] = proposal;
 
-        staking.proposedOperations(
-            _msgSender(),
+        staking.proposed(
+            msg.sender,
             block.timestamp + proposalLockTime
         );
 
-        proposedOperations[_msgSender()] = 1;
+        proposedOperations[msg.sender] = 1;
 
         //emit Proposed event
-        emit Proposed(_operationsProposalIndex, _msgSender(), projectInfo);
+        emit Proposed(_operationsProposalIndex, msg.sender, projectInfo);
 
         return _operationsProposalIndex;
     }
@@ -424,7 +424,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         votedOperations[id][msg.sender] = 1;
 
         //set the lock time in the staking contract
-        staking.votedOperations(msg.sender, block.timestamp + voteLockTime);
+        staking.voted(msg.sender, block.timestamp + voteLockTime);
 
         //mint a participation token if live
         if (poLive == 1) {
@@ -556,9 +556,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         IStaking staking = IStaking(stakingAddress);
-        staking.terminateOperations(_msgSender());
+        staking.terminate(msg.sender);
         terminated = true;
-        emit Terminated(_msgSender(), block.number);
+        emit Terminated(msg.sender, block.number);
     }
 
     /**
@@ -573,7 +573,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param id the proposal id
      */
     function getVotedOperations(uint256 id) external view returns (uint8) {
-        return votedOperations[id][_msgSender()];
+        return votedOperations[id][msg.sender];
     }
 
     /**
@@ -686,7 +686,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param amount The amount of coins to transfer.
      */
     function _transferCoin(address from, address to, uint256 amount) internal {
-        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.sender != from) revert Unauthorized(msg.sender);
         if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
         (bool sent, ) = to.call{value: msg.value}("");
         require(sent, "Failed to transfer");
