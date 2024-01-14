@@ -132,7 +132,7 @@ contract ParticipationTest is Test {
         vm.startPrank(addr2);
         staking.lockSci(1000e18);
         gov.voteOnOperations(1, true, 1000e18);
-        po.burn(addr2, 1);
+        po.burn(1);
         uint256 balance1 = po.balanceOf(addr2);
         assertEq(balance1, 0);
         vm.stopPrank();
