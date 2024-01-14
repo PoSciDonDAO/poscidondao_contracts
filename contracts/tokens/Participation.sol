@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "../../lib/openzeppelin-contracts/contracts/utils/Strings.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
-
-// import "contracts/tokens/ImpactNft.sol";
 
 contract Participation is AccessControl {
 
@@ -25,18 +22,18 @@ contract Participation is AccessControl {
 
     mapping(uint256 => mapping(address => uint256)) private _balances;
 
-    modifier onlyGov() {
+    modifier gov() {
         if (msg.sender != govOps) revert Unauthorized(msg.sender);
         _;
     }
 
-    modifier onlyStake() {
+    modifier stake() {
         if (msg.sender != staking) revert Unauthorized(msg.sender);
         _;
     }
 
-    event Push(address indexed user, uint256 amount, uint256 tokenId);
-    event Pull(address indexed user, uint256 amount, uint256 tokenId);
+    event Push(address indexed user, uint256 tokenId, uint256 amount);
+    event Pull(address indexed user, uint256 tokenId, uint256 amount);
     event MintedTokenInfo(address receiver, uint256 tokenId, uint256 amount);
     event BurnedTokenInfo(address burner, uint256 tokenId, uint256 amount);
     event TransferSingle(
@@ -86,29 +83,28 @@ contract Participation is AccessControl {
     /**
      * @dev pushes participation tokens from user wallet to staking contract
      */
-    function push(address user, uint256 amount) external onlyStake {
+    function push(address user, uint256 amount) external stake {
         //transfer tokens from user to staking contract
         _safeTransferFrom(user, staking, PARTICIPATION_TOKEN_ID, amount, "");
 
-        emit Push(user, amount, 1);
+        emit Push(user,  PARTICIPATION_TOKEN_ID, amount);
     }
 
     /**
      * @dev pulls participation tokens from staking contract to user wallet
      */
-    function pull(address user, uint256 amount) external onlyStake {
+    function pull(address user, uint256 amount) external stake {
         //transfer tokens from staking contract to user
         _safeTransferFrom(staking, user, PARTICIPATION_TOKEN_ID, amount, "");
 
         //emit Pull event
-        emit Pull(user, amount, 1);
+        emit Pull(user, PARTICIPATION_TOKEN_ID, amount);
     }
 
     /**
-     * @dev mints a PO NFT
-     * @param user the address of the user that participated in governance
+     * @dev mints a PO token
      */
-    function mint(address user) external onlyGov {
+    function mint(address user) external gov {
         //mint token
         _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
 
@@ -116,12 +112,14 @@ contract Participation is AccessControl {
         emit MintedTokenInfo(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT);
     }
 
-    function burn(address user, uint256 amount) external {
-        if (_msgSender() != user) revert Unauthorized(_msgSender());
+    /**
+     * @dev burns a given amount of PO tokens for msg.sender
+     */
+    function burn(uint256 amount) external {
         //burn token
-        _burn(user, PARTICIPATION_TOKEN_ID, amount);
+        _burn(msg.sender, PARTICIPATION_TOKEN_ID, amount);
         //emit event
-        emit BurnedTokenInfo(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT);
+        emit BurnedTokenInfo(msg.sender, PARTICIPATION_TOKEN_ID, amount);
     }
 
     /**
@@ -135,8 +133,6 @@ contract Participation is AccessControl {
         _setURI(baseURI);
     }
 
-    ///*** PUBLIC FUNCTIONS ***///
-
     /**
      * @dev See {IERC1155-balanceOf}.
      *
@@ -146,18 +142,17 @@ contract Participation is AccessControl {
      */
     function balanceOf(address account) external view returns (uint256) {
         if (account == address(0)) revert IncorrectAddress(account);
-        return _balances[0][account];
+        return _balances[PARTICIPATION_TOKEN_ID][account];
     }
 
     ///*** PUBLIC FUNCTION ***///
 
     /**
-     *@dev   This function allows the generation of a URI for a specific token Id with the format {baseUri}/{id}/
+     *@dev   This function allows the generation of a URI for token Id 0 with the format {baseUri}/{id}/
      *       the id in this case is a decimal string representation of the token Id
-     *@param tokenId is the token Id to generate or return the URI for.
      */
-    function uri(uint256 tokenId) public view returns (string memory) {
-        return string(abi.encodePacked(_uri, "/", Strings.toString(tokenId)));
+    function uri() public view returns (string memory) {
+        return string(abi.encodePacked(_uri, "/", PARTICIPATION_TOKEN_ID));
     }
 
     ///*** INTERNAL FUNCTIONS ***///

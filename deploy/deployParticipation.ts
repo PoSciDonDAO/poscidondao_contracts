@@ -28,7 +28,7 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   // Estimate contract deployment fee
   const URI = "IPFS";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const stakingAddress = "0xc7d8Aa2683C39Fb81E9766e6810A6e8b8EBeD795";
+  const stakingAddress = "0xb28204EbF14f5B50eA04e925788a22aca85dC261";
   const deploymentFee = await deployer.estimateDeployFee(artifact, [URI, treasuryWallet, stakingAddress]);
 
   // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2

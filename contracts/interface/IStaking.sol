@@ -22,27 +22,16 @@ interface IStaking {
 
     function lockSci(uint256 amount) external;
 
-    function proposedOperations(
+    function proposed(
         address user,
         uint256 proposalLockEnd
     ) external returns (bool);
 
-    function proposedResearch(
-        address user,
-        uint256 proposalLockEnd
-    ) external returns (bool);
+    function terminate(address admin) external;
 
-    function terminateOperations(address admin) external;
-
-    function terminateResearch(address admin) external;
-
-    function votedOperations(
+    function voted(
         address user,
         uint256 voteLockEnd
     ) external returns (bool);
 
-    function votedResearch(
-        address user,
-        uint256 voteLockEnd
-    ) external returns (bool);
 }

@@ -448,7 +448,6 @@ contract GovernorResearchTest is Test {
 
         vm.startPrank(treasuryWallet);
         govRes.terminateResearch();
-        govOps.terminateOperations();
         vm.stopPrank();
 
         vm.startPrank(addr1);
