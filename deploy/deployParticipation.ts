@@ -1,63 +1,64 @@
-import { Wallet, utils } from "zksync-web3";
-import * as ethers from "ethers";
-import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { Deployer } from "@matterlabs/hardhat-zksync-deploy";
-import { run } from "hardhat";
-
-// load env file
+import { ethers, hardhatArguments, run } from "hardhat";
+import { getEnv, sleep } from "./utils";
 import dotenv from "dotenv";
 dotenv.config();
 
-// load wallet private key from env file
-const PRIVATE_KEY = process.env.WALLET_PRIVATE_KEY || "";
+async function main() {
+  console.log(`Running deploy script for the Participation contract`);
+  // load wallet private key from env file
+  const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
-if (!PRIVATE_KEY)
-  throw "⛔️ Private key not detected! Add it to the .env file!";
+  if (!PRIVATE_KEY)
+    throw "⛔️ Private key not detected! Add it to the .env file!";
 
-// An example of a deploy script that will deploy and call a simple contract.
-export default async function (hre: HardhatRuntimeEnvironment) {
-  console.log(`Running deploy script for the usdc contract`);
+  const [deployer] = await ethers.getSigners();
 
-  // Initialize the wallet.
-  const wallet = new Wallet(PRIVATE_KEY);
+  console.log("Deploying Contract with the account:", deployer.address);
+  console.log("Account Balance:", (await deployer.getBalance()).toString());
 
-  // Create deployer object and load the artifact of the contract you want to deploy.
-  const deployer = new Deployer(hre, wallet);
-  const artifact = await deployer.loadArtifact("Participation");
+  if (!hardhatArguments.network) {
+    throw new Error("please pass --network");
+  }
 
-  // Estimate contract deployment fee
   const URI = "IPFS";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const stakingAddress = "0xb28204EbF14f5B50eA04e925788a22aca85dC261";
-  const deploymentFee = await deployer.estimateDeployFee(artifact, [URI, treasuryWallet, stakingAddress]);
 
-  // ⚠️ OPTIONAL: You can skip this block if your account already has funds in L2
-  // const depositHandle = await deployer.zkWallet.deposit({
-  //   to: deployer.zkWallet.address,
-  //   token: utils.ETH_ADDRESS,
-  //   amount: deploymentFee.mul(2),
-  // });
-  // // Wait until the deposit is processed on zkSync
-  // await depositHandle.wait();
+  const constructorArguments = [URI, treasuryWallet, stakingAddress];
 
-  // Deploy this contract. The returned object will be of a `Contract` type, similarly to ones in `ethers`.
-  // `greeting` is an argument for contract constructor.
-  const parsedFee = ethers.utils.formatEther(deploymentFee.toString());
-  console.log(`The deployment is estimated to cost ${parsedFee} ETH`);
-
-  const usdcContract = await deployer.deploy(artifact, [URI, treasuryWallet, stakingAddress]);
-
-  //obtain the Constructor Arguments
-  console.log(
-    "constructor args:" + usdcContract.interface.encodeDeploy([URI, treasuryWallet, stakingAddress])
+  const Contract = await ethers.getContractFactory("Participation");
+  // Estimate contract deployment fee
+  const estimatedGas = await ethers.provider.estimateGas(
+    Contract.getDeployTransaction(...constructorArguments)
   );
 
-  // Show the contract info.
-  const contractAddress = usdcContract.address;
-  console.log(`${artifact.contractName} was deployed to ${contractAddress}`);
-  await run("verify:verify", {
-    address: contractAddress,
-    constructorArguments: [URI, treasuryWallet, stakingAddress],
-  });
+  // Fetch current gas price
+  const gasPrice = await ethers.provider.getGasPrice();
 
+  // Calculate the estimated deployment cost
+  const estimatedCost = estimatedGas.mul(gasPrice);
+
+  console.log(
+    `Estimated deployment cost: ${ethers.utils.formatEther(
+      estimatedCost
+    )} MATIC`
+  );
+
+  const contract = await Contract.deploy(...constructorArguments);
+  console.log("Deployed Contract Address:", contract.address);
+  console.log(`${contract.contractName} was deployed to ${contract.address}`);
+  console.log("Verifying contract in 2 minutes...");
+  await sleep(120000 * 1);
+  await run("verify:verify", {
+    address: contract.address,
+    constructorArguments: [...constructorArguments],
+  });
+  console.log(`${contract.address} has been verified`);
 }
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
