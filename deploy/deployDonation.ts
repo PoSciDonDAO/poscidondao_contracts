@@ -20,7 +20,7 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const usdc = "0x07659EfbcB9C3D82C2B54Bf80d95cB870A612744";
+  const usdc = "0x8d834c8641FbdBB0DFf24a5c343F2e459ea96923";
   const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
   const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
 
