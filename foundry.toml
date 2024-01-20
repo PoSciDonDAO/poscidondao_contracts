@@ -1,11 +1,13 @@
 [profile.default]
-libs = ['lib']
-out = 'out'
-src = 'src'
-
-[rpc_endpoints]
-zk-l1-local = "http://localhost:8545/"
-zk-l2-local = "http://localhost:3050"
-zk-rpc = "${ZKSYNC_RPC_URL}"
+src = "src"
+out = "artifacts"
+libs = ["node_modules", "lib"]
+remappings = [
+    "@ensdomains/=node_modules/@ensdomains/",
+    "@imtbl/=node_modules/@imtbl/",
+    "@openzeppelin/=node_modules/@openzeppelin/",
+    "erc721a/=node_modules/erc721a/",
+    "hardhat/=node_modules/hardhat/",
+]
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

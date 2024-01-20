@@ -64,7 +64,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
     address public treasuryWallet;
-    address public donationWallet;
     address public usdc;
     address public sci;
 
@@ -123,7 +122,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
-        donationWallet = donationWallet_;
         usdc = usdc_;
         sci = sci_;
 
@@ -187,15 +185,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newTreasuryWallet
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         treasuryWallet = newTreasuryWallet;
-    }
-
-    /**
-     * @dev sets the donation wallet address
-     */
-    function setDonationWallet(
-        address newDonationWallet
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        donationWallet = newDonationWallet;
     }
 
     /**
