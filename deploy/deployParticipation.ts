@@ -22,7 +22,7 @@ async function main() {
 
   const URI = "IPFS";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const stakingAddress = "0xb28204EbF14f5B50eA04e925788a22aca85dC261";
+  const stakingAddress = "0xD488Eebc20372f00c15128fe965D2455Fa57921c";
 
   const constructorArguments = [URI, treasuryWallet, stakingAddress];
 
@@ -46,7 +46,6 @@ async function main() {
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
-  console.log(`${contract.contractName} was deployed to ${contract.address}`);
   console.log("Verifying contract in 2 minutes...");
   await sleep(120000 * 1);
   await run("verify:verify", {

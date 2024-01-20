@@ -56,9 +56,9 @@ contract GovernorOperationsTest is Test {
         govOps = new GovernorOperations(
             address(staking),
             treasuryWallet,
-            donationWallet,
             address(usdc),
-            address(sci)
+            address(sci),
+            address(po)
         );
 
         govRes = new GovernorResearch(
