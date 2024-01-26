@@ -8,16 +8,18 @@ interface IStaking {
 
     function getLatestUserRights(address user) external view returns (uint256);
 
+    function getProposalLockEndTime(address user) external view returns (uint256);
+
     function getStakedSci(address user) external view returns (uint256);
 
     function getTotalStaked() external returns (uint256);
-
+    
     function getUserRights(
         address user,
         uint256 snapshotIndex,
         uint256 blockNum
     ) external view returns (uint256);
-
+    
     function lockPo(uint256 amount) external;
 
     function lockSci(uint256 amount) external;
@@ -29,9 +31,5 @@ interface IStaking {
 
     function terminate(address admin) external;
 
-    function voted(
-        address user,
-        uint256 voteLockEnd
-    ) external returns (bool);
-
+    function voted(address user, uint256 voteLockEnd) external returns (bool);
 }

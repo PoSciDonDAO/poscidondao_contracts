@@ -34,16 +34,16 @@ contract StakingTest is Test {
         vm.startPrank(treasuryWallet);
         sci = new Sci(treasuryWallet);
 
-        staking = new Staking(treasuryWallet, address(sci));
+        po = new Participation("", treasuryWallet);
 
-        po = new Participation("", treasuryWallet, address(staking));
+        staking = new Staking(treasuryWallet, address(sci), address(po));
 
         govOps = new GovernorOperations(
             address(staking),
             treasuryWallet,
-            donationWallet,
             address(usdc),
-            address(sci)
+            address(sci),
+            address(po)
         );
 
         govRes = new GovernorResearch(
@@ -55,7 +55,6 @@ contract StakingTest is Test {
         );
 
         staking.setPoToken(address(po));
-        staking.setSciToken(address(sci));
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
         govOps.setPoPhase(1);
@@ -64,6 +63,7 @@ contract StakingTest is Test {
         govOps.govParams("quorum", 1000e18);
         govOps.govParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
+        po.setStaking(address(staking));
         vm.stopPrank();
 
         deal(address(usdc), treasuryWallet, 10000e18);
