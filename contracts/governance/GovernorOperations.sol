@@ -75,7 +75,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     mapping(uint256 => Proposal) private operationsProposals;
     mapping(uint256 => mapping(address => uint8)) private votedOperations;
-    mapping(address => uint8) private proposedOperations;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -286,7 +285,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 opThreshold
             );
 
-        if (proposedOperations[msg.sender] == 1) revert ProposalLock();
+        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp) revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -344,8 +343,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         operationsProposals[_operationsProposalIndex] = proposal;
 
         staking.proposed(msg.sender, block.timestamp + proposalLockTime);
-
-        proposedOperations[msg.sender] = 1;
 
         //emit Proposed event
         emit Proposed(_operationsProposalIndex, msg.sender, projectInfo);
