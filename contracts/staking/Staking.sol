@@ -36,7 +36,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     struct User {
         uint256 stakedPo; //PO deposited
         uint256 stakedSci; //SCI deposited
-        uint256 votingRights; //Voting rights for Operation proposals
+        uint256 votingRights; //Voting rights for operation proposals
         uint256 proposalLockEnd; //Time before token unlock after proposing
         uint256 voteLockEnd; //Time before token unlock after voting
         uint256 amtSnapshots; //Amount of snapshots
@@ -232,7 +232,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev frees locked tokens after voteLockEnd has passed
+     * @dev frees locked tokens after vote or proposal lock end has passed
      * @param amount the amount of tokens that will be freed
      */
     function freeSci(uint256 amount) external nonReentrant {

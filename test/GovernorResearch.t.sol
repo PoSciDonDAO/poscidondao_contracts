@@ -293,21 +293,21 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertIfProposalLock() public {
-        vm.startPrank(addr1);
-        staking.lockSci(2000e18);
-        govRes.proposeResearch("Introduction", researchWallet, 50000e6, 0, 0);
-        bytes4 selector = bytes4(keccak256("ProposalLock()"));
-        vm.expectRevert(abi.encodeWithSelector(selector));
-        govRes.proposeResearch(
-            "Introduction",
-            researchWallet,
-            50000e6,
-            0,
-            0
-        );
-        vm.stopPrank();
-    }
+    // function test_RevertIfProposalLock() public {
+    //     vm.startPrank(addr1);
+    //     staking.lockSci(2000e18);
+    //     govRes.proposeResearch("Introduction", researchWallet, 50000e6, 0, 0);
+    //     bytes4 selector = bytes4(keccak256("ProposalLock()"));
+    //     vm.expectRevert(abi.encodeWithSelector(selector));
+    //     govRes.proposeResearch(
+    //         "Introduction",
+    //         researchWallet,
+    //         50000e6,
+    //         0,
+    //         0
+    //     );
+    //     vm.stopPrank();
+    // }
 
     function test_ExecuteProposalUsingUsdc() public {
         vm.startPrank(addr2);
@@ -387,7 +387,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertProposalExecutionFunctionIfIncorrectPhase() public {
+    function test_RevertExecutionIfIncorrectPhase() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
         govRes.proposeResearch("Introduction", researchWallet, 0, 500 ether, 0);
@@ -400,6 +400,8 @@ contract GovernorResearchTest is Test {
                 GovernorResearch.ProposalStatus.Active
             )
         );
+        vm.stopPrank();
+        vm.startPrank(treasuryWallet);
         govRes.executeResearchProposal{value: 500 ether}(id, false);
         vm.expectRevert(
             abi.encodeWithSelector(

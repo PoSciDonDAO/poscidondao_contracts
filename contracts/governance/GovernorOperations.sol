@@ -71,7 +71,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint8 public poLive;
     uint256 public opThreshold;
     uint256 private _operationsProposalIndex;
-    bytes32 public constant OPERATIONS_ROLE = keccak256("OPERATIONS_ROLE");
     bool public terminated = false;
     mapping(uint256 => Proposal) private operationsProposals;
     mapping(uint256 => mapping(address => uint8)) private votedOperations;
@@ -133,9 +132,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         proposalLockTime = 4 weeks;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-
-        _grantRole(OPERATIONS_ROLE, treasuryWallet_);
-        _setRoleAdmin(OPERATIONS_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -147,34 +143,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 thresholdOpMember
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         opThreshold = thresholdOpMember;
-    }
-
-    /**
-     * @dev allows the DAO to add a member to the Due Diligence Crew
-     * @param member the address of the member that will be added to the DD crew
-     */
-    function addOperationsMember(
-        address member
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        IStaking staking = IStaking(stakingAddress);
-        if (staking.getStakedSci(member) > opThreshold) {
-            grantRole(OPERATIONS_ROLE, member);
-        } else {
-            revert InsufficientBalance(
-                staking.getStakedSci(member),
-                opThreshold
-            );
-        }
-    }
-
-    /**
-     * @dev allows the DAO to add a member to the Due Diligence Crew
-     * @param member the address of the member that will be added to the DD crew
-     */
-    function removeOperationsMember(
-        address member
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        revokeRole(OPERATIONS_ROLE, member);
     }
 
     /**
@@ -285,7 +253,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 opThreshold
             );
 
-        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp) revert ProposalLock();
+        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp)
+            revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -451,7 +420,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function executeOperationsProposal(
         uint256 id
-    ) external payable notTerminated nonReentrant {
+    ) external payable notTerminated nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         //check if proposal exists
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
@@ -486,7 +455,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             }
             if (payment == Payment.Coin) {
-                _transferCoin(treasuryWallet, receivingWallet, amount);
+                _transferCoin(treasuryWallet, receivingWallet, amount); //only treasury wallet can execute this proposal
             }
 
             operationsProposals[id].status = ProposalStatus.Executed;
@@ -499,7 +468,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     function completeOperationsProposal(
         uint256 id
-    ) external notTerminated onlyRole(OPERATIONS_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
 
@@ -517,7 +486,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function cancelOperationsProposal(
         uint256 id
-    ) external notTerminated onlyRole(OPERATIONS_ROLE) {
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
 
@@ -604,7 +573,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getOperationsProposalProjectInfo(
         uint256 id
-    ) external view returns (string memory, address, Payment, uint256, bool) {
+    )
+        external
+        view
+        returns (string memory, address, Payment, uint256, uint256, bool)
+    {
         if (id > _operationsProposalIndex || id < 1)
             revert ProposalInexistent();
         return (
@@ -612,6 +585,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             operationsProposals[id].details.receivingWallet,
             operationsProposals[id].details.payment,
             operationsProposals[id].details.amount,
+            operationsProposals[id].details.amountSci,
             operationsProposals[id].details.executable
         );
     }

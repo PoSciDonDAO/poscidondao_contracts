@@ -93,7 +93,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
-    event Voted(uint256 indexed id, address indexed voter, bool indexed support, uint256 amount);
+    event Voted(
+        uint256 indexed id,
+        address indexed voter,
+        bool indexed support,
+        uint256 amount
+    );
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Completed(uint256 indexed id);
@@ -259,7 +264,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 ddThreshold
             );
 
-        if (proposedResearch[_msgSender()] == 1) revert ProposalLock();
+        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp)
+            revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -313,12 +319,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         researchProposals[_researchProposalIndex] = proposal;
 
-        staking.proposed(
-            _msgSender(),
-            block.timestamp + proposalLockTime
-        );
-
-        proposedResearch[_msgSender()] = 1;
+        staking.proposed(_msgSender(), block.timestamp + proposalLockTime);
 
         //emit Proposed event
         emit Proposed(_researchProposalIndex, _msgSender(), projectInfo);
@@ -354,7 +355,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         //check if DD member/voter still has enough tokens staked
         if (staking.getStakedSci(msg.sender) < ddThreshold)
-            revert InsufficientBalance(staking.getStakedSci(msg.sender), ddThreshold);
+            revert InsufficientBalance(
+                staking.getStakedSci(msg.sender),
+                ddThreshold
+            );
 
         //vote for, against or abstain
         if (support) {
