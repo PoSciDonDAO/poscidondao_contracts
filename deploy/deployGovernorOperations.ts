@@ -20,11 +20,11 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const stakingAddress = "0xD488Eebc20372f00c15128fe965D2455Fa57921c";
+  const stakingAddress = "0x5688CFece0aD0a797A2BB4EF574E60872c5069f7";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const usdc = "0x8d834c8641FbdBB0DFf24a5c343F2e459ea96923";
   const sciToken = "0xD2c280935c9B7A3Bf07bde3FB3e10b1E58206873";
-  const poToken = "0x578928B093423E9622c7F7e7d741eF9397701930";
+  const poToken = "0x032746d21e589f9c42b81d3EC77E389dbf4B96b2";
 
   const constructorArguments = [
     stakingAddress,

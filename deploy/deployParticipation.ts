@@ -22,9 +22,8 @@ async function main() {
 
   const URI = "IPFS";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const stakingAddress = "0xD488Eebc20372f00c15128fe965D2455Fa57921c";
 
-  const constructorArguments = [URI, treasuryWallet, stakingAddress];
+  const constructorArguments = [URI, treasuryWallet];
 
   const Contract = await ethers.getContractFactory("Participation");
   // Estimate contract deployment fee
