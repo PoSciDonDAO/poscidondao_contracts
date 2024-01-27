@@ -45,9 +45,9 @@ contract GovernorResearchTest is Test {
         vm.startPrank(treasuryWallet);
         sci = new Sci(treasuryWallet);
 
-        staking = new Staking(treasuryWallet, address(sci));
+        staking = new Staking(treasuryWallet, address(sci), address(po));
 
-        po = new Participation("", treasuryWallet, address(staking));
+        po = new Participation("", treasuryWallet);
 
         staking.setPoToken(address(po));
         staking.setSciToken(address(sci));
@@ -55,9 +55,9 @@ contract GovernorResearchTest is Test {
         govOps = new GovernorOperations(
             address(staking),
             treasuryWallet,
-            donationWallet,
             address(usdc),
-            address(sci)
+            address(sci),
+            address(po)
         );
         govRes = new GovernorResearch(
             address(staking),

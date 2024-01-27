@@ -53,7 +53,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** TOKEN ***///
-    IParticipation private _po;
+    IParticipation private po;
 
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
@@ -75,7 +75,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     mapping(uint256 => Proposal) private operationsProposals;
     mapping(uint256 => mapping(address => uint8)) private votedOperations;
-    mapping(address => uint8) private proposedOperations;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -116,14 +115,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     constructor(
         address stakingAddress_,
         address treasuryWallet_,
-        address donationWallet_,
         address usdc_,
-        address sci_
+        address sci_,
+        address po_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
+        po = IParticipation(po_);
 
         opThreshold = 100e18;
 
@@ -133,7 +133,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         proposalLockTime = 4 weeks;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-        _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
 
         _grantRole(OPERATIONS_ROLE, treasuryWallet_);
         _setRoleAdmin(OPERATIONS_ROLE, DEFAULT_ADMIN_ROLE);
@@ -212,7 +211,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setPoToken(
         address po_
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        _po = IParticipation(po_);
+        po = IParticipation(po_);
     }
 
     /**
@@ -286,7 +285,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 opThreshold
             );
 
-        if (proposedOperations[msg.sender] == 1) revert ProposalLock();
+        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp) revert ProposalLock();
 
         Payment payment;
         uint256 amount;
@@ -343,12 +342,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //store proposal at the given index
         operationsProposals[_operationsProposalIndex] = proposal;
 
-        staking.proposed(
-            msg.sender,
-            block.timestamp + proposalLockTime
-        );
-
-        proposedOperations[msg.sender] = 1;
+        staking.proposed(msg.sender, block.timestamp + proposalLockTime);
 
         //emit Proposed event
         emit Proposed(_operationsProposalIndex, msg.sender, projectInfo);
@@ -417,7 +411,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         //mint a participation token if live
         if (poLive == 1) {
-            _po.mint(msg.sender);
+            po.mint(msg.sender);
         }
 
         //emit Voted events
@@ -554,7 +548,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev returns the PO token address
      */
     function getPoToken() external view returns (address) {
-        return address(_po);
+        return address(po);
     }
 
     /**

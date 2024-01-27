@@ -8,102 +8,145 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 contract Donation is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
-    
+
     error IncorrectPercentage();
     error InsufficientDonation();
-    
-    uint256 private _donationThresholdEth;
-    uint256 private _donationThresholdUsdc;
+
     uint256 private _donationFraction;
+    uint256 private _donationThresholdMatic;
+    uint256 private _donationThresholdUsdc;
+    uint256 private _donationThresholdWeth;
 
     address public donationWallet;
     address public treasuryWallet;
     address public usdc;
+    address public weth;
 
-    event DonationCompleted(address indexed user, uint256 donation);
+    event DonationCompleted(
+        address indexed user,
+        address asset,
+        uint256 donation
+    );
 
     constructor(
-        address _usdc,
         address _donationWallet,
-        address _treasuryWallet
+        address _treasuryWallet,
+        address _usdc,
+        address _weth
     ) {
         _donationFraction = 95;
-        _donationThresholdEth = 1e15;
+        _donationThresholdMatic = 1e18;
         _donationThresholdUsdc = 1e6;
-        usdc = _usdc;
+
         donationWallet = _donationWallet;
         treasuryWallet = _treasuryWallet;
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
+        _setupRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
+
+        usdc = _usdc;
+        weth = _weth;
     }
-    
+
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
      * @dev sets the staking contract address
      * @param usdcAddress the address of the staking contract
      */
-    function setUsdcAddress(address usdcAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setUsdcAddress(
+        address usdcAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         usdc = usdcAddress;
     }
 
     /**
-     * @dev sets the Threshold to donate usdc or eth
-     * @param amountUsdc the least amount of USDC that needs be donated  
-     * @param amountEth the least amount of ETH that needs be donated  
+     * @dev sets the Threshold to donate USDC, MATIC or WETH
+     * @param amountUsdc the least amount of USDC that needs be donated
+     * @param amountMatic the least amount of MATIC that needs be donated
+     * @param amountWeth the least amount of WETH that needs be donated
      */
-    function setDonationThreshold(uint256 amountUsdc, uint256 amountEth) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setDonationThreshold(
+        uint256 amountUsdc,
+        uint256 amountMatic,
+        uint256 amountWeth
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _donationThresholdUsdc = amountUsdc;
-        _donationThresholdEth = amountEth;
+        _donationThresholdMatic = amountMatic;
+        _donationThresholdWeth = amountWeth;
     }
 
     /**
      * @dev sets the donated amount that will go to the donation wallet and treasury
      */
-    function setDonationFraction(uint256 percentage) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(percentage < 95) revert IncorrectPercentage();
+    function setDonationFraction(
+        uint256 percentage
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (percentage < 95) revert IncorrectPercentage();
         _donationFraction = percentage;
     }
 
     /**
-     * @dev sends Eth donations to the donation wallet, 
-     * donor receives DON tokens.
-     * ! Per 0.001 ETH --> ethPrice/1000 DON Token !
-     * @param user the user that donates the Ether 
+     * @dev sends MATIC donations to the donation & treasury wallet
+     * @param user the user that donates the Ether
      */
-    function donateEth(address user) external payable nonReentrant {
+    function donateMatic(address user) external payable nonReentrant {
         //check if the donation Threshold has been reached
-        if (msg.value < _donationThresholdEth) revert InsufficientDonation();
+        if (msg.value < _donationThresholdMatic) revert InsufficientDonation();
 
-        uint256 amountDonation = msg.value / 100 * _donationFraction;
-        uint256 amountTreasury = msg.value / 100 * (100 - _donationFraction);
+        uint256 amountDonation = (msg.value / 100) * _donationFraction;
+        uint256 amountTreasury = (msg.value / 100) * (100 - _donationFraction);
 
         //transfer Eth to donation wallet if successful
-        (bool sentDonation,) = donationWallet.call{value: amountDonation}("");
-        (bool sentTreasury,) = treasuryWallet.call{value: amountTreasury}("");
+        (bool sentDonation, ) = donationWallet.call{value: amountDonation}("");
+        (bool sentTreasury, ) = treasuryWallet.call{value: amountTreasury}("");
         require(sentDonation && sentTreasury);
 
         //emit event
-        emit DonationCompleted(user, msg.value);
+        emit DonationCompleted(user, address(0), msg.value);
     }
 
     /**
-     * @dev sends donated USDC to the donation wallet 
-     * donor receives DON tokens based on the given ratio.
+     * @dev sends donated USDC to the donation & treasury wallet
+     * @param user the user that donates the USDC
      * @param usdcAmount the amount of donated USDC
-     * @param user the user that donates the USDC  
      */
-    function donateUsdc(address user, uint256 usdcAmount) external nonReentrant {
+    function donateUsdc(
+        address user,
+        uint256 usdcAmount
+    ) external nonReentrant {
         //check if the donation Threshold has been reached
         if (usdcAmount < _donationThresholdUsdc) revert InsufficientDonation();
 
-        uint256 amountDonation = usdcAmount / 100 * _donationFraction;
-        uint256 amountTreasury = usdcAmount / 100 * (100 - _donationFraction);
+        uint256 amountDonation = (usdcAmount / 100) * _donationFraction;
+        uint256 amountTreasury = (usdcAmount / 100) * (100 - _donationFraction);
 
         //pull usdc from wallet to donation wallet
         IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
         IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
 
         //emit event
-        emit DonationCompleted(user, usdcAmount);
+        emit DonationCompleted(user, address(usdc), usdcAmount);
+    }
+
+    /**
+     * @dev sends donated WETH to the donation & treasury wallet 
+     * @param user the user that donates the USDC
+     * @param wethAmount the amount of donated USDC
+     */
+    function donateWeth(
+        address user,
+        uint256 wethAmount
+    ) external nonReentrant {
+        //check if the donation Threshold has been reached
+        if (wethAmount < _donationThresholdWeth) revert InsufficientDonation();
+
+        uint256 amountDonation = (wethAmount / 100) * _donationFraction;
+        uint256 amountTreasury = (wethAmount / 100) * (100 - _donationFraction);
+
+        //pull usdc from wallet to donation wallet
+        IERC20(weth).safeTransferFrom(user, donationWallet, amountDonation);
+        IERC20(weth).safeTransferFrom(user, treasuryWallet, amountTreasury);
+
+        //emit event
+        emit DonationCompleted(user, address(weth), wethAmount);
     }
 }

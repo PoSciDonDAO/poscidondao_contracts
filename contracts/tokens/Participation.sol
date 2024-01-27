@@ -46,11 +46,9 @@ contract Participation is AccessControl {
 
     constructor(
         string memory baseURI_,
-        address treasuryWallet_,
-        address staking_
+        address treasuryWallet_
     ) {
         treasuryWallet = treasuryWallet_;
-        staking = staking_;
         _setURI(baseURI_);
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }

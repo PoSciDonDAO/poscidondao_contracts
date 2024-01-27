@@ -12,7 +12,6 @@
     "@typechain/ethers-v5": "^2.0.0",
     "@types/chai": "^4.3.1",
     "@types/ethereumjs-abi": "^0.6.3",
-    "@types/jest": "^27.4.1",
     "@types/mocha": "^8.2.3",
     "@types/node": "^16.0.3",
     "chai": "^4.3.6",

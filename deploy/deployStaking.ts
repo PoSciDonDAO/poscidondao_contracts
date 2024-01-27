@@ -21,9 +21,10 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sciToken = "0x937F6B427a687b91977Fe09b931e202D995d37B7";
+  const sciToken = "0xD2c280935c9B7A3Bf07bde3FB3e10b1E58206873";
+  const poToken = "0x032746d21e589f9c42b81d3EC77E389dbf4B96b2";
 
-  const constructorArguments = [treasuryWallet, sciToken];
+  const constructorArguments = [treasuryWallet, sciToken, poToken];
 
   const Contract = await ethers.getContractFactory("Staking");
   // Estimate contract deployment fee
@@ -38,12 +39,11 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
+    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} MATIC`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
-  console.log(`${contract.contractName} was deployed to ${contract.address}`);
   console.log("Verifying contract in 2 minutes...");
   await sleep(120000 * 1);
   await run("verify:verify", {
