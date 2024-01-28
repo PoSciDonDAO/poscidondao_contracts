@@ -124,6 +124,7 @@ contract StakingTest is Test {
     function test_LockPoTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation(
             "Info",
             treasuryWallet,
@@ -136,7 +137,6 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(200e18);
-        uint256 id = govOps.getOperationsProposalIndex();
         govOps.voteOnOperations(id, true, 150e18);
         staking.lockPo(1);
         assertEq(staking.getStakedPo(addr2), 1);
@@ -146,6 +146,7 @@ contract StakingTest is Test {
     function test_FreePoTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation(
             "Info",
             treasuryWallet,
@@ -158,7 +159,6 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(200e18);
-        uint256 id = govOps.getOperationsProposalIndex();
         govOps.voteOnOperations(id, true, 150e18);
         staking.lockPo(1);
         staking.freePo(1);

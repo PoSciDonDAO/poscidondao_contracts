@@ -25,7 +25,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error ProposalIsNotExecutable();
     error ProposalLifeTimePassed();
     error ProposalLock();
-    error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
+    error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
     error Unauthorized(address user);
@@ -85,6 +85,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     enum Payment {
+        None,
         Usdc,
         Sci,
         Coin,
@@ -206,83 +207,48 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev proposes a change in DAO operations
-     *      at least one option needs to be proposed
-     * @param info ipfs hash of project proposal
-     * @param receivingWallet the address of the party receiving funds if proposal passed
-     * @param amountUsdc the amount of USDC
-     * @param amountCoin the amount of Coin
-     * @param amountSci the amount of SCI tokens
+     * @dev Proposes a change in DAO operations. At least one option needs to be proposed.
+     * @param info IPFS hash of project proposal.
+     * @param receivingWallet Address of the party receiving funds if proposal passes.
+     * @param amountUsdc Amount of USDC.
+     * @param amountCoin Amount of Coin.
+     * @param amountSci Amount of SCI tokens.
+     * @param executable Whether the proposal is executable.
+     * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
+     * @return uint256 Index of the newly created proposal.
      */
     function proposeOperation(
         string memory info,
         address receivingWallet,
-        uint256 amountUsdc, //6 decimals
-        uint256 amountCoin, //18 decimals
-        uint256 amountSci, //18 decimals
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci,
         bool executable,
         bool quadraticVoting
     ) external notTerminated nonReentrant returns (uint256) {
-        if (bytes(info).length == 0) revert InvalidInfo();
-
-        if (executable) {
-            if (
-                receivingWallet == address(0) ||
-                !((amountUsdc > 0 && amountCoin == 0 && (amountSci >= 0)) ||
-                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                    (amountSci > 0 && amountCoin == 0 && (amountUsdc >= 0)))
-            ) {
-                revert InvalidInputForExecutable();
-            }
-        } else {
-            if (
-                receivingWallet != address(0) ||
-                amountUsdc != 0 ||
-                amountCoin != 0 ||
-                amountSci != 0
-            ) {
-                revert InvalidInputForNonExecutable();
-            }
-        }
+        validateInput(
+            info,
+            receivingWallet,
+            amountUsdc,
+            amountCoin,
+            amountSci,
+            executable
+        );
 
         IStaking staking = IStaking(stakingAddress);
 
-        if (staking.getStakedSci(msg.sender) < opThreshold)
-            revert InsufficientBalance(
-                staking.getStakedSci(msg.sender),
-                opThreshold
+        validateStakingRequirements(staking, msg.sender);
+
+        (
+            Payment payment,
+            uint256 amount,
+            uint256 sciAmount
+        ) = determinePaymentDetails(
+                amountUsdc,
+                amountCoin,
+                amountSci,
+                executable
             );
-
-        if (staking.getProposalLockEndTime(msg.sender) > block.timestamp)
-            revert ProposalLock();
-
-        Payment payment;
-        uint256 amount;
-        uint256 sciAmount;
-        if (executable) {
-            uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
-                (amountCoin > 0 ? 1 : 0) +
-                (amountSci > 0 ? 1 : 0);
-
-            if (paymentOptions == 1) {
-                if (amountUsdc > 0) {
-                    amount = amountUsdc;
-                    payment = Payment.Usdc;
-                } else if (amountCoin > 0) {
-                    amount = amountCoin;
-                    payment = Payment.Coin;
-                } else if (amountSci > 0) {
-                    sciAmount = amountSci;
-                    payment = Payment.Sci;
-                }
-            } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
-                amount = amountUsdc;
-                sciAmount = amountSci;
-                payment = Payment.SciUsdc;
-            } else {
-                revert IncorrectPaymentOption();
-            }
-        }
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
@@ -293,30 +259,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             executable
         );
 
-        //Initiate and specify each parameter of the proposal
-        Proposal memory proposal = Proposal(
-            block.number,
-            block.timestamp + proposalLifeTime,
-            ProposalStatus.Active,
+        uint256 currentIndex = storeProposal(
             projectInfo,
-            0,
-            0,
-            0,
-            quadraticVoting
+            quadraticVoting,
+            staking
         );
 
-        //increment proposal index
-        _operationsProposalIndex += 1;
+        emit Proposed(currentIndex, msg.sender, projectInfo);
 
-        //store proposal at the given index
-        operationsProposals[_operationsProposalIndex] = proposal;
-
-        staking.proposed(msg.sender, block.timestamp + proposalLockTime);
-
-        //emit Proposed event
-        emit Proposed(_operationsProposalIndex, msg.sender, projectInfo);
-
-        return _operationsProposalIndex;
+        return currentIndex;
     }
 
     /**
@@ -331,8 +282,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votes
     ) external notTerminated nonReentrant {
         //check if proposal exists
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id >= _operationsProposalIndex) revert ProposalInexistent();
 
         //check if proposal is still active
         if (operationsProposals[id].status != ProposalStatus.Active)
@@ -394,11 +344,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function finalizeVotingOperationsProposal(
         uint256 id
     ) external notTerminated {
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id >= _operationsProposalIndex) revert ProposalInexistent();
 
         if (block.timestamp < operationsProposals[id].endTimeStamp)
             revert ProposalOngoing(
+                id,
                 block.timestamp,
                 operationsProposals[id].endTimeStamp
             );
@@ -422,8 +372,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 id
     ) external payable notTerminated nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         //check if proposal exists
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id >= _operationsProposalIndex) revert ProposalInexistent();
 
         if (operationsProposals[id].details.executable) {
             //check if proposal has finalized voting
@@ -469,8 +418,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function completeOperationsProposal(
         uint256 id
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id > _operationsProposalIndex) revert ProposalInexistent();
 
         if (operationsProposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(operationsProposals[id].status);
@@ -487,8 +435,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function cancelOperationsProposal(
         uint256 id
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id >= _operationsProposalIndex) revert ProposalInexistent();
 
         if (operationsProposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(operationsProposals[id].status);
@@ -554,8 +501,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             bool
         )
     {
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id > _operationsProposalIndex) revert ProposalInexistent();
         return (
             operationsProposals[id].startBlockNum,
             operationsProposals[id].endTimeStamp,
@@ -578,8 +524,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         view
         returns (string memory, address, Payment, uint256, uint256, bool)
     {
-        if (id > _operationsProposalIndex || id < 1)
-            revert ProposalInexistent();
+        if (id >= _operationsProposalIndex) revert ProposalInexistent();
         return (
             operationsProposals[id].details.info,
             operationsProposals[id].details.receivingWallet,
@@ -591,6 +536,146 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Validates input parameters for an operation proposal.
+     * @param info Description or details of the operation proposal.
+     * @param receivingWallet Wallet address to receive funds if the proposal is approved.
+     * @param amountUsdc Amount of USDC involved in the proposal.
+     * @param amountCoin Amount of Coin involved in the proposal.
+     * @param amountSci Amount of SCI tokens involved in the proposal.
+     * @param executable Boolean indicating whether the proposal is executable.
+     *
+     * @notice Reverts with InvalidInfo if the info is empty.
+     * Reverts with InvalidInputForExecutable or InvalidInputForNonExecutable
+     * based on the executable flag and the validity of payment amounts and receiving wallet.
+     */
+    function validateInput(
+        string memory info,
+        address receivingWallet,
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci,
+        bool executable
+    ) internal pure {
+        if (bytes(info).length == 0) revert InvalidInfo();
+
+        if (executable) {
+            if (
+                receivingWallet == address(0) ||
+                !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
+                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                    (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
+            ) {
+                revert InvalidInputForExecutable();
+            }
+        } else {
+            if (
+                receivingWallet != address(0) ||
+                amountUsdc != 0 ||
+                amountCoin != 0 ||
+                amountSci != 0
+            ) {
+                revert InvalidInputForNonExecutable();
+            }
+        }
+    }
+
+    /**
+     * @dev Checks if the proposer satisfies the staking requirements for proposal submission.
+     * @param staking The staking contract interface to check staked amounts.
+     * @param proposer Address of the user making the proposal.
+     *
+     * @notice Reverts with InsufficientBalance if the staked amount is below the required threshold.
+     * Reverts with ProposalLock if the proposer's tokens are locked due to a recent proposal.
+     */
+    function validateStakingRequirements(
+        IStaking staking,
+        address proposer
+    ) internal view {
+        if (staking.getStakedSci(proposer) < opThreshold)
+            revert InsufficientBalance(
+                staking.getStakedSci(proposer),
+                opThreshold
+            );
+
+        if (staking.getProposalLockEndTime(proposer) > block.timestamp)
+            revert ProposalLock();
+    }
+
+    /**
+     * @dev Determines and returns the payment type and amounts for an operation proposal.
+     * @param amountUsdc Amount of USDC involved in the proposal.
+     * @param amountCoin Amount of Coin involved in the proposal.
+     * @param amountSci Amount of SCI tokens involved in the proposal.
+     * @param executable Boolean flag indicating whether the proposal is executable.
+     * @return payment The determined payment method from the Payment enum.
+     * @return amount The amount of USDC or Coin to be used.
+     * @return sciAmount The amount of SCI tokens to be used.
+     *
+     * @notice Reverts with IncorrectPaymentOption if the payment method is not valid.
+     * The method is determined based on the non-zero amounts of USDC, Coin, and SCI tokens.
+     */
+    function determinePaymentDetails(
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci,
+        bool executable
+    )
+        internal
+        pure
+        returns (Payment payment, uint256 amount, uint256 sciAmount)
+    {
+        if (!executable) return (Payment.None, 0, 0); // Default for non-executable, adjust as needed
+
+        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
+            (amountCoin > 0 ? 1 : 0) +
+            (amountSci > 0 ? 1 : 0);
+
+        if (paymentOptions == 1) {
+            if (amountUsdc > 0) return (Payment.Usdc, amountUsdc, 0);
+            if (amountCoin > 0) return (Payment.Coin, amountCoin, 0);
+            if (amountSci > 0) return (Payment.Sci, 0, amountSci);
+        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
+            return (Payment.SciUsdc, amountUsdc, amountSci);
+        }
+
+        revert IncorrectPaymentOption();
+    }
+
+    /**
+     * @dev Stores a new operation proposal in the contract's state and updates staking.
+     * @param projectInfo Struct containing detailed information about the project.
+     * @param quadraticVoting Boolean indicating if quadratic voting is enabled for this proposal.
+     * @param staking The staking contract interface used for updating the proposer's status.
+     * @return uint256 The index where the new proposal is stored.
+     *
+     * @notice The function increments the operations proposal index after storing.
+     * It also updates the staking contract to reflect the new proposal.
+     */
+    function storeProposal(
+        ProjectInfo memory projectInfo,
+        bool quadraticVoting,
+        IStaking staking
+    ) internal returns (uint256) {
+        Proposal memory proposal = Proposal(
+            block.number,
+            block.timestamp + proposalLifeTime,
+            ProposalStatus.Active,
+            projectInfo,
+            0,
+            0,
+            0,
+            quadraticVoting
+        );
+
+        uint256 currentIndex = _operationsProposalIndex++;
+        operationsProposals[currentIndex] = proposal;
+
+        staking.proposed(msg.sender, block.timestamp + proposalLockTime);
+
+        return currentIndex;
+    }
 
     /**
      * @dev calculates the square root of given x 

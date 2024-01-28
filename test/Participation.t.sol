@@ -96,6 +96,7 @@ contract ParticipationTest is Test {
     function test_ReceiveParticipationTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
             treasuryWallet,
@@ -105,7 +106,6 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        uint256 id = gov.getOperationsProposalIndex();
         gov.voteOnOperations(id, true, 1000e18);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
@@ -115,6 +115,7 @@ contract ParticipationTest is Test {
     function test_BurnParticipationTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
             treasuryWallet,
@@ -124,7 +125,6 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        uint256 id = gov.getOperationsProposalIndex();
         gov.voteOnOperations(id, true, 1000e18);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
@@ -132,7 +132,7 @@ contract ParticipationTest is Test {
 
         vm.startPrank(addr2);
         staking.lockSci(1000e18);
-        gov.voteOnOperations(1, true, 1000e18);
+        gov.voteOnOperations(id, true, 1000e18);
         po.burn(1);
         uint256 balance1 = po.balanceOf(addr2);
         assertEq(balance1, 0);
@@ -142,6 +142,7 @@ contract ParticipationTest is Test {
     function test_StakeParticipationTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
             treasuryWallet,
@@ -155,7 +156,7 @@ contract ParticipationTest is Test {
 
         vm.startPrank(addr2);
         staking.lockSci(1000e18);
-        gov.voteOnOperations(1, true, 1000e18);
+        gov.voteOnOperations(id, true, 1000e18);
         staking.lockPo(po.balanceOf(addr2));
         assertEq(staking.getStakedPo(addr2), 1);
         vm.stopPrank();
@@ -164,6 +165,7 @@ contract ParticipationTest is Test {
     function test_UnstakeParticipationTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
             treasuryWallet,
@@ -173,7 +175,7 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        uint256 id = gov.getOperationsProposalIndex();
+
         gov.voteOnOperations(id, true, 1000e18);
 
         assertEq(po.balanceOf(addr1), 1);
@@ -194,6 +196,7 @@ contract ParticipationTest is Test {
     function test_StakeMultipleParticipationTokens() public {
         vm.startPrank(addr1);
         staking.lockSci(1000e18);
+        uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
             operationsWallet,
@@ -206,7 +209,8 @@ contract ParticipationTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(1000e18);
-        gov.voteOnOperations(1, true, 1000e18);
+        gov.voteOnOperations(id, true, 1000e18);
+        uint256 id2 = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction2",
             operationsWallet,
@@ -216,7 +220,7 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        uint256 id2 = gov.getOperationsProposalIndex();
+
         gov.voteOnOperations(id2, true, 1000e18);
         assertEq(po.balanceOf(addr2), 2);
         staking.lockPo(po.balanceOf(addr2));

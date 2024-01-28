@@ -91,7 +91,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     );
     event Terminated(address admin, uint256 blockNumber);
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
-    event ProposalLockEndTimeUpdated(address user, uint256 voteLockEndTime);
+    event ProposalLockEndTimeUpdated(address user, uint256 proposalLockEndTime);
 
     constructor(address treasuryWallet_, address sci_, address po_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);

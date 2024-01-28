@@ -132,6 +132,7 @@ contract GovernorOperationsTest is Test {
     function test_OperationsProposalUsingUsdc() public {
         vm.startPrank(treasuryWallet);
         staking.lockSci(200e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
 
         (
@@ -142,9 +143,7 @@ contract GovernorOperationsTest is Test {
             uint256 votesAgainst,
             uint256 totalVotes,
             bool quadraticVoting
-        ) = govOps.getOperationsProposalInfo(
-                govOps.getOperationsProposalIndex()
-            );
+        ) = govOps.getOperationsProposalInfo(id);
 
         assertEq(startBlockNum, block.number);
         assertEq(endTimeStamp, block.timestamp + govOps.proposalLifeTime());
@@ -161,9 +160,7 @@ contract GovernorOperationsTest is Test {
             uint256 amount,
             uint256 amountSci,
             bool executable
-        ) = govOps.getOperationsProposalProjectInfo(
-                govOps.getOperationsProposalIndex()
-            );
+        ) = govOps.getOperationsProposalProjectInfo(id);
 
         assertEq(info, "Info");
         assertEq(wallet, opWallet);
@@ -177,8 +174,8 @@ contract GovernorOperationsTest is Test {
     function test_VoteFor() public {
         vm.startPrank(addr1);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         govOps.voteOnOperations(id, true, 2000e18);
 
         (
@@ -204,8 +201,8 @@ contract GovernorOperationsTest is Test {
     function test_VoteForProposalWithQuadraticFunding() public {
         vm.startPrank(addr1);
         staking.lockSci(100e18);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, true);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, true);
         govOps.voteOnOperations(id, true, 100e18);
 
         (
@@ -232,8 +229,8 @@ contract GovernorOperationsTest is Test {
     function test_RevertVoteWithVoteLockIfAlreadyVoted() public {
         vm.startPrank(addr2);
         staking.lockSci(10000e18);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         govOps.voteOnOperations(id, true, 10000e18);
         bytes4 selector = bytes4(keccak256("VoteLock()"));
         vm.expectRevert(selector);
@@ -244,12 +241,13 @@ contract GovernorOperationsTest is Test {
     function test_RevertVoteWithInsufficientRights() public {
         vm.startPrank(addr2);
         staking.lockSci(180e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         bytes4 selector = bytes4(
             keccak256("InsufficientVotingRights(uint256,uint256)")
         );
         vm.expectRevert(abi.encodeWithSelector(selector, 180e18, 1.8e23));
-        govOps.voteOnOperations(1, true, 1.8e23);
+        govOps.voteOnOperations(id, true, 1.8e23);
         vm.stopPrank();
     }
 
@@ -259,15 +257,15 @@ contract GovernorOperationsTest is Test {
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         bytes4 selector = bytes4(keccak256("ProposalInexistent()"));
         vm.expectRevert(selector);
-        govOps.voteOnOperations(2, true, 1.8e28);
+        govOps.voteOnOperations(1, true, 1.8e28);
         vm.stopPrank();
     }
 
     function test_RevertIfQuorumNotReached() public {
         vm.startPrank(addr1);
         staking.lockSci(180e18);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         vm.warp(4.1 weeks);
         bytes4 selector = bytes4(keccak256("QuorumNotReached()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
@@ -278,12 +276,19 @@ contract GovernorOperationsTest is Test {
     function test_RevertIfProposalStillOngoing() public {
         vm.startPrank(addr1);
         staking.lockSci(180e18);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 proposalLifeTime = govOps.proposalLifeTime();
-        bytes4 selector = bytes4(keccak256("ProposalOngoing(uint256,uint256)"));
+        bytes4 selector = bytes4(
+            keccak256("ProposalOngoing(uint256,uint256,uint256)")
+        );
         vm.expectRevert(
-            abi.encodeWithSelector(selector, 1, proposalLifeTime + 1)
+            abi.encodeWithSelector(
+                selector,
+                id,
+                block.timestamp,
+                proposalLifeTime + 1
+            )
         );
         govOps.finalizeVotingOperationsProposal(id);
         vm.stopPrank();
@@ -292,9 +297,9 @@ contract GovernorOperationsTest is Test {
     function test_FinalizeVotingOperationsProposal() public {
         vm.startPrank(addr1);
         staking.lockSci(120e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         vm.stopPrank();
-        uint256 id = govOps.getOperationsProposalIndex();
         vm.startPrank(addr2);
         staking.lockSci(1.8e24);
         govOps.voteOnOperations(id, true, 8e23);
@@ -311,8 +316,8 @@ contract GovernorOperationsTest is Test {
     function test_RevertVoteIfVotingIsFinalized() public {
         vm.startPrank(addr2);
         staking.lockSci(1.8e24);
-        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         govOps.voteOnOperations(id, true, 8e23);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
@@ -329,11 +334,12 @@ contract GovernorOperationsTest is Test {
     function test_RevertFreeTokensWhenVotesLocked() public {
         vm.startPrank(addr1);
         staking.lockSci(2000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.voteOnOperations(1, true, 2000e18);
+        govOps.voteOnOperations(id, true, 2000e18);
         vm.stopPrank();
         (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         bytes4 selector = bytes4(
@@ -350,11 +356,12 @@ contract GovernorOperationsTest is Test {
     function test_FreeTokensAterVotingAndAfterVoteLockEndPassed() public {
         vm.startPrank(addr1);
         staking.lockSci(2000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.voteOnOperations(1, true, 2000e18);
+        govOps.voteOnOperations(id, true, 2000e18);
         (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
         vm.warp(voteLockEnd);
         staking.freeSci(2000e18);
@@ -364,12 +371,12 @@ contract GovernorOperationsTest is Test {
     function test_ExecuteProposalUsingUsdc() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, false);
-        govOps.voteOnOperations(1, true, 2000e18);
+        govOps.voteOnOperations(id, true, 2000e18);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        uint256 id = govOps.getOperationsProposalIndex();
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
         (, address wallet, , uint256 amounts, , ) = govOps
@@ -388,8 +395,8 @@ contract GovernorOperationsTest is Test {
     function test_ExecuteProposalUsingSci() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", opWallet, 0, 0, 1000e18, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 0, 0, 1000e18, true, false);
         govOps.voteOnOperations(id, true, 2000e18);
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
@@ -407,6 +414,7 @@ contract GovernorOperationsTest is Test {
     function test_ExecuteProposalUsingSciAndUsdc() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation(
             "Info",
             opWallet,
@@ -416,7 +424,6 @@ contract GovernorOperationsTest is Test {
             true,
             false
         );
-        uint256 id = govOps.getOperationsProposalIndex();
         govOps.voteOnOperations(id, true, 2000e18);
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
@@ -435,8 +442,8 @@ contract GovernorOperationsTest is Test {
     function test_ExecuteProposalUsingCoin() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", opWallet, 0, 1 ether, 0, true, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 0, 1 ether, 0, true, false);
         govOps.voteOnOperations(id, true, 2000e18);
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
@@ -471,9 +478,9 @@ contract GovernorOperationsTest is Test {
     function test_RevertExecutionIfIncorrectMsgValue() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", opWallet, 0, 500 ether, 0, true, false);
-        govOps.voteOnOperations(1, true, 2000e18);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 0, 500 ether, 0, true, false);
+        govOps.voteOnOperations(id, true, 2000e18);
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
         vm.stopPrank();
@@ -487,9 +494,9 @@ contract GovernorOperationsTest is Test {
     function test_RevertExecutionFunctionIfIncorrectPhase() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", opWallet, 0, 500 ether, 0, true, false);
-        govOps.voteOnOperations(1, true, 2000e18);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 0, 500 ether, 0, true, false);
+        govOps.voteOnOperations(id, true, 2000e18);
         bytes4 selector = bytes4(keccak256("IncorrectPhase(uint8)"));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -513,10 +520,10 @@ contract GovernorOperationsTest is Test {
     function test_CancelOperationsProposal() public {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
+        uint256 id = govOps.getOperationsProposalIndex();
         govOps.proposeOperation("Info", opWallet, 0, 500 ether, 0, true, false);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
-        uint256 id = govOps.getOperationsProposalIndex();
         govOps.cancelOperationsProposal(id);
         (, , GovernorOperations.ProposalStatus status, , , , ) = govOps
             .getOperationsProposalInfo(id);
@@ -527,8 +534,8 @@ contract GovernorOperationsTest is Test {
     function test_CompleteProposalIfNotExecutable() public {
         vm.startPrank(addr1);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", address(0), 0, 0, 0, false, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", address(0), 0, 0, 0, false, false);
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
@@ -612,8 +619,8 @@ contract GovernorOperationsTest is Test {
     function test_FreeTokensEvenIfTerminatedAndVoteLocked() public {
         vm.startPrank(addr1);
         staking.lockSci(2000e18);
-        govOps.proposeOperation("Info", address(0), 0, 0, 0, false, false);
         uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", address(0), 0, 0, 0, false, false);
         govOps.voteOnOperations(id, true, 2000e18);
         vm.stopPrank();
 
