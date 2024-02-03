@@ -19,7 +19,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidInput();
     error ProposalLifeTimePassed();
     error ProposalLock();
-    error ProposalOngoing(uint256 currentBlock, uint256 endBlock);
+    error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
     error Unauthorized(address user);
@@ -93,7 +93,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
-    event Voted(uint256 indexed id, address indexed voter, bool indexed support, uint256 amount);
+    event Voted(
+        uint256 indexed id,
+        address indexed voter,
+        bool indexed support,
+        uint256 amount
+    );
     event Scheduled(uint256 indexed id, bool indexed research);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Completed(uint256 indexed id);
@@ -118,6 +123,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         proposalLifeTime = 4 weeks;
         quorum = 1;
         voteLockTime = 2 weeks;
+        proposalLockTime = 4 weeks;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
@@ -227,9 +233,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function proposeResearch(
         string memory info,
         address receivingWallet,
-        uint256 amountUsdc, //6 decimals
-        uint256 amountCoin, //18 decimals
-        uint256 amountSci //18 decimals
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci
     )
         external
         nonReentrant
@@ -237,93 +243,37 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DUE_DILIGENCE_ROLE)
         returns (uint256)
     {
-        if (
-            bytes(info).length == 0 ||
-            receivingWallet == address(0) ||
-            !((amountUsdc > 0 &&
-                amountCoin == 0 &&
-                (amountSci == 0 || amountSci > 0)) ||
-                (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                (amountSci > 0 &&
-                    amountCoin == 0 &&
-                    (amountUsdc == 0 || amountUsdc > 0)))
-        ) {
-            revert InvalidInput();
-        }
+        validateResearchInput(
+            info,
+            receivingWallet,
+            amountUsdc,
+            amountCoin,
+            amountSci
+        );
 
         IStaking staking = IStaking(stakingAddress);
+        validateStakingForResearch(staking, msg.sender);
 
-        if (staking.getStakedSci(_msgSender()) < ddThreshold)
-            revert InsufficientBalance(
-                staking.getStakedSci(_msgSender()),
-                ddThreshold
-            );
-
-        if (proposedResearch[_msgSender()] == 1) revert ProposalLock();
-
-        Payment payment;
-        uint256 amount;
-        uint256 sciAmount;
-
-        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
-            (amountCoin > 0 ? 1 : 0) +
-            (amountSci > 0 ? 1 : 0);
-
-        if (paymentOptions == 1) {
-            if (amountUsdc > 0) {
-                amount = amountUsdc;
-                payment = Payment.Usdc;
-            } else if (amountCoin > 0) {
-                amount = amountCoin;
-                payment = Payment.Coin;
-            } else if (amountSci > 0) {
-                sciAmount = amountSci;
-                payment = Payment.Sci;
-            }
-        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
-            amount = amountUsdc;
-            sciAmount = amountSci;
-            payment = Payment.SciUsdc;
-        } else {
-            revert IncorrectPaymentOption();
-        }
+        (Payment payment, uint256 amount, uint256 sciAmount) = determinePayment(
+            amountUsdc,
+            amountCoin,
+            amountSci
+        );
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
             receivingWallet,
             payment,
             amount,
-            amountSci,
-            true
-        );
-        //Initiate and specify each parameter of the proposal
-        Proposal memory proposal = Proposal(
-            block.number,
-            block.timestamp + proposalLifeTime,
-            ProposalStatus.Active,
-            projectInfo,
-            0,
-            0,
-            0
+            sciAmount,
+            true // Assuming 'true' indicates the proposal is executable
         );
 
-        //increment proposal index
-        _researchProposalIndex += 1;
+        uint256 currentIndex = storeResearchProposal(projectInfo);
 
-        //store proposal at the given index
-        researchProposals[_researchProposalIndex] = proposal;
+        emit Proposed(currentIndex, msg.sender, projectInfo);
 
-        staking.proposed(
-            _msgSender(),
-            block.timestamp + proposalLockTime
-        );
-
-        proposedResearch[_msgSender()] = 1;
-
-        //emit Proposed event
-        emit Proposed(_researchProposalIndex, _msgSender(), projectInfo);
-
-        return _researchProposalIndex;
+        return currentIndex;
     }
 
     /**
@@ -337,7 +287,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool support
     ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         //check if proposal exists
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (id >= _researchProposalIndex) revert ProposalInexistent();
 
         //check if proposal is still active
         if (researchProposals[id].status != ProposalStatus.Active)
@@ -354,7 +304,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         //check if DD member/voter still has enough tokens staked
         if (staking.getStakedSci(msg.sender) < ddThreshold)
-            revert InsufficientBalance(staking.getStakedSci(msg.sender), ddThreshold);
+            revert InsufficientBalance(
+                staking.getStakedSci(msg.sender),
+                ddThreshold
+            );
 
         //vote for, against or abstain
         if (support) {
@@ -383,13 +336,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function finalizeVotingResearchProposal(
         uint256 id
     ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (id >= _researchProposalIndex) revert ProposalInexistent();
 
         if (researchProposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(researchProposals[id].status);
 
         if (block.timestamp < researchProposals[id].endTimeStamp)
             revert ProposalOngoing(
+                id,
                 block.timestamp,
                 researchProposals[id].endTimeStamp
             );
@@ -411,7 +365,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool donated
     ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         // Check if proposal exists and has finalized voting
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (id >= _researchProposalIndex) revert ProposalInexistent();
         if (researchProposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(researchProposals[id].status);
 
@@ -451,7 +405,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function cancelResearchProposal(
         uint256 id
     ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (id >= _researchProposalIndex) revert ProposalInexistent();
 
         if (researchProposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(researchProposals[id].status);
@@ -481,7 +435,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param id the proposal id
      */
     function getVotedResearch(uint256 id) external view returns (uint8) {
-        return votedResearch[id][_msgSender()];
+        return votedResearch[id][msg.sender];
     }
 
     /**
@@ -502,7 +456,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         view
         returns (uint256, uint256, ProposalStatus, uint256, uint256, uint256)
     {
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+        if (id > _researchProposalIndex) revert ProposalInexistent();
         return (
             researchProposals[id].startBlockNum,
             researchProposals[id].endTimeStamp,
@@ -519,17 +473,130 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function getResearchProposalProjectInfo(
         uint256 id
-    ) external view returns (string memory, address, Payment, uint256) {
-        if (id > _researchProposalIndex || id < 1) revert ProposalInexistent();
+    ) external view returns (string memory, address, Payment, uint256, uint256) {
+        if (id > _researchProposalIndex) revert ProposalInexistent();
         return (
             researchProposals[id].details.info,
             researchProposals[id].details.receivingWallet,
             researchProposals[id].details.payment,
-            researchProposals[id].details.amount
+            researchProposals[id].details.amount,
+            researchProposals[id].details.amountSci
         );
     }
 
     ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Validates the input parameters for a research proposal.
+     * @param info The description or details of the research proposal, expected not to be empty.
+     * @param receivingWallet The wallet address that will receive funds if the proposal is approved.
+     * @param amountUsdc The amount of USDC tokens involved in the proposal (6 decimals).
+     * @param amountCoin The amount of Coin tokens involved in the proposal (18 decimals).
+     * @param amountSci The amount of SCI tokens involved in the proposal (18 decimals).
+     *
+     * @notice This function reverts with InvalidInput if the validation fails.
+     * Validation fails if 'info' is empty, 'receivingWallet' is a zero address,
+     * or the payment amounts do not meet the specified criteria.
+     */
+    function validateResearchInput(
+        string memory info,
+        address receivingWallet,
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci
+    ) internal pure {
+        bool validInput = bytes(info).length > 0 &&
+            receivingWallet != address(0) &&
+            ((amountUsdc > 0 && amountCoin == 0) ||
+                (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                (amountSci > 0 && amountCoin == 0));
+        if (!validInput) {
+            revert InvalidInput();
+        }
+    }
+
+    /**
+     * @dev Validates if the proposer meets the staking requirements for proposing research.
+     * @param staking The staking contract interface used to check the staked SCI.
+     * @param proposer The address of the proposal initiator.
+     *
+     * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
+     * The staked SCI amount and required threshold are provided in the revert message.
+     */
+    function validateStakingForResearch(
+        IStaking staking,
+        address proposer
+    ) internal view {
+        uint256 stakedSci = staking.getStakedSci(proposer);
+        if (stakedSci < ddThreshold) {
+            revert InsufficientBalance(stakedSci, ddThreshold);
+        }
+    }
+
+    /**
+     * @dev Determines the payment method and amount for the research proposal.
+     * @param amountUsdc Amount of USDC tokens to be used in the proposal.
+     * @param amountCoin Amount of Coin tokens to be used in the proposal.
+     * @param amountSci Amount of SCI tokens to be used in the proposal.
+     * @return payment The determined type of payment from the Payment enum.
+     * @return amount The amount of USDC or Coin tokens to be used.
+     * @return sciAmount The amount of SCI tokens to be used.
+     *
+     * @notice This function reverts with IncorrectPaymentOption if the payment options do not meet the criteria.
+     * Only one of amountUsdc, amountCoin, or amountSci should be greater than zero, except for a specific combination
+     * where SciUsdc is chosen as the payment method.
+     */
+    function determinePayment(
+        uint256 amountUsdc,
+        uint256 amountCoin,
+        uint256 amountSci
+    )
+        internal
+        pure
+        returns (Payment payment, uint256 amount, uint256 sciAmount)
+    {
+        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
+            (amountCoin > 0 ? 1 : 0) +
+            (amountSci > 0 ? 1 : 0);
+
+        if (paymentOptions == 1) {
+            if (amountUsdc > 0) return (Payment.Usdc, amountUsdc, 0);
+            if (amountCoin > 0) return (Payment.Coin, amountCoin, 0);
+            if (amountSci > 0) return (Payment.Sci, 0, amountSci);
+        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
+            return (Payment.SciUsdc, amountUsdc, amountSci);
+        } else {
+            revert IncorrectPaymentOption();
+        }
+    }
+
+    /**
+     * @dev Stores a new research proposal in the contract's state.
+     * @param projectInfo Struct containing information about the project.
+     * @return uint256 The index of the newly stored research proposal.
+     *
+     * @notice The function increments the _researchProposalIndex after storing the proposal.
+     * The proposal is stored with an Active status and initialized voting counters.
+     * The function returns the index at which the new proposal is stored.
+     */
+    function storeResearchProposal(
+        ProjectInfo memory projectInfo
+    ) internal returns (uint256) {
+        Proposal memory proposal = Proposal(
+            block.number,
+            block.timestamp + proposalLifeTime,
+            ProposalStatus.Active,
+            projectInfo,
+            0,
+            0,
+            0
+        );
+
+        uint256 currentIndex = _researchProposalIndex++;
+        researchProposals[currentIndex] = proposal;
+
+        return currentIndex;
+    }
 
     /**
      * @dev Transfers ERC20 tokens from one address to another.
@@ -561,7 +628,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param amount The amount of coins to transfer.
      */
     function _transferCoin(address from, address to, uint256 amount) internal {
-        if (_msgSender() != from) revert Unauthorized(_msgSender());
+        if (msg.sender != from) revert Unauthorized(msg.sender);
         if (msg.value != amount) revert IncorrectCoinValue();
         (bool sent, ) = to.call{value: msg.value}("");
         require(sent, "Failed to transfer");

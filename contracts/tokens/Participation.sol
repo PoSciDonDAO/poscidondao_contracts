@@ -4,11 +4,18 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 contract Participation is AccessControl {
-
+    error AddressAlreadyAuthorized();
+    error AddressNotFound();
     error LengthMismatch();
-    error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
+    error InsufficientBalance(
+        address from,
+        uint256 currentDeposit,
+        uint256 requestedAmount
+    );
     error IncorrectAddress(address _chosenAddress);
+    error InvalidAddress();
     error Unauthorized(address user);
+    error UnauthorizedCaller(address caller);
 
     address public treasuryWallet;
     address public govOps;
@@ -17,18 +24,14 @@ contract Participation is AccessControl {
     string public symbol = "PO";
     bool internal frozen = false;
     string private _uri;
-    uint256 public constant PARTICIPATION_TOKEN_ID = 0;
-    uint256 public constant MINT_AMOUNT = 1;
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    uint256 private constant PARTICIPATION_TOKEN_ID = 0;
+    uint256 private constant MINT_AMOUNT = 1;
 
     mapping(uint256 => mapping(address => uint256)) private _balances;
 
     modifier gov() {
         if (msg.sender != govOps) revert Unauthorized(msg.sender);
-        _;
-    }
-
-    modifier stake() {
-        if (msg.sender != staking) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -44,10 +47,7 @@ contract Participation is AccessControl {
         uint256 value
     );
 
-    constructor(
-        string memory baseURI_,
-        address treasuryWallet_
-    ) {
+    constructor(string memory baseURI_, address treasuryWallet_) {
         treasuryWallet = treasuryWallet_;
         _setURI(baseURI_);
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
@@ -56,18 +56,28 @@ contract Participation is AccessControl {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the staking address
+     * @dev grants the BURNER_ROLE to the specified address
      */
-    function setStaking(
-        address _newStaking
+    function grantBurnerRole(
+        address burner
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        staking = _newStaking;
+        grantRole(BURNER_ROLE, burner);
+    }
+
+    /**
+     * @dev revokes the BURNER_ROLE from the specified address
+     */
+    function revokeBurnerRole(address burner) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        revokeRole(BURNER_ROLE, burner);
     }
 
     /**
      * @dev sets the address of the governance smart contract
+     * @param newGovOps The address to be set as Governance Operations.
      */
-    function setGovOps(address newGovOps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGovOps(
+        address newGovOps
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govOps = newGovOps;
     }
 
@@ -76,27 +86,6 @@ contract Participation is AccessControl {
      */
     function freeze() external onlyRole(DEFAULT_ADMIN_ROLE) {
         frozen = true;
-    }
-
-    /**
-     * @dev pushes participation tokens from user wallet to staking contract
-     */
-    function push(address user, uint256 amount) external stake {
-        //transfer tokens from user to staking contract
-        _safeTransferFrom(user, staking, PARTICIPATION_TOKEN_ID, amount, "");
-
-        emit Push(user,  PARTICIPATION_TOKEN_ID, amount);
-    }
-
-    /**
-     * @dev pulls participation tokens from staking contract to user wallet
-     */
-    function pull(address user, uint256 amount) external stake {
-        //transfer tokens from staking contract to user
-        _safeTransferFrom(staking, user, PARTICIPATION_TOKEN_ID, amount, "");
-
-        //emit Pull event
-        emit Pull(user, PARTICIPATION_TOKEN_ID, amount);
     }
 
     /**
@@ -113,11 +102,12 @@ contract Participation is AccessControl {
     /**
      * @dev burns a given amount of PO tokens for msg.sender
      */
-    function burn(uint256 amount) external {
+    function burn(address user, uint256 amount) external onlyRole(BURNER_ROLE) {
         //burn token
-        _burn(msg.sender, PARTICIPATION_TOKEN_ID, amount);
+        _burn(user, PARTICIPATION_TOKEN_ID, amount);
+
         //emit event
-        emit BurnedTokenInfo(msg.sender, PARTICIPATION_TOKEN_ID, amount);
+        emit BurnedTokenInfo(user, PARTICIPATION_TOKEN_ID, amount);
     }
 
     /**
@@ -156,45 +146,8 @@ contract Participation is AccessControl {
     ///*** INTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Transfers `amount` tokens of token type `id` from `from` to `to`.
-     *
-     * Emits a {TransferSingle} event.
-     *
-     * Requirements:
-     *
-     * - `to` cannot be the zero address.
-     * - `from` must have a balance of tokens of type `id` of at least `amount`.
-     * - If `to` refers to a smart contract, it must implement {IERC1155Receiver-onERC1155Received} and return the
-     * acceptance magic value.
+     * @dev sets the new URI
      */
-    function _safeTransferFrom(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
-    ) internal virtual {
-        if (to == address(0)) revert IncorrectAddress(to);
-
-        address operator = msg.sender;
-        uint256[] memory ids = _asSingletonArray(id);
-        uint256[] memory amounts = _asSingletonArray(amount);
-
-        _beforeTokenTransfer(operator, from, to, ids, amounts, data);
-
-        uint256 fromBalance = _balances[id][from];
-        require(
-            fromBalance >= amount,
-            "ERC1155: insufficient balance for transfer"
-        );
-        unchecked {
-            _balances[id][from] = fromBalance - amount;
-        }
-        _balances[id][to] += amount;
-
-        emit TransferSingle(operator, from, to, id, amount);
-    }
-
     function _setURI(string memory newUri) internal {
         _uri = newUri;
     }
@@ -248,7 +201,9 @@ contract Participation is AccessControl {
         _beforeTokenTransfer(operator, from, address(0), ids, amounts, "");
 
         uint256 fromBalance = _balances[id][from];
-        require(fromBalance >= amount, "ERC1155: burn amount exceeds balance");
+        if (fromBalance < amount) {
+            revert InsufficientBalance(from, fromBalance, amount);
+        }
         unchecked {
             _balances[id][from] = fromBalance - amount;
         }
