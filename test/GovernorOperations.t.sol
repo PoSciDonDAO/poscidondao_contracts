@@ -47,10 +47,7 @@ contract GovernorOperationsTest is Test {
         sci = new Sci(treasuryWallet);
         po = new Participation("", treasuryWallet);
 
-        staking = new Staking(treasuryWallet, address(sci), address(po));
-
-        staking.setPoToken(address(po));
-        staking.setSciToken(address(sci));
+        staking = new Staking(treasuryWallet, address(sci));
 
         govOps = new GovernorOperations(
             address(staking),
@@ -192,7 +189,7 @@ contract GovernorOperationsTest is Test {
         assertEq(votesAgainst, 0);
         assertEq(totalVotes, 2000e18);
 
-        (, , , , uint256 voteLockEnd, , ) = staking.users(addr1);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
@@ -220,7 +217,7 @@ contract GovernorOperationsTest is Test {
         assertEq(totalVotes, 10e18);
         assertEq(quadraticVoting, true);
 
-        (, , , , uint256 voteLockEnd, , ) = staking.users(addr1);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
@@ -341,7 +338,7 @@ contract GovernorOperationsTest is Test {
         staking.lockSci(2000e18);
         govOps.voteOnOperations(id, true, 2000e18);
         vm.stopPrank();
-        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -362,7 +359,7 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         staking.lockSci(2000e18);
         govOps.voteOnOperations(id, true, 2000e18);
-        (, , , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
         vm.warp(voteLockEnd);
         staking.freeSci(2000e18);
         vm.stopPrank();
@@ -632,7 +629,6 @@ contract GovernorOperationsTest is Test {
         staking.freeSci(2000e18);
         vm.stopPrank();
         (
-            uint256 stakedPo,
             uint256 stakedSci,
             uint256 votingRights,
             uint256 proposalLockEnd,
@@ -641,7 +637,6 @@ contract GovernorOperationsTest is Test {
             address delegate
         ) = staking.users(addr1);
         assertEq(staking.getTotalStaked(), 0);
-        assertEq(stakedPo, 0);
         assertEq(stakedSci, 0);
         assertEq(votingRights, 0);
         assertEq(proposalLockEnd, 0);

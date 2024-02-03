@@ -473,13 +473,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function getResearchProposalProjectInfo(
         uint256 id
-    ) external view returns (string memory, address, Payment, uint256) {
+    ) external view returns (string memory, address, Payment, uint256, uint256) {
         if (id > _researchProposalIndex) revert ProposalInexistent();
         return (
             researchProposals[id].details.info,
             researchProposals[id].details.receivingWallet,
             researchProposals[id].details.payment,
-            researchProposals[id].details.amount
+            researchProposals[id].details.amount,
+            researchProposals[id].details.amountSci
         );
     }
 

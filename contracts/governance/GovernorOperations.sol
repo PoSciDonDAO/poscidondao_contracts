@@ -52,7 +52,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool executable;
     }
 
-    ///*** TOKEN ***///
+    ///*** INTERFACE ***///
     IParticipation private po;
 
     ///*** GOVERNANCE PARAMETERS ***///
@@ -106,8 +106,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool indexed support,
         uint256 amount
     );
-    event Scheduled(uint256 indexed id, bool indexed research);
+    event Scheduled(uint256 indexed id);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
+    event Failed(uint256 indexed id, uint256 totalVotes, uint256 quorum);
     event Completed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
@@ -356,12 +357,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (operationsProposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(operationsProposals[id].status);
 
-        if (operationsProposals[id].totalVotes < quorum)
+        if (operationsProposals[id].totalVotes < quorum) {
+            emit Failed(id, operationsProposals[id].totalVotes, quorum);
             revert QuorumNotReached();
+        }
 
         operationsProposals[id].status = ProposalStatus.Scheduled;
 
-        emit Scheduled(id, false);
+        emit Scheduled(id);
     }
 
     /**

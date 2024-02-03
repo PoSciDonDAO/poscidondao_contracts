@@ -28,14 +28,12 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address newDelegate
     );
 
-    ///*** TOKENS ***//
+    ///*** TOKEN ***//
     IERC20 private _sci;
-    IParticipation private _po;
 
     ///*** STRUCTS ***///
     struct User {
-        uint256 stakedPo; //PO deposited
-        uint256 stakedSci; //SCI deposited
+        uint256 lockedSci; //SCI deposited
         uint256 votingRights; //Voting rights for operation proposals
         uint256 proposalLockEnd; //Time before token unlock after proposing
         uint256 voteLockEnd; //Time before token unlock after voting
@@ -93,21 +91,12 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
     event ProposalLockEndTimeUpdated(address user, uint256 proposalLockEndTime);
 
-    constructor(address treasuryWallet_, address sci_, address po_) {
+    constructor(address treasuryWallet_, address sci_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _sci = IERC20(sci_);
-        _po = IParticipation(po_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
-
-    /**
-     * @dev sets the PO token address and interface
-     * @param po the address of the participation ($PO) token
-     */
-    function setPoToken(address po) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _po = IParticipation(po);
-    }
 
     /**
      * @dev sets the sci token address.
@@ -163,18 +152,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
                 users[oldDelegate].voteLockEnd
             );
 
-            users[oldDelegate].votingRights -= users[owner].stakedSci;
+            users[oldDelegate].votingRights -= users[owner].lockedSci;
 
             _snapshot(oldDelegate, users[oldDelegate].votingRights);
 
-            users[owner].votingRights += users[owner].stakedSci;
+            users[owner].votingRights += users[owner].lockedSci;
 
             _snapshot(owner, users[owner].votingRights);
         }
 
         //update voting rights for delegate
         if (newDelegate != address(0)) {
-            users[newDelegate].votingRights += users[owner].stakedSci;
+            users[newDelegate].votingRights += users[owner].lockedSci;
 
             _snapshot(newDelegate, users[newDelegate].votingRights);
             //update owner's voting power
@@ -198,7 +187,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         totStaked += amount;
 
         //Adds amount of deposited SCI tokens
-        users[msg.sender].stakedSci += amount;
+        users[msg.sender].lockedSci += amount;
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
@@ -214,21 +203,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
 
         emit Locked(address(_sci), msg.sender, amount);
-    }
-
-    /**
-     * @dev locks a given amount PO tokens
-     * @param amount the amount of tokens that will be locked
-     */
-    function lockPo(uint256 amount) external notTerminated nonReentrant {
-        //Retrieve PO token from user wallet
-        _po.push(msg.sender, amount);
-
-        //update staked PO balance
-        users[msg.sender].stakedPo += amount;
-
-        //emit locked event
-        emit Locked(address(_po), msg.sender, amount);
     }
 
     /**
@@ -257,7 +231,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         totStaked -= amount;
 
         //remove amount from deposited amount
-        users[msg.sender].stakedSci -= amount;
+        users[msg.sender].lockedSci -= amount;
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
@@ -286,20 +260,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
 
         emit Freed(address(_sci), msg.sender, amount);
-    }
-
-    /**
-     * @dev frees locked PO tokens
-     * @param amount the amount of tokens that will be freed
-     */
-    function freePo(uint256 amount) external nonReentrant {
-        //Retrieve PO token from staking contract
-        _po.pull(msg.sender, amount);
-
-        //update staked PO balance
-        users[msg.sender].stakedPo -= amount;
-
-        emit Freed(address(_po), msg.sender, amount);
     }
 
     /**
@@ -354,13 +314,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev returns the address for the Participation (PO) token
      */
-    function getPoAddress() external view returns (address) {
-        return address(_po);
-    }
-
-    /**
-     * @dev returns the address for the Participation (PO) token
-     */
     function getSciAddress() external view returns (address) {
         return address(_sci);
     }
@@ -373,17 +326,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the amount of staked PO tokens of a given user
-     */
-    function getStakedPo(address user) external view returns (uint256) {
-        return users[user].stakedPo;
-    }
-
-    /**
      * @dev returns the amount of staked SCI tokens of a given user
      */
     function getStakedSci(address user) external view returns (uint256) {
-        return users[user].stakedSci;
+        return users[user].lockedSci;
     }
 
     /**
