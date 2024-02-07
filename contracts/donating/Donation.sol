@@ -12,10 +12,10 @@ contract Donation is AccessControl, ReentrancyGuard {
     error IncorrectPercentage();
     error InsufficientDonation();
 
-    uint256 private _donationFraction;
-    uint256 private _donationThresholdMatic;
-    uint256 private _donationThresholdUsdc;
-    uint256 private _donationThresholdWeth;
+    uint256 public donationFraction;
+    uint256 public donationThresholdMatic;
+    uint256 public donationThresholdUsdc;
+    uint256 public donationThresholdWeth;
 
     address public donationWallet;
     address public treasuryWallet;
@@ -29,21 +29,21 @@ contract Donation is AccessControl, ReentrancyGuard {
     );
 
     constructor(
-        address _donationWallet,
-        address _treasuryWallet,
-        address _usdc,
-        address _weth
+        address donationWallet_,
+        address treasuryWallet_,
+        address usdc_,
+        address weth_
     ) {
-        _donationFraction = 95;
-        _donationThresholdMatic = 1e18;
-        _donationThresholdUsdc = 1e6;
+        donationFraction = 95;
+        donationThresholdMatic = 5e17;
+        donationThresholdUsdc = 1e6;
+        donationThresholdWeth = 1e15;
 
-        donationWallet = _donationWallet;
-        treasuryWallet = _treasuryWallet;
-        _setupRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
-
-        usdc = _usdc;
-        weth = _weth;
+        donationWallet = donationWallet_;
+        treasuryWallet = treasuryWallet_;
+        _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        usdc = usdc_;
+        weth = weth_;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -69,9 +69,9 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 amountMatic,
         uint256 amountWeth
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _donationThresholdUsdc = amountUsdc;
-        _donationThresholdMatic = amountMatic;
-        _donationThresholdWeth = amountWeth;
+        donationThresholdUsdc = amountUsdc;
+        donationThresholdMatic = amountMatic;
+        donationThresholdWeth = amountWeth;
     }
 
     /**
@@ -81,7 +81,7 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 percentage
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (percentage < 95) revert IncorrectPercentage();
-        _donationFraction = percentage;
+        donationFraction = percentage;
     }
 
     /**
@@ -90,10 +90,10 @@ contract Donation is AccessControl, ReentrancyGuard {
      */
     function donateMatic(address user) external payable nonReentrant {
         //check if the donation Threshold has been reached
-        if (msg.value < _donationThresholdMatic) revert InsufficientDonation();
+        if (msg.value < donationThresholdMatic) revert InsufficientDonation();
 
-        uint256 amountDonation = (msg.value / 100) * _donationFraction;
-        uint256 amountTreasury = (msg.value / 100) * (100 - _donationFraction);
+        uint256 amountDonation = (msg.value / 100) * donationFraction;
+        uint256 amountTreasury = (msg.value / 100) * (100 - donationFraction);
 
         //transfer Eth to donation wallet if successful
         (bool sentDonation, ) = donationWallet.call{value: amountDonation}("");
@@ -114,10 +114,10 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 usdcAmount
     ) external nonReentrant {
         //check if the donation Threshold has been reached
-        if (usdcAmount < _donationThresholdUsdc) revert InsufficientDonation();
+        if (usdcAmount < donationThresholdUsdc) revert InsufficientDonation();
 
-        uint256 amountDonation = (usdcAmount / 100) * _donationFraction;
-        uint256 amountTreasury = (usdcAmount / 100) * (100 - _donationFraction);
+        uint256 amountDonation = (usdcAmount / 100) * donationFraction;
+        uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
         //pull usdc from wallet to donation wallet
         IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
@@ -128,7 +128,7 @@ contract Donation is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sends donated WETH to the donation & treasury wallet 
+     * @dev sends donated WETH to the donation & treasury wallet
      * @param user the user that donates the USDC
      * @param wethAmount the amount of donated USDC
      */
@@ -137,10 +137,10 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 wethAmount
     ) external nonReentrant {
         //check if the donation Threshold has been reached
-        if (wethAmount < _donationThresholdWeth) revert InsufficientDonation();
+        if (wethAmount < donationThresholdWeth) revert InsufficientDonation();
 
-        uint256 amountDonation = (wethAmount / 100) * _donationFraction;
-        uint256 amountTreasury = (wethAmount / 100) * (100 - _donationFraction);
+        uint256 amountDonation = (wethAmount / 100) * donationFraction;
+        uint256 amountTreasury = (wethAmount / 100) * (100 - donationFraction);
 
         //pull usdc from wallet to donation wallet
         IERC20(weth).safeTransferFrom(user, donationWallet, amountDonation);

@@ -21,6 +21,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error InvalidInputForExecutable();
     error InvalidInputForNonExecutable();
     error InvalidInfo();
+    error InvalidVotesInput();
     error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
     error ProposalIsNotExecutable();
     error ProposalLifeTimePassed();
@@ -73,7 +74,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 private _operationsProposalIndex;
     bool public terminated = false;
     mapping(uint256 => Proposal) private operationsProposals;
-    mapping(uint256 => mapping(address => uint8)) private votedOperations;
+    mapping(uint256 => mapping(address => bool)) private votedOperations;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -130,8 +131,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposalLifeTime = 2 weeks;
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
-        voteLockTime = 2 weeks;
-        proposalLockTime = 4 weeks;
+        voteLockTime = 0; //testing
+        proposalLockTime = 0; //testing
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
@@ -294,7 +295,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (votedOperations[id][msg.sender] == 1) revert VoteLock();
+        if (votedOperations[id][msg.sender] == true) revert VoteLock();
+
+        if (votes == 0) revert InvalidVotesInput();
 
         IStaking staking = IStaking(stakingAddress);
         //get latest voting rights
@@ -324,7 +327,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         operationsProposals[id].totalVotes += actualVotes;
 
         //set user as voted for proposal
-        votedOperations[id][msg.sender] = 1;
+        votedOperations[id][msg.sender] = true;
 
         //set the lock time in the staking contract
         staking.voted(msg.sender, block.timestamp + voteLockTime);
@@ -474,7 +477,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
-    function getVotedOperations(uint256 id) external view returns (uint8) {
+    function getVotedOperations(uint256 id) external view returns (bool) {
         return votedOperations[id][msg.sender];
     }
 

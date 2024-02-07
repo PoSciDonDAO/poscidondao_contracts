@@ -144,10 +144,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev allows the DAO to add a member to the Due Diligence Crew
-     * @param member the address of the member that will be added to the DD crew
+     * @dev grants Due Diligence role to member
+     * @param member the address of the DAO member
      */
-    function addDueDiligenceMember(
+    function grantDueDiligenceRole(
         address member
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         IStaking staking = IStaking(stakingAddress);
@@ -162,10 +162,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev allows the DAO to add a member to the Due Diligence Crew
-     * @param member the address of the member that will be added to the DD crew
+     * @dev revokes Due Diligence role to member
+     * @param member the address of the DAO member
      */
-    function removeDueDiligenceMember(
+    function revokeDueDiligenceRole(
         address member
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         revokeRole(DUE_DILIGENCE_ROLE, member);

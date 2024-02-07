@@ -21,10 +21,9 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sciToken = "0xD2c280935c9B7A3Bf07bde3FB3e10b1E58206873";
-  const poToken = "0x032746d21e589f9c42b81d3EC77E389dbf4B96b2";
+  const sciToken = "0xC927cB1f391607D376358661E60C9116AE6a531E";
 
-  const constructorArguments = [treasuryWallet, sciToken, poToken];
+  const constructorArguments = [treasuryWallet, sciToken];
 
   const Contract = await ethers.getContractFactory("Staking");
   // Estimate contract deployment fee
