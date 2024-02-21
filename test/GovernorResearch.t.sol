@@ -26,19 +26,6 @@ contract GovernorResearchTest is Test {
     address treasuryWallet = vm.addr(7);
     address researchWallet = vm.addr(8);
 
-    event Locked(
-        address indexed user,
-        address indexed gov,
-        uint256 deposit,
-        uint256 votes
-    );
-    event Freed(
-        address indexed gov,
-        address indexed user,
-        uint256 amount,
-        uint256 remainingVotes
-    );
-
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
 
@@ -108,8 +95,8 @@ contract GovernorResearchTest is Test {
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
-        govRes.addDueDiligenceMember(addr1);
-        govRes.addDueDiligenceMember(addr2);
+        govRes.grantDueDiligenceRole(addr1);
+        govRes.grantDueDiligenceRole(addr2);
         vm.stopPrank();
     }
 
