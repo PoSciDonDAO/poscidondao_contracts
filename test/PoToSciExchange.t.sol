@@ -54,7 +54,6 @@ contract PoToSciExchangeTest is Test {
         gov.govParams("proposalLifeTime", 8 weeks);
         gov.govParams("quorum", 1000e18);
         gov.govParams("voteLockTime", 2 weeks);
-        gov.setPoPhase(1);
         po.setGovOps(address(gov));
         vm.stopPrank();
 

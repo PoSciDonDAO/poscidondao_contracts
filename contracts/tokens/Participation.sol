@@ -19,7 +19,6 @@ contract Participation is AccessControl {
 
     address public treasuryWallet;
     address public govOps;
-    address public staking;
     string public name = "Participation Token";
     string public symbol = "PO";
     bool internal frozen = false;
