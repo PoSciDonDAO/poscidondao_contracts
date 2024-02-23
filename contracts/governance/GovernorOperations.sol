@@ -108,7 +108,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amount
     );
     event Scheduled(uint256 indexed id);
-    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
+    event Executed(uint256 indexed id, uint256 amount);
     event Completed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
@@ -409,13 +409,19 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             operationsProposals[id].status = ProposalStatus.Executed;
 
-            emit Executed(id, false, amount);
+            emit Executed(id, amount);
         } else {
             revert ProposalIsNotExecutable();
         }
     }
 
-    function completeOperationsProposal(uint256 id) external notTerminated {
+    /**
+     * @dev completes the proposal after the proposed change has been performed
+     * @param id the index of the proposal of interest
+     */
+    function completeOperationsProposal(
+        uint256 id
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (id > _operationsProposalIndex) revert ProposalInexistent();
 
         if (operationsProposals[id].status != ProposalStatus.Scheduled)
@@ -427,7 +433,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal
+     * @dev cancels the proposal when life time passed and when quorum not reached
      * @param id the index of the proposal of interest
      */
     function cancelOperationsProposal(uint256 id) external notTerminated {
@@ -690,24 +696,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev calculates the square root of given x 
-            adjusted for values with 18 decimals
-     */
-    function _sqrt(uint256 x) internal pure returns (uint256 y) {
-        if (x == 0) return 0; // Return 0 for 0 input
+ * @dev calculates the square root of given x 
+        adjusted for values with 18 decimals.
+ *      More accurate version with fixed-point arithmetic.
+ */
+    function _sqrt(uint256 x) internal pure returns (uint256) {
+        if (x == 0) return 0;
 
-        // Normalize x by dividing by 1e18
-        uint256 normalizedX = x / 1e18;
+        uint256 z = (x + 1e18) / 2;
+        uint256 y = x;
+        uint256 e = 3;
 
-        uint256 z = (normalizedX + 1) / 2;
-        y = normalizedX;
         while (z < y) {
             y = z;
-            z = (normalizedX / z + z) / 2;
+            z = (((x * 1e18) / z) + z) / 2;
         }
 
-        // Convert the result back to wei scale by multiplying with 1e18
-        return y * 1e18;
+        // Adjust the precision
+        while ((y * y) / 1e18 < x) {
+            y += e;
+        }
+
+        return y;
     }
 
     /**
