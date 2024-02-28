@@ -7,6 +7,7 @@ import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IER
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "./SybilResistance.sol";
 
 contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -16,6 +17,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
+    error InexistentOrInvalidSBT();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
     error InvalidInputForExecutable();
@@ -70,6 +72,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public sci;
 
     ///*** STORAGE & MAPPINGS ***///
+    Hub private hub;
     uint256 public opThreshold;
     uint256 private _operationsProposalIndex;
     bool public terminated = false;
@@ -118,14 +121,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address treasuryWallet_,
         address usdc_,
         address sci_,
-        address po_
+        address po_,
+        address hubAddress_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
         po = IParticipation(po_);
-
+        hub = Hub(hubAddress_);
         opThreshold = 100e18;
 
         proposalLifeTime = 15 minutes; //testing
@@ -137,6 +141,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev sets the Hub address
+     */
+    function setHubAddress(address hubAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        hub = Hub(hubAddress);
+    }
 
     /**
      * @dev sets the threshold for members to propose
@@ -265,12 +276,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev vote for an option of a given proposal
      *      using the rights from the most recent snapshot
      * @param id the index of the proposal
+     * @param support user's choice to support a proposal or not
      * @param votes the amount of votes
+     * @param circuitId the identifier of holonym v3's zkp circuit
      */
     function voteOnOperations(
         uint256 id,
         bool support,
-        uint256 votes
+        uint256 votes,
+        bytes32 circuitId
     ) external notTerminated nonReentrant {
         //check if proposal exists
         if (id >= _operationsProposalIndex) revert ProposalInexistent();
@@ -287,6 +301,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (votedOperations[id][msg.sender] == true) revert VoteLock();
 
         if (votes == 0) revert InvalidVotesInput();
+
+        if (operationsProposals[id].quadraticVoting) {
+            SBT memory sbt = hub.getSBT(msg.sender, circuitId);
+            if(sbt.publicValues.length == 0) {
+                revert InexistentOrInvalidSBT();
+            }
+        }
 
         IStaking staking = IStaking(stakingAddress);
         //get latest voting rights
