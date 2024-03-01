@@ -304,7 +304,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (operationsProposals[id].quadraticVoting) {
             SBT memory sbt = hub.getSBT(msg.sender, circuitId);
-            if(sbt.publicValues.length == 0) {
+            if(sbt.publicValues.length == 0 && block.timestamp > sbt.expiry) {
                 revert InexistentOrInvalidSBT();
             }
         }

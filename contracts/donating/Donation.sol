@@ -13,14 +13,12 @@ contract Donation is AccessControl, ReentrancyGuard {
     error InsufficientDonation();
 
     uint256 public donationFraction;
-    uint256 public donationThresholdMatic;
     uint256 public donationThresholdUsdc;
-    uint256 public donationThresholdWeth;
+    uint256 public donationThresholdEth;
 
     address public donationWallet;
     address public treasuryWallet;
     address public usdc;
-    address public weth;
 
     event DonationCompleted(
         address indexed user,
@@ -31,19 +29,16 @@ contract Donation is AccessControl, ReentrancyGuard {
     constructor(
         address donationWallet_,
         address treasuryWallet_,
-        address usdc_,
-        address weth_
+        address usdc_
     ) {
         donationFraction = 95;
-        donationThresholdMatic = 5e17;
         donationThresholdUsdc = 1e6;
-        donationThresholdWeth = 1e15;
+        donationThresholdEth = 1e15;
 
         donationWallet = donationWallet_;
         treasuryWallet = treasuryWallet_;
         _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         usdc = usdc_;
-        weth = weth_;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -61,17 +56,14 @@ contract Donation is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the Threshold to donate USDC, MATIC or WETH
      * @param amountUsdc the least amount of USDC that needs be donated
-     * @param amountMatic the least amount of MATIC that needs be donated
-     * @param amountWeth the least amount of WETH that needs be donated
+     * @param amountEth the least amount of WETH that needs be donated
      */
     function setDonationThreshold(
         uint256 amountUsdc,
-        uint256 amountMatic,
-        uint256 amountWeth
+        uint256 amountEth
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         donationThresholdUsdc = amountUsdc;
-        donationThresholdMatic = amountMatic;
-        donationThresholdWeth = amountWeth;
+        donationThresholdEth = amountEth;
     }
 
     /**
@@ -88,9 +80,9 @@ contract Donation is AccessControl, ReentrancyGuard {
      * @dev sends MATIC donations to the donation & treasury wallet
      * @param user the user that donates the Ether
      */
-    function donateMatic(address user) external payable nonReentrant {
+    function donateEth(address user) external payable nonReentrant {
         //check if the donation Threshold has been reached
-        if (msg.value < donationThresholdMatic) revert InsufficientDonation();
+        if (msg.value < donationThresholdEth) revert InsufficientDonation();
 
         uint256 amountDonation = (msg.value / 100) * donationFraction;
         uint256 amountTreasury = (msg.value / 100) * (100 - donationFraction);
@@ -125,28 +117,5 @@ contract Donation is AccessControl, ReentrancyGuard {
 
         //emit event
         emit DonationCompleted(user, address(usdc), usdcAmount);
-    }
-
-    /**
-     * @dev sends donated WETH to the donation & treasury wallet
-     * @param user the user that donates the USDC
-     * @param wethAmount the amount of donated USDC
-     */
-    function donateWeth(
-        address user,
-        uint256 wethAmount
-    ) external nonReentrant {
-        //check if the donation Threshold has been reached
-        if (wethAmount < donationThresholdWeth) revert InsufficientDonation();
-
-        uint256 amountDonation = (wethAmount / 100) * donationFraction;
-        uint256 amountTreasury = (wethAmount / 100) * (100 - donationFraction);
-
-        //pull usdc from wallet to donation wallet
-        IERC20(weth).safeTransferFrom(user, donationWallet, amountDonation);
-        IERC20(weth).safeTransferFrom(user, treasuryWallet, amountTreasury);
-
-        //emit event
-        emit DonationCompleted(user, address(weth), wethAmount);
     }
 }

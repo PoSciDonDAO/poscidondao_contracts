@@ -23,6 +23,9 @@ contract ParticipationTest is Test {
     address treasuryWallet = vm.addr(6);
     address donationWallet = vm.addr(7);
     address operationsWallet = vm.addr(8);
+    bytes32 govIdCircuitId = 0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
+    bytes32 phoneCircuitId = 0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
+    address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
 
     function setUp() public {
         usdc = new MockUsdc(10000000e6);
@@ -39,7 +42,8 @@ contract ParticipationTest is Test {
             treasuryWallet,
             address(usdc),
             address(sci),
-            address(po)
+            address(po),
+            hubAddress
         );
 
         po.grantBurnerRole(treasuryWallet);
@@ -75,7 +79,7 @@ contract ParticipationTest is Test {
 
     function test_ReceiveParticipationTokens() public {
         vm.startPrank(addr1);
-        staking.lockSci(1000e18);
+        staking.lockSci(2000e18);
         uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
@@ -86,7 +90,7 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.voteOnOperations(id, true, 1000e18);
+        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
         vm.stopPrank();
@@ -94,7 +98,7 @@ contract ParticipationTest is Test {
 
     function test_BurnParticipationTokensWhenTreasuryIsBurner() public {
         vm.startPrank(addr1);
-        staking.lockSci(1000e18);
+        staking.lockSci(2000e18);
         uint256 id = gov.getOperationsProposalIndex();
         gov.proposeOperation(
             "Introduction",
@@ -105,14 +109,14 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.voteOnOperations(id, true, 1000e18);
+        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-        staking.lockSci(1000e18);
-        gov.voteOnOperations(id, true, 1000e18);
+        staking.lockSci(2000e18);
+        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         po.burn(addr2, 1);

@@ -5,7 +5,7 @@ libs = ["node_modules", "lib"]
 remappings = [
     "@ensdomains/=node_modules/@ensdomains/",
     "@imtbl/=node_modules/@imtbl/",
-    "@openzeppelin/=node_modules/@openzeppelin/",
+    "@openzeppelin/=node_modules/@openzeppelin",
     "erc721a/=node_modules/erc721a/",
     "hardhat/=node_modules/hardhat/",
 ]
