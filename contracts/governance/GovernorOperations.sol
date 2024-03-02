@@ -304,9 +304,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (operationsProposals[id].quadraticVoting) {
             SBT memory sbt = hub.getSBT(msg.sender, circuitId);
+            //getSBT reverts because there is no Hub.sol on optimism or polygon testnet
             if(sbt.publicValues.length == 0 && block.timestamp > sbt.expiry) {
                 revert InexistentOrInvalidSBT();
-            }
+            } 
         }
 
         IStaking staking = IStaking(stakingAddress);

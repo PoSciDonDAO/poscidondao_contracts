@@ -25,7 +25,7 @@ async function main() {
   const usdc = "0x578928B093423E9622c7F7e7d741eF9397701930";
   const sciToken = "0xfA5F4cFaBdD43c17e3D8Ca18446602270eC2D215";
   const poToken = "0x8Aed302331bE40532e0DCf780E33b9Bd3668434E";
-  const hubAddress = 0x2aa822e264f8cc31a2b9c22f39e5551241e94dfb;
+  const hubAddress = "0x2aa822e264f8cc31a2b9c22f39e5551241e94dfb";
 
   const constructorArguments = [
 		stakingAddress,

@@ -29,6 +29,7 @@ contract GovernorOperationsTest is Test {
     bytes32 govIdCircuitId = 0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
     bytes32 phoneCircuitId = 0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
     address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
+    address customAddress = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
 
     event Cancelled(uint256 indexed id);
 
@@ -67,42 +68,47 @@ contract GovernorOperationsTest is Test {
         govOps.govParams("proposeLockTime", 2 weeks);
         vm.stopPrank();
 
-        deal(address(sci), addr1, 10000000000e18);
-        deal(address(usdc), addr1, 10000e6);
-        deal(addr1, 10000 ether);
-
-        deal(address(sci), addr2, 10000000000e18);
-        deal(address(usdc), addr2, 10000e6);
-        deal(addr2, 10000 ether);
-
-        deal(address(sci), treasuryWallet, 10000000000e18);
-        deal(address(usdc), treasuryWallet, 100000000e6);
-        deal(treasuryWallet, 10000 ether);
-
-        deal(address(sci), donationWallet, 10000000000e18);
-        deal(address(usdc), donationWallet, 10000000e6);
-        deal(donationWallet, 5000 ether);
-
         vm.startPrank(treasuryWallet);
         usdc.approve(address(govOps), 100000000000000e6);
         sci.approve(address(govOps), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
+        deal(address(sci), treasuryWallet, 10000000000e18);
+        deal(address(usdc), treasuryWallet, 100000000e6);
+        deal(treasuryWallet, 10000 ether);
+        vm.stopPrank();
+
+        vm.startPrank(customAddress);
+        usdc.approve(address(govOps), 100000000000000e6);
+        sci.approve(address(govOps), 100000000000000e18);
+        sci.approve(address(staking), 1000000000000e18);
+        deal(address(sci), customAddress, 10000000000e18);
+        deal(address(usdc), customAddress, 10000e6);
+        deal(addr1, 10000 ether);
         vm.stopPrank();
 
         vm.startPrank(donationWallet);
         usdc.approve(address(govOps), 100000000000000e6);
         sci.approve(address(govOps), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
+        deal(address(sci), donationWallet, 10000000000e18);
+        deal(address(usdc), donationWallet, 10000000e6);
+        deal(donationWallet, 5000 ether);
         vm.stopPrank();
 
         vm.startPrank(addr1);
         sci.approve(address(govOps), 1000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
+        deal(address(sci), addr1, 10000000000e18);
+        deal(address(usdc), addr1, 10000e6);
+        deal(addr1, 10000 ether);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         sci.approve(address(govOps), 1000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
+        deal(address(sci), addr2, 10000000000e18);
+        deal(address(usdc), addr2, 10000e6);
+        deal(addr2, 10000 ether);
         vm.stopPrank();
     }
 
@@ -188,33 +194,32 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    // function test_VoteForProposalWithQuadraticFunding() public {
-    //     vm.startPrank(addr1);
-    //     staking.lockSci(100e18);
-    //     uint256 id = govOps.getOperationsProposalIndex();
-    //     govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, true);
-    //     govOps.voteOnOperations(id, true, 100e18, phoneCircuitId);
+    function test_VoteForProposalWithQuadraticFunding() public {
+        vm.startPrank(0x690BF2dB31D39EE0a88fcaC89117b66a588E865a);
+        staking.lockSci(100e18);
+        uint256 id = govOps.getOperationsProposalIndex();
+        govOps.proposeOperation("Info", opWallet, 5000000e6, 0, 0, true, true);
+        govOps.voteOnOperations(id, true, 100e18, phoneCircuitId);
+        (
+            ,
+            ,
+            ,
+            uint256 votesFor,
+            uint256 votesAgainst,
+            uint256 totalVotes,
+            bool quadraticVoting
+        ) = govOps.getOperationsProposalInfo(id);
 
-    //     (
-    //         ,
-    //         ,
-    //         ,
-    //         uint256 votesFor,
-    //         uint256 votesAgainst,
-    //         uint256 totalVotes,
-    //         bool quadraticVoting
-    //     ) = govOps.getOperationsProposalInfo(id);
+        assertEq(votesFor, 10e18);
+        assertEq(votesAgainst, 0);
+        assertEq(totalVotes, 10e18);
+        assertEq(quadraticVoting, true);
 
-    //     assertEq(votesFor, 10e18);
-    //     assertEq(votesAgainst, 0);
-    //     assertEq(totalVotes, 10e18);
-    //     assertEq(quadraticVoting, true);
+        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
-    //     (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
-
-    //     assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
-    //     vm.stopPrank();
-    // }
+        assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
+        vm.stopPrank();
+    }
 
     function test_RevertVoteForProposalWithQuadraticFunding() public {
         vm.startPrank(addr1);
