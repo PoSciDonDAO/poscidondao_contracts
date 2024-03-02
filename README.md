@@ -168,7 +168,7 @@ Adapt one of the scripts in the deploy folder to create your own deployment scri
 ### Execute the Deployment Script
 
 ```bash
-npx hardhat run --network mumbai scripts/deploy.ts
+npx hardhat run --network polygonMumbai scripts/deploy.ts
 ```
 
 ### Post-deployment
