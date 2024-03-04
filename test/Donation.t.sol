@@ -32,7 +32,8 @@ contract DonationTest is Test {
             don = new Donation(
                 donationWallet,
                 treasuryWallet,
-                address(usdc)
+                address(usdc),
+                address(weth)
             );
         vm.stopPrank();
 
@@ -81,35 +82,43 @@ contract DonationTest is Test {
         vm.stopPrank();
     }
 
-    function test_DonateEth() public {
+    function test_DonateMatic() public {
         vm.startPrank(addr2);
-            don.donateEth{value: 100e18}(addr2);
+            don.donateMatic{value: 100e18}(addr2);
             assertEq(donationWallet.balance, 95e18);
             assertEq(treasuryWallet.balance, 5e18);
         vm.stopPrank();
     }
+
+    function test_DonateWeth() public {
+        vm.startPrank(addr2);
+            don.donateWeth(addr2, 1000e18);
+            assertEq(weth.balanceOf(donationWallet), 950e18);
+            assertEq(weth.balanceOf(treasuryWallet), 50e18);
+        vm.stopPrank();
+    }
     
-    function test_RevertIfThresholdDonateEthNotReached() public {
+    function test_RevertIfThresholdDonateMaticNotReached() public {
         vm.startPrank(addr2);
             bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
             vm.expectRevert(selector);
-            don.donateEth{value: 0.00001e18}(addr2);
+            don.donateMatic{value: 0.00001e18}(addr2);
         vm.stopPrank();
     }
 
-    function test_DonateHighEthAmount() public {
+    function test_DonateHighMaticAmount() public {
         vm.startPrank(addr2);
-            don.donateEth{value: 1000000e18}(addr2);
+            don.donateMatic{value: 1000000e18}(addr2);
             assertEq(donationWallet.balance, 950000e18);
             assertEq(treasuryWallet.balance, 50000e18);
         vm.stopPrank();
     }
 
-    function test_donateEthMintEvent() public {
+    function test_donateMaticMintEvent() public {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
             emit DonationCompleted(addr2, address(0), 1e18);
-            don.donateEth{value: 1e18}(addr2);
+            don.donateMatic{value: 1e18}(addr2);
         vm.stopPrank();
     }
 }

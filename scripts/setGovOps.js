@@ -6,11 +6,11 @@ async function main() {
 	const INFURA_KEY = process.env.INFURA_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://optimism-sepolia.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x7177A5D2Bc6D50FE857B5E797907C45632C7c43c";
+	const providerUrl = `https://polygon-mumbai.infura.io/v3/${INFURA_KEY}`;
+	const contractAddressStaking = "0x65dE8B8C49a782bBcC4Bf315536A733F9bD40c98";
 	const contractAddressParticipation =
-		"0x8Aed302331bE40532e0DCf780E33b9Bd3668434E";
-	const newAddress = "0x9EaFED1c7855839Ed8A7767545F221eDb98b8A16";
+		"0xf5369906e03C0bA84956b7c214188cc38A11E9D3";
+	const newAddress = "0xCF1648C891c48dA4e388D0f3CC0370004D732258";
 
 	if (!newAddress) {
 		console.error(

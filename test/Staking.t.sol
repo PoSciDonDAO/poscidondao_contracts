@@ -62,6 +62,9 @@ contract StakingTest is Test {
         govOps.govParams("proposalLifeTime", 4 weeks);
         govOps.govParams("quorum", 1000e18);
         govOps.govParams("voteLockEnd", 2 weeks);
+        staking.addDelegate(address(0));
+        staking.addDelegate(addr2);
+        staking.addDelegate(addr3);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 
@@ -71,9 +74,7 @@ contract StakingTest is Test {
         deal(address(usdc), addr3, 10000e18);
 
         deal(address(sci), addr1, 100000000e18);
-
         deal(address(sci), addr2, 100000000e18);
-
         deal(address(sci), addr3, 100000000e18);
 
         vm.startPrank(addr1);
@@ -169,13 +170,134 @@ contract StakingTest is Test {
         assertEq(staking.getUserRights(addr1, 2, block.number), 0);
     }
 
+    function test_LockSciTokensIfVotingRightsDelegated() public {
+        vm.startPrank(addr1);
+        staking.lockSci(500e18);
+        staking.delegate(addr2);
+        vm.stopPrank();
+        vm.roll(block.number + 2);
+        vm.startPrank(addr1);
+        staking.lockSci(500e18);
+        vm.stopPrank();
+        (
+            uint256 lockedSci,
+            uint256 votingRights,
+            uint256 voteLockEnd,
+            uint256 proposeLockEnd,
+            uint256 amtSnapshots,
+            address delegate
+        ) = staking.users(addr1);
+        assertEq(staking.getTotalStaked(), 1000e18);
+        assertEq(lockedSci, 1000e18);
+        assertEq(votingRights, 0);
+        assertEq(voteLockEnd, 0);
+        assertEq(proposeLockEnd, 0);
+        assertEq(amtSnapshots, 1);
+        assertEq(delegate, addr2);
+
+        (
+            uint256 lockedSci1,
+            uint256 votingRights1,
+            ,
+            ,
+            uint256 amtSnapshots1,
+            address delegate1
+        ) = staking.users(addr2);
+        assertEq(lockedSci1, 0);
+        assertEq(votingRights1, 1000e18);
+        assertEq(amtSnapshots1, 2);
+        assertEq(delegate1, address(0));
+    }
+
+    function test_FreeSciTokensIfVotingRightsDelegated() public {
+        vm.startPrank(addr1);
+        staking.lockSci(500e18);
+        staking.delegate(addr2); //delegates 500 voting rights after locking
+        vm.stopPrank();
+        vm.roll(block.number + 2);
+        vm.startPrank(addr1);
+        staking.freeSci(300e18);
+        vm.stopPrank();
+        (
+            uint256 lockedSci,
+            uint256 votingRights,
+            uint256 voteLockEnd,
+            uint256 proposeLockEnd,
+            uint256 amtSnapshots,
+            address delegate
+        ) = staking.users(addr1);
+        assertEq(staking.getTotalStaked(), 200e18);
+        assertEq(lockedSci, 200e18);
+        assertEq(votingRights, 0);
+        assertEq(voteLockEnd, 0);
+        assertEq(proposeLockEnd, 0);
+        assertEq(amtSnapshots, 1);
+        assertEq(delegate, addr2);
+
+        (
+            uint256 lockedSci1,
+            uint256 votingRights1,
+            ,
+            ,
+            uint256 amtSnapshots1,
+            address delegate1
+        ) = staking.users(addr2);
+        assertEq(lockedSci1, 0);
+        assertEq(votingRights1, 200e18);
+        assertEq(amtSnapshots1, 2);
+        assertEq(delegate1, address(0));
+    }
+
+    function test_RevertDelegationIfOldAndNewDelegatesSimilar() public {
+        vm.startPrank(addr1);
+        staking.lockSci(500e18);
+        vm.stopPrank();
+        vm.roll(block.number + 2);
+        vm.startPrank(addr1);
+        staking.delegate(addr2);
+        bytes4 selector = bytes4(keccak256("AlreadyDelegated()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr2);
+    }
+
+    function test_RevertSelfDelegationNotAllowed() public {
+        vm.startPrank(addr2);
+        staking.lockSci(500e18); // Ensure addr1 has some locked SCI for delegation
+        bytes4 selector = bytes4(keccak256("SelfDelegationNotAllowed()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr2); // Attempt to self-delegate
+    }
+
+    function test_RevertDelegationToAlreadyDelegatedUser() public {
+        vm.startPrank(addr2);
+        staking.lockSci(500e18); // Ensure addr2 has some locked SCI for delegation
+        staking.delegate(addr3); // addr2 delegates to addr3
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        staking.lockSci(500e18); // Ensure addr1 has some locked SCI for delegation
+        bytes4 selector = bytes4(keccak256("CannotDelegateToAnotherDelegator()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr2); // Attempt to delegate to addr2, who has already delegated
+        vm.stopPrank();
+    }
+
+    function test_RevertDelegationIfDelegateNotAllowListed() public {
+        vm.startPrank(addr2);
+        staking.lockSci(500e18); 
+        bytes4 selector = bytes4(keccak256("DelegateNotAllowListed()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr4);
+        vm.stopPrank();
+    }
+
     function test_DelegateVotingRightsIfOwner() public {
         vm.startPrank(addr1);
         staking.lockSci(500e18);
         vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.delegate(addr1, addr2);
+        staking.delegate(addr2);
         (
             uint256 lockedSci1,
             uint256 votingRights1,
@@ -218,11 +340,11 @@ contract StakingTest is Test {
         vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.delegate(addr1, addr2);
+        staking.delegate(addr2);
         vm.stopPrank();
         vm.roll(block.number + 2);
-        vm.startPrank(addr2);
-        staking.delegate(addr1, address(0));
+        vm.startPrank(addr1);
+        staking.delegate(address(0));
         vm.stopPrank();
         (
             uint256 lockedSci,
@@ -239,112 +361,5 @@ contract StakingTest is Test {
         assertEq(proposeLockEnd, 0);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
-    }
-
-    function test_LockSciTokensIfVotingRightsDelegated() public {
-        vm.startPrank(addr1);
-        staking.delegate(addr1, addr2); //gives 0 voting rights
-        vm.stopPrank();
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        staking.lockSci(500e18); //delegates 500 voting rights after locking
-        vm.stopPrank();
-        (
-            uint256 lockedSci,
-            uint256 votingRights,
-            uint256 voteLockEnd,
-            uint256 proposeLockEnd,
-            uint256 amtSnapshots,
-            address delegate
-        ) = staking.users(addr1);
-        assertEq(staking.getTotalStaked(), 500e18);
-        assertEq(lockedSci, 500e18);
-        assertEq(votingRights, 0);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
-        assertEq(amtSnapshots, 1);
-        assertEq(delegate, addr2);
-
-        (
-            uint256 lockedSci1,
-            uint256 votingRights1,
-            ,
-            ,
-            uint256 amtSnapshots1,
-            address delegate1
-        ) = staking.users(addr2);
-        assertEq(lockedSci1, 0);
-        assertEq(votingRights1, 500e18);
-        assertEq(amtSnapshots1, 2);
-        assertEq(delegate1, address(0));
-    }
-
-    function test_FreeSciTokensIfVotingRightsDelegated() public {
-        vm.startPrank(addr1);
-        staking.delegate(addr1, addr2); //gives 0 voting rights
-        vm.stopPrank();
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        staking.lockSci(500e18); //delegates 500 voting rights after locking
-        vm.stopPrank();
-        vm.startPrank(addr1);
-        staking.freeSci(300e18); //delegates 500 voting rights after locking
-        vm.stopPrank();
-        (
-            uint256 lockedSci,
-            uint256 votingRights,
-            uint256 voteLockEnd,
-            uint256 proposeLockEnd,
-            uint256 amtSnapshots,
-            address delegate
-        ) = staking.users(addr1);
-        assertEq(staking.getTotalStaked(), 200e18);
-        assertEq(lockedSci, 200e18);
-        assertEq(votingRights, 0);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
-        assertEq(amtSnapshots, 1);
-        assertEq(delegate, addr2);
-
-        (
-            uint256 lockedSci1,
-            uint256 votingRights1,
-            ,
-            ,
-            uint256 amtSnapshots1,
-            address delegate1
-        ) = staking.users(addr2);
-        assertEq(lockedSci1, 0);
-        assertEq(votingRights1, 200e18);
-        assertEq(amtSnapshots1, 2);
-        assertEq(delegate1, address(0));
-    }
-
-    function test_RevertDelegationIfMsgSenderNotOwnerOrOldDelegate() public {
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        vm.stopPrank();
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        (, , , , , address delegate) = staking.users(addr1);
-        bytes4 selector = bytes4(
-            keccak256("UnauthorizedDelegation(address,address,address)")
-        );
-        vm.expectRevert(
-            abi.encodeWithSelector(selector, addr3, delegate, addr2)
-        );
-        staking.delegate(addr3, addr2);
-    }
-
-    function test_RevertDelegationIfOldAndNewDelegatesSimilar() public {
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        vm.stopPrank();
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        staking.delegate(addr1, addr2);
-        bytes4 selector = bytes4(keccak256("AlreadyDelegated()"));
-        vm.expectRevert(abi.encodeWithSelector(selector));
-        staking.delegate(addr1, addr2);
     }
 }

@@ -15,18 +15,19 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotClaim();
+    error CannotDelegateToAnotherDelegator();
+    error CannotDelegateToContract();
     error ContractsTerminated();
+    error DelegateAlreadyAdded(address delegate);
+    error DelegateNotAllowListed();
+    error DelegateNotFound(address delegate);
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error NotGovernanceContract();
+    error NoVotingPowerToDelegate();
+    error SelfDelegationNotAllowed();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
-    error UnauthorizedDelegation(
-        address owner,
-        address oldDelegate,
-        address newDelegate
-    );
 
     ///*** TOKEN ***//
     IERC20 private _sci;
@@ -52,7 +53,9 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     address public govOpsContract;
     address public govResContract;
     uint256 private totStaked;
+    uint256 private totDelegated;
     mapping(address => User) public users;
+    mapping(address => bool) public delegates;
 
     ///*** MODIFIERS ***///
     modifier gov() {
@@ -67,10 +70,13 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event DelegateAdded(address indexed delegate);
+    event DelegateRemoved(address indexed delegate);
     event Delegated(
         address indexed owner,
         address indexed oldDelegate,
-        address indexed newDelegate
+        address indexed newDelegate,
+        uint256 delegatedAmount
     );
     event Freed(
         address indexed token,
@@ -107,6 +113,31 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Adds an address to the delegate whitelist
+     * @param newDelegate Address to be added to the whitelist
+     */
+    function addDelegate(address newDelegate) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (delegates[newDelegate]) {
+            revert DelegateAlreadyAdded(newDelegate);
+        }
+        delegates[newDelegate] = true;
+        emit DelegateAdded(newDelegate);
+    }
+
+    /**
+     * @dev Removes an address from the delegate whitelist
+     * @param formerDelegate Address to be removed from the whitelist
+     */
+    function removeDelegate(address formerDelegate) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (!delegates[formerDelegate]) {
+            revert DelegateNotFound(formerDelegate);
+        }
+        delegates[formerDelegate] = false;
+        emit DelegateRemoved(formerDelegate);
+    }
+
+
+    /**
      * @dev sets the address of the operations governance smart contract
      */
     function setGovOps(
@@ -126,26 +157,25 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev delegates the owner's voting rights
-     * @param owner the owner of the delegated voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
-    function delegate(
-        address owner,
-        address newDelegate
-    ) external notTerminated {
+    function delegate(address newDelegate) external nonReentrant notTerminated {
+        address owner = msg.sender;
         address oldDelegate = users[owner].delegate;
+        uint256 lockedSci = users[owner].lockedSci;
+
+        if(!delegates[newDelegate]) revert DelegateNotAllowListed();
+
+        if (owner == newDelegate) revert SelfDelegationNotAllowed();
 
         if (oldDelegate == newDelegate) revert AlreadyDelegated();
 
-        //check if function caller can change delegation
-        if (
-            !(owner == _msgSender() ||
-                (oldDelegate == _msgSender() && newDelegate == address(0)))
-        ) revert UnauthorizedDelegation(owner, oldDelegate, newDelegate);
+        if (lockedSci == 0) revert NoVotingPowerToDelegate();
 
-        users[owner].delegate = newDelegate;
+        if (users[newDelegate].delegate != address(0)) {
+            revert CannotDelegateToAnotherDelegator();
+        }
 
-        //update vote unlock time
         if (oldDelegate != address(0)) {
             users[owner].voteLockEnd = Math.max(
                 users[owner].voteLockEnd,
@@ -159,21 +189,29 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[owner].votingRights += users[owner].lockedSci;
 
             _snapshot(owner, users[owner].votingRights);
+
+            totDelegated -= lockedSci;
         }
 
-        //update voting rights for delegate
         if (newDelegate != address(0)) {
             users[newDelegate].votingRights += users[owner].lockedSci;
 
             _snapshot(newDelegate, users[newDelegate].votingRights);
-            //update owner's voting power
+
             users[owner].votingRights = 0;
 
             _snapshot(owner, users[owner].votingRights);
+
+            totDelegated += lockedSci;
+
+            users[owner].delegate = newDelegate;
+        } else {
+            users[owner].delegate = address(0);
         }
 
-        emit Delegated(owner, oldDelegate, newDelegate);
+        emit Delegated(owner, oldDelegate, newDelegate, lockedSci);
     }
+
 
     /**
      * @dev locks a given amount of SCI tokens
@@ -319,10 +357,17 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the total amount of staked SCI and DON tokens
+     * @dev returns the total amount of staked SCI tokens
      */
     function getTotalStaked() external view returns (uint256) {
         return totStaked;
+    }
+
+    /**
+     * @dev returns the total amount of delegated SCI tokens
+     */
+    function getTotalDelegated() external view returns (uint256) {
+        return totDelegated;
     }
 
     /**
