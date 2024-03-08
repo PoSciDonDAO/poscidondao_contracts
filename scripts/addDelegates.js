@@ -8,17 +8,13 @@ async function main() {
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-mumbai.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressStaking = "0x5d4dFb7a517cd3D75216528D55591fAa8b3237f3";
-	const contractAddressParticipation =
-		"0xf5369906e03C0bA84956b7c214188cc38A11E9D3";
-	const newGovOpsAddress = "0x10E0a2f127434FD23C81F45d70257b5086c80266";
+	const NULL_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-	if (!newGovOpsAddress) {
-		console.error(
-			"You must provide the new address as a command line argument."
-		);
-		process.exit(1);
-	}
-
+	const delegates = [
+		NULL_ADDRESS,
+		"0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe",
+		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
+	];
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);
 	const wallet = new ethers.Wallet(`0x${privateKey}`, provider);
@@ -26,7 +22,7 @@ async function main() {
 	// Define the smart contract interface (ABI) for the function you want to call
 	const abi = [
 		// Replace this with the actual ABI for your setGovOps function
-		"function setGovOps(address newGovOpsAddress)",
+		"function addDelegate(address newDelegate)",
 	];
 
 	// Connect to your contract
@@ -35,22 +31,18 @@ async function main() {
 		abi,
 		wallet
 	);
-	const contractParticipation = new ethers.Contract(
-		contractAddressParticipation,
-		abi,
-		wallet
-	);
 
 	// Call the setGovOps function
 	try {
-		const tx1 = await contractStaking.setGovOps(newGovOpsAddress);
-		console.log("Transaction hash:", tx1.hash);
-		const receipt1 = await tx1.wait();
-		console.log("Transaction confirmed in block:", receipt1.blockNumber);
-		const tx2 = await contractParticipation.setGovOps(newGovOpsAddress);
-		console.log("Transaction hash:", tx2.hash);
-		const receipt2 = await tx2.wait();
-		console.log("Transaction confirmed in block:", receipt2.blockNumber);
+		for (let i = 0; i < delegates.length; i++) {
+			const tx1 = await contractStaking.addDelegate(delegates[i]);
+			console.log("Transaction hash:", tx1.hash);
+			const receipt1 = await tx1.wait();
+			console.log(
+				"Transaction confirmed in block:",
+				receipt1.blockNumber
+			);
+		}
 	} catch (error) {
 		console.error("Error calling setGovOps:", error);
 	}

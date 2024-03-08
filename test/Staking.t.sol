@@ -62,10 +62,8 @@ contract StakingTest is Test {
         govOps.govParams("proposalLifeTime", 4 weeks);
         govOps.govParams("quorum", 1000e18);
         govOps.govParams("voteLockEnd", 2 weeks);
-        staking.addDelegate(address(0));
-        staking.addDelegate(addr2);
-        staking.addDelegate(addr3);
         po.setGovOps(address(govOps));
+        staking.addDelegate(address(0));
         vm.stopPrank();
 
         deal(address(usdc), treasuryWallet, 10000e18);
@@ -79,17 +77,37 @@ contract StakingTest is Test {
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
+        staking.lockSci(500e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         sci.approve(address(staking), 10000e18);
+        staking.lockSci(500e18);
         vm.stopPrank();
+
+        vm.startPrank(addr3);
+        sci.approve(address(staking), 10000e18);
+        staking.lockSci(500e18);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+        staking.addDelegate(addr2);
+        staking.addDelegate(addr3);
+        vm.stopPrank();
+    }
+    function test_ReturnUserRights() public {
+        assertEq(staking.getLatestUserRights(addr1), 500e18);
+        assertEq(staking.getUserRights(addr1, 1, block.number), 500e18);
+        vm.roll(block.number + 2);
+        vm.startPrank(addr1);
+        staking.freeSci(500e18);
+        vm.stopPrank();
+        assertEq(staking.getLatestUserRights(addr1), 0);
+        assertEq(staking.getUserRights(addr1, 2, block.number), 0);
     }
 
     function test_LockSciTokens() public {
         vm.startPrank(addr1);
-        staking.lockSci(500e18);
-
         (
             uint256 lockedSci,
             uint256 votingRights,
@@ -99,7 +117,6 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(lockedSci, sci.balanceOf(address(staking)));
         assertEq(votingRights, 500e18);
         assertEq(voteLockEnd, 0);
         assertEq(proposeLockEnd, 0);
@@ -119,11 +136,43 @@ contract StakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_FreeSciTokens() public {
+    function test_LockSciTokensIfVotingRightsDelegated() public {
+        vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.lockSci(500e18);
+        staking.delegate(addr2);
         vm.stopPrank();
+        vm.roll(block.number + 2);
+        (
+            uint256 lockedSci,
+            uint256 votingRights,
+            uint256 voteLockEnd,
+            uint256 proposeLockEnd,
+            uint256 amtSnapshots,
+            address delegate
+        ) = staking.users(addr1);
 
+        assertEq(lockedSci, 500e18);
+        assertEq(votingRights, 0);
+        assertEq(voteLockEnd, 0);
+        assertEq(proposeLockEnd, 0);
+        assertEq(amtSnapshots, 2);
+        assertEq(delegate, addr2);
+
+        (
+            uint256 lockedSci1,
+            uint256 votingRights1,
+            ,
+            ,
+            uint256 amtSnapshots1,
+            address delegate1
+        ) = staking.users(addr2);
+        assertEq(lockedSci1, 500e18);
+        assertEq(votingRights1, 1000e18);
+        assertEq(amtSnapshots1, 2);
+        assertEq(delegate1, address(0));
+    }
+
+    function test_FreeSciTokens() public {
         vm.roll(block.number + 1);
 
         vm.startPrank(addr1);
@@ -145,7 +194,6 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(staking.getTotalStaked(), 300e18);
         assertEq(lockedSci, 300e18);
         assertEq(votingRights, 300e18);
         assertEq(voteLockEnd, 0);
@@ -154,65 +202,10 @@ contract StakingTest is Test {
         assertEq(delegate, address(0));
     }
 
-    function test_ReturnUserRights() public {
-        assertEq(staking.getLatestUserRights(addr1), 0);
-        assertEq(staking.getUserRights(addr1, 0, block.number), 0);
-        vm.startPrank(addr1);
-        staking.lockSci(100e18);
-        vm.stopPrank();
-        assertEq(staking.getLatestUserRights(addr1), 100e18);
-        assertEq(staking.getUserRights(addr1, 1, block.number), 100e18);
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        staking.freeSci(100e18);
-        vm.stopPrank();
-        assertEq(staking.getLatestUserRights(addr1), 0);
-        assertEq(staking.getUserRights(addr1, 2, block.number), 0);
-    }
-
-    function test_LockSciTokensIfVotingRightsDelegated() public {
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        staking.delegate(addr2);
-        vm.stopPrank();
-        vm.roll(block.number + 2);
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        vm.stopPrank();
-        (
-            uint256 lockedSci,
-            uint256 votingRights,
-            uint256 voteLockEnd,
-            uint256 proposeLockEnd,
-            uint256 amtSnapshots,
-            address delegate
-        ) = staking.users(addr1);
-        assertEq(staking.getTotalStaked(), 1000e18);
-        assertEq(lockedSci, 1000e18);
-        assertEq(votingRights, 0);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
-        assertEq(amtSnapshots, 1);
-        assertEq(delegate, addr2);
-
-        (
-            uint256 lockedSci1,
-            uint256 votingRights1,
-            ,
-            ,
-            uint256 amtSnapshots1,
-            address delegate1
-        ) = staking.users(addr2);
-        assertEq(lockedSci1, 0);
-        assertEq(votingRights1, 1000e18);
-        assertEq(amtSnapshots1, 2);
-        assertEq(delegate1, address(0));
-    }
-
     function test_FreeSciTokensIfVotingRightsDelegated() public {
+        vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        staking.delegate(addr2); //delegates 500 voting rights after locking
+        staking.delegate(addr2);
         vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
@@ -226,12 +219,11 @@ contract StakingTest is Test {
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
-        assertEq(staking.getTotalStaked(), 200e18);
         assertEq(lockedSci, 200e18);
         assertEq(votingRights, 0);
         assertEq(voteLockEnd, 0);
         assertEq(proposeLockEnd, 0);
-        assertEq(amtSnapshots, 1);
+        assertEq(amtSnapshots, 2);
         assertEq(delegate, addr2);
 
         (
@@ -242,17 +234,13 @@ contract StakingTest is Test {
             uint256 amtSnapshots1,
             address delegate1
         ) = staking.users(addr2);
-        assertEq(lockedSci1, 0);
-        assertEq(votingRights1, 200e18);
-        assertEq(amtSnapshots1, 2);
-        assertEq(delegate1, address(0));
+        assertEq(lockedSci1, 500e18);
+        assertEq(votingRights1, 700e18);
+        assertEq(amtSnapshots1, 3);
+        assertEq(delegate1, address(0)); //Cannot further delegate tokens
     }
 
     function test_RevertDelegationIfOldAndNewDelegatesSimilar() public {
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        vm.stopPrank();
-        vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
         bytes4 selector = bytes4(keccak256("AlreadyDelegated()"));
@@ -270,31 +258,34 @@ contract StakingTest is Test {
 
     function test_RevertDelegationToAlreadyDelegatedUser() public {
         vm.startPrank(addr2);
-        staking.lockSci(500e18); // Ensure addr2 has some locked SCI for delegation
-        staking.delegate(addr3); // addr2 delegates to addr3
+        staking.delegate(addr3);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        staking.lockSci(500e18); // Ensure addr1 has some locked SCI for delegation
         bytes4 selector = bytes4(keccak256("CannotDelegateToAnotherDelegator()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
-        staking.delegate(addr2); // Attempt to delegate to addr2, who has already delegated
+        staking.delegate(addr2);
         vm.stopPrank();
     }
 
     function test_RevertDelegationIfDelegateNotAllowListed() public {
         vm.startPrank(addr2);
-        staking.lockSci(500e18); 
         bytes4 selector = bytes4(keccak256("DelegateNotAllowListed()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
         staking.delegate(addr4);
         vm.stopPrank();
     }
 
-    function test_DelegateVotingRightsIfOwner() public {
+    function test_RevertDelegationWithoutVotingPower() public {
         vm.startPrank(addr1);
-        staking.lockSci(500e18);
+        staking.freeSci(500e18);
+        bytes4 selector = bytes4(keccak256("NoVotingPowerToDelegate()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr2);
         vm.stopPrank();
+    }
+
+    function test_DelegateVotingRights() public {
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
@@ -308,7 +299,6 @@ contract StakingTest is Test {
         ) = staking.users(addr1);
         vm.stopPrank();
 
-        assertEq(staking.getTotalStaked(), 500e18);
         assertEq(lockedSci1, 500e18);
         assertEq(votingRights1, 0);
         assertEq(voteLockEnd1, 0);
@@ -325,19 +315,15 @@ contract StakingTest is Test {
             address delegate2
         ) = staking.users(addr2);
 
-        assertEq(staking.getTotalStaked(), 500e18);
-        assertEq(lockedSci2, 0);
-        assertEq(votingRights2, 500e18);
+        assertEq(lockedSci2, 500e18);
+        assertEq(votingRights2, 1000e18);
         assertEq(voteLockEnd2, 0);
         assertEq(proposeLockEnd2, 0);
-        assertEq(amtSnapshots2, 1);
+        assertEq(amtSnapshots2, 2);
         assertEq(delegate2, address(0));
     }
 
     function test_RemoveDelegateIfDelegated() public {
-        vm.startPrank(addr1);
-        staking.lockSci(500e18);
-        vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
@@ -354,7 +340,7 @@ contract StakingTest is Test {
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
-        assertEq(staking.getTotalStaked(), 500e18);
+
         assertEq(lockedSci, 500e18);
         assertEq(votingRights, 500e18);
         assertEq(voteLockEnd, 0);

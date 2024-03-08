@@ -54,6 +54,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     address public govResContract;
     uint256 private totStaked;
     uint256 private totDelegated;
+    uint256 public delegateThreshold;
     mapping(address => User) public users;
     mapping(address => bool) public delegates;
 
@@ -100,6 +101,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     constructor(address treasuryWallet_, address sci_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _sci = IERC20(sci_);
+        delegateThreshold = 100e18;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -112,14 +114,19 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         _sci = IERC20(sci);
     }
 
+    function setDelegateThreshold(uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        delegateThreshold = newThreshold;
+    }
+
     /**
-     * @dev Adds an address to the delegate whitelist
+     * @dev Adds an address to the delegate whitelist if tokens have been staked
      * @param newDelegate Address to be added to the whitelist
      */
     function addDelegate(address newDelegate) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (delegates[newDelegate]) {
             revert DelegateAlreadyAdded(newDelegate);
         }
+        if(users[newDelegate].lockedSci < delegateThreshold && newDelegate != address(0)) revert InsufficientBalance(users[newDelegate].lockedSci, delegateThreshold);
         delegates[newDelegate] = true;
         emit DelegateAdded(newDelegate);
     }
@@ -170,7 +177,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         if (oldDelegate == newDelegate) revert AlreadyDelegated();
 
-        if (lockedSci == 0) revert NoVotingPowerToDelegate();
+        if (lockedSci == 0 && newDelegate != address(0)) revert NoVotingPowerToDelegate();
 
         if (users[newDelegate].delegate != address(0)) {
             revert CannotDelegateToAnotherDelegator();
@@ -273,7 +280,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
-            //check if delegate did not vote recently
             if (
                 users[delegated].voteLockEnd > block.timestamp && !(terminated)
             ) {
@@ -289,6 +295,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[delegated].votingRights -= amount;
 
             _snapshot(delegated, users[delegated].votingRights);
+
+            if(users[msg.sender].lockedSci == 0) {
+                users[msg.sender].delegate = address(0);
+            }
+
         } else {
             //add new amount of votes as rights
             users[msg.sender].votingRights -= amount;

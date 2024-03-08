@@ -6,7 +6,7 @@ async function main() {
 	const INFURA_KEY = process.env.INFURA_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://optimism-sepolia.infura.io/v3/${INFURA_KEY}`;
+	const providerUrl = `https://polygon-mumbai.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressGovOps = "0x9EaFED1c7855839Ed8A7767545F221eDb98b8A16";
 
 	// Connect to the Ethereum network
