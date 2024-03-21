@@ -311,41 +311,34 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
 
         IStaking staking = IStaking(stakingAddress);
-        //get latest voting rights
+
         uint256 votingRights = staking.getLatestUserRights(msg.sender);
 
-        //check if user has enough voting rights
         if (votes > votingRights)
             revert InsufficientVotingRights(votingRights, votes);
 
         uint256 actualVotes;
 
         if (operationsProposals[id].quadraticVoting) {
-            // Calculate the actual number of votes (square root of the voting rights)
             actualVotes = _sqrt(votes);
         } else {
             actualVotes = votes;
         }
 
-        //vote for or against
         if (support) {
             operationsProposals[id].votesFor += actualVotes;
         } else {
             operationsProposals[id].votesAgainst += actualVotes;
         }
 
-        //add to the total votes
         operationsProposals[id].totalVotes += actualVotes;
 
-        //set user as voted for proposal
         votedOperations[id][msg.sender] = true;
 
-        //set the lock time in the staking contract
         staking.voted(msg.sender, block.timestamp + voteLockTime);
 
         po.mint(msg.sender);
 
-        //emit Voted events
         emit Voted(id, msg.sender, support, actualVotes);
     }
 
@@ -392,7 +385,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function executeOperationsProposal(
         uint256 id
-    ) external payable notTerminated nonReentrant {
+    ) external payable notTerminated nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         //check if proposal exists
         if (id >= _operationsProposalIndex) revert ProposalInexistent();
 
@@ -437,7 +430,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
     }
 
-    function completeOperationsProposal(uint256 id) external notTerminated {
+    function completeOperationsProposal(uint256 id) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (id > _operationsProposalIndex) revert ProposalInexistent();
 
         if (operationsProposals[id].status != ProposalStatus.Scheduled)
@@ -464,15 +457,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 block.timestamp,
                 operationsProposals[id].endTimeStamp
             );
-
-        if (
-            (!operationsProposals[id].quadraticVoting &&
-                operationsProposals[id].totalVotes > quorum) ||
-            (operationsProposals[id].quadraticVoting &&
-                operationsProposals[id].totalVotes > _sqrt(quorum))
-        ) {
-            revert QuorumReached();
-        }
         operationsProposals[id].status = ProposalStatus.Cancelled;
 
         emit Cancelled(id);
@@ -529,7 +513,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             uint256,
             uint256,
             ProposalStatus,
-            uint256,
+            ProjectInfo memory,
             uint256,
             uint256,
             bool
@@ -540,32 +524,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             operationsProposals[id].startBlockNum,
             operationsProposals[id].endTimeStamp,
             operationsProposals[id].status,
+            operationsProposals[id].details,
             operationsProposals[id].votesFor,
-            operationsProposals[id].votesAgainst,
             operationsProposals[id].totalVotes,
             operationsProposals[id].quadraticVoting
-        );
-    }
-
-    /**
-     * @dev returns operations project info information
-     * @param id the index of the proposal of interest
-     */
-    function getOperationsProposalProjectInfo(
-        uint256 id
-    )
-        external
-        view
-        returns (string memory, address, Payment, uint256, uint256, bool)
-    {
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
-        return (
-            operationsProposals[id].details.info,
-            operationsProposals[id].details.receivingWallet,
-            operationsProposals[id].details.payment,
-            operationsProposals[id].details.amount,
-            operationsProposals[id].details.amountSci,
-            operationsProposals[id].details.executable
         );
     }
 

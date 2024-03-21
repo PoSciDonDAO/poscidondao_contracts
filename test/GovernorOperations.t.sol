@@ -135,8 +135,8 @@ contract GovernorOperationsTest is Test {
             uint256 startBlockNum,
             uint256 endTimeStamp,
             GovernorOperations.ProposalStatus status,
+            GovernorOperations.ProjectInfo memory details,
             uint256 votesFor,
-            uint256 votesAgainst,
             uint256 totalVotes,
             bool quadraticVoting
         ) = govOps.getOperationsProposalInfo(id);
@@ -145,25 +145,14 @@ contract GovernorOperationsTest is Test {
         assertEq(endTimeStamp, block.timestamp + govOps.proposalLifeTime());
         assertTrue(status == GovernorOperations.ProposalStatus.Active);
         assertEq(votesFor, 0);
-        assertEq(votesAgainst, 0);
         assertEq(totalVotes, 0);
         assertEq(quadraticVoting, false);
-
-        (
-            string memory info,
-            address wallet,
-            GovernorOperations.Payment payment,
-            uint256 amount,
-            uint256 amountSci,
-            bool executable
-        ) = govOps.getOperationsProposalProjectInfo(id);
-
-        assertEq(info, "Info");
-        assertEq(wallet, opWallet);
-        assertTrue(payment == GovernorOperations.Payment.Usdc);
-        assertEq(amount, 5000000e6);
-        assertEq(amountSci, 0);
-        assertEq(executable, true);
+        assertEq(details.info, "Info");
+        assertEq(details.receivingWallet, opWallet);
+        assertTrue(details.payment == GovernorOperations.Payment.Usdc);
+        assertEq(details.amount, 5000000e6);
+        assertEq(details.amountSci, 0);
+        assertEq(details.executable, true);
         vm.stopPrank();
     }
 
@@ -178,14 +167,13 @@ contract GovernorOperationsTest is Test {
             ,
             ,
             ,
+            ,
             uint256 votesFor,
-            uint256 votesAgainst,
             uint256 totalVotes,
 
         ) = govOps.getOperationsProposalInfo(id);
 
         assertEq(votesFor, 2000e18);
-        assertEq(votesAgainst, 0);
         assertEq(totalVotes, 2000e18);
 
         (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
@@ -204,14 +192,13 @@ contract GovernorOperationsTest is Test {
             ,
             ,
             ,
+            ,
             uint256 votesFor,
-            uint256 votesAgainst,
             uint256 totalVotes,
             bool quadraticVoting
         ) = govOps.getOperationsProposalInfo(id);
 
         assertEq(votesFor, 10e18);
-        assertEq(votesAgainst, 0);
         assertEq(totalVotes, 10e18);
         assertEq(quadraticVoting, true);
 
@@ -221,6 +208,7 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
+    //this one will fail
     function test_RevertVoteForProposalWithQuadraticFunding() public {
         vm.startPrank(addr1);
         staking.lockSci(100e18);
@@ -394,8 +382,8 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr1);
         vm.warp(4.1 weeks);
         govOps.finalizeVotingOperationsProposal(id);
-        (, address wallet, , uint256 amounts, , ) = govOps
-            .getOperationsProposalProjectInfo(id);
+        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
+            .getOperationsProposalInfo(id);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         govOps.executeOperationsProposal(id);
@@ -403,7 +391,7 @@ contract GovernorOperationsTest is Test {
             .getOperationsProposalInfo(id);
 
         assertTrue(status == GovernorOperations.ProposalStatus.Executed);
-        assertEq(usdc.balanceOf(wallet), amounts);
+        assertEq(usdc.balanceOf(details.receivingWallet), details.amount);
         vm.stopPrank();
     }
 
@@ -418,11 +406,10 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         govOps.executeOperationsProposal(id);
+        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
+            .getOperationsProposalInfo(id);
 
-        (, address receivingWallet, , , , ) = govOps
-            .getOperationsProposalProjectInfo(id);
-
-        assertEq(sci.balanceOf(receivingWallet), 1000e18);
+        assertEq(sci.balanceOf(details.receivingWallet), 1000e18);
         vm.stopPrank();
     }
 
@@ -446,11 +433,11 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(treasuryWallet);
         govOps.executeOperationsProposal(id);
 
-        (, address receivingWallet, , , , ) = govOps
-            .getOperationsProposalProjectInfo(id);
+        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
+            .getOperationsProposalInfo(id);
 
-        assertEq(sci.balanceOf(receivingWallet), 1000e18);
-        assertEq(usdc.balanceOf(receivingWallet), 5000e6);
+        assertEq(sci.balanceOf(details.receivingWallet), 1000e18);
+        assertEq(usdc.balanceOf(details.receivingWallet), 5000e6);
         vm.stopPrank();
     }
 
@@ -466,10 +453,10 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(treasuryWallet);
         govOps.executeOperationsProposal{value: 1 ether}(id);
 
-        (, address receivingWallet, , , , ) = govOps
-            .getOperationsProposalProjectInfo(id);
+        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
+            .getOperationsProposalInfo(id);
 
-        assertEq(receivingWallet.balance, 1 ether);
+        assertEq(details.receivingWallet.balance, 1 ether);
         vm.stopPrank();
     }
 

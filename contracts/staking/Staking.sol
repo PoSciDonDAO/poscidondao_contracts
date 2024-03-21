@@ -114,6 +114,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         _sci = IERC20(sci);
     }
 
+    /**
+     * @dev sets the amount of staked sci tokens needed to become a delegate
+     * @param newThreshold the new threshold to become a delegate
+     */
     function setDelegateThreshold(uint256 newThreshold) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delegateThreshold = newThreshold;
     }

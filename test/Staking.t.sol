@@ -117,6 +117,7 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
+        assertEq(lockedSci, 500e18);
         assertEq(votingRights, 500e18);
         assertEq(voteLockEnd, 0);
         assertEq(proposeLockEnd, 0);
