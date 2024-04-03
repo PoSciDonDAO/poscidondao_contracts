@@ -46,7 +46,7 @@
 
 ## Overview
 
-PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to streamlining and democratizing the funding and acceleration of personalized medicine research. Utilizing the advanced zkSync Era blockchain, PoSciDonDAO implements a suite of smart contracts designed to facilitate transparent, democratic, and efficient governance of DAO operations and personalized medicine research funding.
+PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to streamlining and democratizing the funding and acceleration of personalized medicine research. Utilizing the Polygon blockchain network, PoSciDonDAO implements a suite of smart contracts designed to facilitate transparent, democratic, and efficient governance of DAO operations and personalized medicine research funding.
 
 ## Contracts in the Repository
 
@@ -98,14 +98,10 @@ foundryup
 3. Compile Contracts: `npx hardhat compile`
 4. Run Tests: `npx hardhat test`
 
-Sure, here's the deployment guide in Markdown format, suitable for a README file:
-
-Certainly! Here's an updated version of the README with the necessary additions for the `.env` file setup:
-
 ```markdown
-# Deployment on Polygon PoS Testnet using Hardhat
+# Deployment on Polygon Proof of Stake (PoS) Testnet using Hardhat
 
-This guide will assist you in deploying smart contracts on the Polygon PoS (Proof of Stake) testnet using Hardhat.
+This guide will assist you in deploying smart contracts on the Polygon PoS testnet using Hardhat.
 
 ## Prerequisites
 
