@@ -63,7 +63,6 @@ contract StakingTest is Test {
         govOps.govParams("quorum", 1000e18);
         govOps.govParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
-        staking.addDelegate(address(0));
         vm.stopPrank();
 
         deal(address(usdc), treasuryWallet, 10000e18);
@@ -74,20 +73,32 @@ contract StakingTest is Test {
         deal(address(sci), addr1, 100000000e18);
         deal(address(sci), addr2, 100000000e18);
         deal(address(sci), addr3, 100000000e18);
+        deal(address(sci), addr4, 100000000e18);
+        deal(address(sci), addr5, 100000000e18);
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
-        staking.lockSci(500e18);
+        staking.lock(500e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         sci.approve(address(staking), 10000e18);
-        staking.lockSci(500e18);
+        staking.lock(500e18);
         vm.stopPrank();
 
         vm.startPrank(addr3);
         sci.approve(address(staking), 10000e18);
-        staking.lockSci(500e18);
+        staking.lock(500e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr4);
+        sci.approve(address(staking), 10000e18);
+        staking.lock(500e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr5);
+        sci.approve(address(staking), 10000e18);
+        staking.lock(500e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
@@ -100,13 +111,13 @@ contract StakingTest is Test {
         assertEq(staking.getUserRights(addr1, 1, block.number), 500e18);
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.freeSci(500e18);
+        staking.free(500e18);
         vm.stopPrank();
         assertEq(staking.getLatestUserRights(addr1), 0);
         assertEq(staking.getUserRights(addr1, 2, block.number), 0);
     }
 
-    function test_LockSciTokens() public {
+    function test_lockTokens() public {
         vm.startPrank(addr1);
         (
             uint256 lockedSci,
@@ -133,11 +144,11 @@ contract StakingTest is Test {
 
         emit Locked(address(sci), addr2, 100e18);
 
-        staking.lockSci(100e18);
+        staking.lock(100e18);
         vm.stopPrank();
     }
 
-    function test_LockSciTokensIfVotingRightsDelegated() public {
+    function test_lockTokensIfVotingRightsDelegated() public {
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
@@ -173,17 +184,17 @@ contract StakingTest is Test {
         assertEq(delegate1, address(0));
     }
 
-    function test_FreeSciTokens() public {
+    function test_freeTokens() public {
         vm.roll(block.number + 1);
 
         vm.startPrank(addr1);
-        staking.freeSci(100e18);
+        staking.free(100e18);
         vm.stopPrank();
 
         vm.roll(block.number + 2);
 
         vm.startPrank(addr1);
-        staking.freeSci(100e18);
+        staking.free(100e18);
         vm.stopPrank();
 
         (
@@ -203,14 +214,14 @@ contract StakingTest is Test {
         assertEq(delegate, address(0));
     }
 
-    function test_FreeSciTokensIfVotingRightsDelegated() public {
+    function test_freeTokensIfVotingRightsDelegated() public {
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
         vm.stopPrank();
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
-        staking.freeSci(300e18);
+        staking.free(300e18);
         vm.stopPrank();
         (
             uint256 lockedSci,
@@ -251,7 +262,7 @@ contract StakingTest is Test {
 
     function test_RevertSelfDelegationNotAllowed() public {
         vm.startPrank(addr2);
-        staking.lockSci(500e18); // Ensure addr1 has some locked SCI for delegation
+        staking.lock(500e18); // Ensure addr1 has some locked SCI for delegation
         bytes4 selector = bytes4(keccak256("SelfDelegationNotAllowed()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
         staking.delegate(addr2); // Attempt to self-delegate
@@ -263,7 +274,18 @@ contract StakingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        bytes4 selector = bytes4(keccak256("CannotDelegateToAnotherDelegator()"));
+        bytes4 selector = bytes4(
+            keccak256("CannotDelegateToAnotherDelegator()")
+        );
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        staking.delegate(addr2);
+        vm.stopPrank();
+    }
+
+    function test_RevertDelegationWithoutVotingPower() public {
+        vm.startPrank(addr1);
+        staking.free(500e18);
+        bytes4 selector = bytes4(keccak256("NoVotingPowerToDelegate()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
         staking.delegate(addr2);
         vm.stopPrank();
@@ -271,18 +293,26 @@ contract StakingTest is Test {
 
     function test_RevertDelegationIfDelegateNotAllowListed() public {
         vm.startPrank(addr2);
-        bytes4 selector = bytes4(keccak256("DelegateNotAllowListed()"));
-        vm.expectRevert(abi.encodeWithSelector(selector));
+        bytes4 selector = bytes4(keccak256("DelegateNotAllowListed(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, addr5));
+        staking.delegate(addr5);
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+        staking.addDelegate(addr4);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
         staking.delegate(addr4);
         vm.stopPrank();
-    }
 
-    function test_RevertDelegationWithoutVotingPower() public {
+        vm.startPrank(treasuryWallet);
+        staking.removeDelegate(addr4);
+        vm.stopPrank();
+
         vm.startPrank(addr1);
-        staking.freeSci(500e18);
-        bytes4 selector = bytes4(keccak256("NoVotingPowerToDelegate()"));
-        vm.expectRevert(abi.encodeWithSelector(selector));
-        staking.delegate(addr2);
+        vm.expectRevert(abi.encodeWithSelector(selector, addr4));
+        staking.delegate(addr4);
         vm.stopPrank();
     }
 

@@ -66,7 +66,7 @@ contract ParticipationTest is Test {
         deal(addr1, 10000 ether);
         sci.approve(address(gov), 10000e18);
         sci.approve(address(staking), 10000000000000000e18);
-        staking.lockSci(10000e18);
+        staking.lock(10000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -79,9 +79,9 @@ contract ParticipationTest is Test {
 
     function test_ReceiveParticipationTokens() public {
         vm.startPrank(addr1);
-        staking.lockSci(2000e18);
-        uint256 id = gov.getOperationsProposalIndex();
-        gov.proposeOperation(
+        staking.lock(2000e18);
+        uint256 id = gov.getProposalIndex();
+        gov.propose(
             "Introduction",
             treasuryWallet,
             5000000e6,
@@ -90,7 +90,7 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
+        gov.vote(id, true, 2000e18, phoneCircuitId);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
         vm.stopPrank();
@@ -98,9 +98,9 @@ contract ParticipationTest is Test {
 
     function test_BurnParticipationTokensWhenTreasuryIsBurner() public {
         vm.startPrank(addr1);
-        staking.lockSci(2000e18);
-        uint256 id = gov.getOperationsProposalIndex();
-        gov.proposeOperation(
+        staking.lock(2000e18);
+        uint256 id = gov.getProposalIndex();
+        gov.propose(
             "Introduction",
             treasuryWallet,
             5000000e6,
@@ -109,14 +109,14 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
+        gov.vote(id, true, 2000e18, phoneCircuitId);
         uint256 balance = po.balanceOf(addr1);
         assertEq(balance, 1);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-        staking.lockSci(2000e18);
-        gov.voteOnOperations(id, true, 2000e18, phoneCircuitId);
+        staking.lock(2000e18);
+        gov.vote(id, true, 2000e18, phoneCircuitId);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         po.burn(addr2, 1);

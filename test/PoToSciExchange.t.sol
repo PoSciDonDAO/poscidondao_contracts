@@ -73,7 +73,7 @@ contract PoToSciExchangeTest is Test {
         deal(addr1, 10000 ether);
         sci.approve(address(gov), 10000e18);
         sci.approve(address(staking), 10000000000000000e18);
-        staking.lockSci(10000e18);
+        staking.lock(10000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -93,9 +93,9 @@ contract PoToSciExchangeTest is Test {
 
     function test_ExchangePoForSci() public {
         vm.startPrank(addr1);
-        staking.lockSci(2000e18);
-        uint256 id = gov.getOperationsProposalIndex();
-        gov.proposeOperation(
+        staking.lock(2000e18);
+        uint256 id = gov.getProposalIndex();
+        gov.propose(
             info,
             operationsWallet,
             50000e6,
@@ -106,8 +106,8 @@ contract PoToSciExchangeTest is Test {
         );
         vm.stopPrank();
         vm.startPrank(addr2);
-        staking.lockSci(5000e18);
-        gov.voteOnOperations(id, true, 5000e18, phoneCircuitId);
+        staking.lock(5000e18);
+        gov.vote(id, true, 5000e18, phoneCircuitId);
         assertEq(po.balanceOf(addr2), 1);
         ex.exchangePoForSci(addr2, 1);
         assertEq(po.balanceOf(addr2), 0);

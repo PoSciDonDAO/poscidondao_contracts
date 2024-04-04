@@ -13,8 +13,7 @@ async function main() {
 	const delegates = [
 		// NULL_ADDRESS,
 		// "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe",
-		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
-		// "0x8a7ad9a192cbb31679d0d468c25546f2949c8bb1",
+		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a"
 	];
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);
@@ -23,7 +22,7 @@ async function main() {
 	// Define the smart contract interface (ABI) for the function you want to call
 	const abi = [
 		// Replace this with the actual ABI for your setGovOps function
-		"function addDelegate(address newDelegate)",
+		"function removeDelegate(address formerDelegate)",
 	];
 
 	// Connect to your contract
@@ -36,7 +35,7 @@ async function main() {
 	// Call the setGovOps function
 	try {
 		for (let i = 0; i < delegates.length; i++) {
-			const tx1 = await contractStaking.addDelegate(delegates[i]);
+			const tx1 = await contractStaking.removeDelegate(delegates[i]);
 			console.log("Transaction hash:", tx1.hash);
 			const receipt1 = await tx1.wait();
 			console.log(

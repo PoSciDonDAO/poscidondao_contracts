@@ -1,8 +1,9 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
 import "./../interface/IParticipation.sol";
 import "./../interface/IStaking.sol";
+import "./../interface/ISci.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
@@ -74,10 +75,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STORAGE & MAPPINGS ***///
     Hub private hub;
     uint256 public opThreshold;
-    uint256 private _operationsProposalIndex;
+    uint256 private index;
+    uint256 public totBurnedForTermination;
+    uint256 public terminationThreshold;
     bool public terminated = false;
-    mapping(uint256 => Proposal) private operationsProposals;
-    mapping(uint256 => mapping(address => bool)) private votedOperations;
+    mapping(uint256 => Proposal) private proposals;
+    mapping(address => uint256) private lockedForTermination;
+    mapping(uint256 => mapping(address => bool)) private voted;
 
     ///*** ENUMERATORS ***///
     enum ProposalStatus {
@@ -103,6 +107,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event BurnedForTermination(address owner, uint256 amount);
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
     event Voted(
         uint256 indexed id,
@@ -131,6 +136,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         po = IParticipation(po_);
         hub = Hub(hubAddress_);
         opThreshold = 100e18;
+        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 5100;
 
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
@@ -145,7 +151,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the Hub address
      */
-    function setHubAddress(address hubAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setHubAddress(
+        address hubAddress
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         hub = Hub(hubAddress);
     }
 
@@ -187,25 +195,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the governance parameters given data
-     * @param _param the parameter of interest
-     * @param _data the data assigned to the parameter
+     * @param param the parameter of interest
+     * @param data the data assigned to the parameter
      */
     function govParams(
-        bytes32 _param,
-        uint256 _data
+        bytes32 param,
+        uint256 data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         //the duration of the proposal
-        if (_param == "proposalLifeTime") proposalLifeTime = _data;
+        if (param == "proposalLifeTime") proposalLifeTime = data;
 
         //the amount of tokens needed to pass a proposal
         //provide a percentage of the total supply
-        if (_param == "quorum") quorum = _data;
+        if (param == "quorum") quorum = data;
 
         //the lock time of your tokens after voting
-        if (_param == "voteLockTime") voteLockTime = _data;
+        if (param == "voteLockTime") voteLockTime = data;
 
         //the lock time of your tokens and ability to propose after proposing
-        if (_param == "proposeLockTime") proposeLockTime = _data;
+        if (param == "proposeLockTime") proposeLockTime = data;
+
+        //the amount of tokens that need to be burned to terminate DAO operations governance
+        if(param == "terminationThreshold") terminationThreshold = data;
     }
 
     /**
@@ -219,7 +230,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
      * @return uint256 Index of the newly created proposal.
      */
-    function proposeOperation(
+    function propose(
         string memory info,
         address receivingWallet,
         uint256 amountUsdc,
@@ -227,7 +238,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountSci,
         bool executable,
         bool quadraticVoting
-    ) external notTerminated nonReentrant returns (uint256) {
+    ) external nonReentrant notTerminated returns (uint256) {
         validateInput(
             info,
             receivingWallet,
@@ -280,34 +291,34 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param votes the amount of votes
      * @param circuitId the identifier of holonym v3's zkp circuit
      */
-    function voteOnOperations(
+    function vote(
         uint256 id,
         bool support,
         uint256 votes,
         bytes32 circuitId
-    ) external notTerminated nonReentrant {
+    ) external nonReentrant notTerminated {
         //check if proposal exists
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
+        if (id >= index) revert ProposalInexistent();
 
         //check if proposal is still active
-        if (operationsProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(operationsProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
         //check if proposal life time has not passed
-        if (block.timestamp > operationsProposals[id].endTimeStamp)
+        if (block.timestamp > proposals[id].endTimeStamp)
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (votedOperations[id][msg.sender] == true) revert VoteLock();
+        if (voted[id][msg.sender] == true) revert VoteLock();
 
         if (votes == 0) revert InvalidVotesInput();
 
-        if (operationsProposals[id].quadraticVoting) {
+        if (proposals[id].quadraticVoting) {
             SBT memory sbt = hub.getSBT(msg.sender, circuitId);
             //getSBT reverts because there is no Hub.sol on optimism or polygon testnet
-            if(sbt.publicValues.length == 0 && block.timestamp > sbt.expiry) {
+            if (sbt.publicValues.length == 0 && block.timestamp > sbt.expiry) {
                 revert InexistentOrInvalidSBT();
-            } 
+            }
         }
 
         IStaking staking = IStaking(stakingAddress);
@@ -319,21 +330,21 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         uint256 actualVotes;
 
-        if (operationsProposals[id].quadraticVoting) {
+        if (proposals[id].quadraticVoting) {
             actualVotes = _sqrt(votes);
         } else {
             actualVotes = votes;
         }
 
         if (support) {
-            operationsProposals[id].votesFor += actualVotes;
+            proposals[id].votesFor += actualVotes;
         } else {
-            operationsProposals[id].votesAgainst += actualVotes;
+            proposals[id].votesAgainst += actualVotes;
         }
 
-        operationsProposals[id].totalVotes += actualVotes;
+        proposals[id].totalVotes += actualVotes;
 
-        votedOperations[id][msg.sender] = true;
+        voted[id][msg.sender] = true;
 
         staking.voted(msg.sender, block.timestamp + voteLockTime);
 
@@ -346,35 +357,33 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev finalizes the voting phase for an operations proposal
      * @param id the index of the proposal of interest
      */
-    function finalizeVotingOperationsProposal(
-        uint256 id
-    ) external notTerminated {
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
+    function finalize(uint256 id) external notTerminated {
+        if (id >= index) revert ProposalInexistent();
 
-        if (block.timestamp < operationsProposals[id].endTimeStamp)
+        if (block.timestamp < proposals[id].endTimeStamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                operationsProposals[id].endTimeStamp
+                proposals[id].endTimeStamp
             );
 
-        if (operationsProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(operationsProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
         if (
-            (!operationsProposals[id].quadraticVoting &&
-                operationsProposals[id].totalVotes < quorum) ||
-            (operationsProposals[id].quadraticVoting &&
-                operationsProposals[id].totalVotes < _sqrt(quorum))
+            (!proposals[id].quadraticVoting &&
+                proposals[id].totalVotes < quorum) ||
+            (proposals[id].quadraticVoting &&
+                proposals[id].totalVotes < _sqrt(quorum))
         ) {
             revert QuorumNotReached(
                 id,
-                operationsProposals[id].totalVotes,
-                operationsProposals[id].quadraticVoting ? _sqrt(quorum) : quorum
+                proposals[id].totalVotes,
+                proposals[id].quadraticVoting ? _sqrt(quorum) : quorum
             );
         }
 
-        operationsProposals[id].status = ProposalStatus.Scheduled;
+        proposals[id].status = ProposalStatus.Scheduled;
 
         emit Scheduled(id);
     }
@@ -383,25 +392,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev executes the proposal using a token or coin - Operation's crew's choice
      * @param id the index of the proposal of interest
      */
-    function executeOperationsProposal(
+    function execute(
         uint256 id
-    ) external payable notTerminated nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external payable nonReentrant notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         //check if proposal exists
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
+        if (id >= index) revert ProposalInexistent();
 
-        if (operationsProposals[id].details.executable) {
+        if (proposals[id].details.executable) {
             //check if proposal has finalized voting
-            if (operationsProposals[id].status != ProposalStatus.Scheduled)
-                revert IncorrectPhase(operationsProposals[id].status);
+            if (proposals[id].status != ProposalStatus.Scheduled)
+                revert IncorrectPhase(proposals[id].status);
 
-            address receivingWallet = operationsProposals[id]
-                .details
-                .receivingWallet;
+            address receivingWallet = proposals[id].details.receivingWallet;
 
-            uint256 amount = operationsProposals[id].details.amount;
-            uint256 amountSci = operationsProposals[id].details.amountSci;
+            uint256 amount = proposals[id].details.amount;
+            uint256 amountSci = proposals[id].details.amountSci;
 
-            Payment payment = operationsProposals[id].details.payment;
+            Payment payment = proposals[id].details.payment;
             if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
                 _transferToken(
                     IERC20(usdc),
@@ -422,7 +429,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 _transferCoin(treasuryWallet, receivingWallet, amount); //only treasury wallet can execute this proposal
             }
 
-            operationsProposals[id].status = ProposalStatus.Executed;
+            proposals[id].status = ProposalStatus.Executed;
 
             emit Executed(id, false, amount);
         } else {
@@ -430,13 +437,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
     }
 
-    function completeOperationsProposal(uint256 id) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (id > _operationsProposalIndex) revert ProposalInexistent();
+    function complete(
+        uint256 id
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (id > index) revert ProposalInexistent();
 
-        if (operationsProposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(operationsProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(proposals[id].status);
 
-        operationsProposals[id].status = ProposalStatus.Completed;
+        proposals[id].status = ProposalStatus.Completed;
 
         emit Completed(id);
     }
@@ -445,21 +454,36 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancelOperationsProposal(uint256 id) external notTerminated {
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
+    function cancel(uint256 id) external notTerminated {
+        if (id >= index) revert ProposalInexistent();
 
-        if (operationsProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(operationsProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
-        if (block.timestamp < operationsProposals[id].endTimeStamp)
+        if (block.timestamp < proposals[id].endTimeStamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                operationsProposals[id].endTimeStamp
+                proposals[id].endTimeStamp
             );
-        operationsProposals[id].status = ProposalStatus.Cancelled;
+        proposals[id].status = ProposalStatus.Cancelled;
 
         emit Cancelled(id);
+    }
+
+    /**
+     * @dev locks a given amount of SCI tokens for termination
+     * @param amount the amount of tokens that will be locked
+     */
+    function burnForTerminatingOperations(
+        uint256 amount
+    ) external nonReentrant notTerminated {
+
+        ISci(sci).burn(msg.sender, amount);
+
+        totBurnedForTermination += amount;
+
+        emit BurnedForTermination(msg.sender, amount);
     }
 
     /**
@@ -471,10 +495,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        IStaking staking = IStaking(stakingAddress);
-        staking.terminate(msg.sender);
-        terminated = true;
-        emit Terminated(msg.sender, block.number);
+        if (totBurnedForTermination > terminationThreshold) {
+            IStaking staking = IStaking(stakingAddress);
+            staking.terminate(msg.sender);
+            terminated = true;
+            emit Terminated(msg.sender, block.number);
+        }
     }
 
     /**
@@ -488,23 +514,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
-    function getVotedOperations(uint256 id) external view returns (bool) {
-        if (id >= _operationsProposalIndex) revert ProposalInexistent();
-        return votedOperations[id][msg.sender];
+    function getVoted(uint256 id) external view returns (bool) {
+        if (id >= index) revert ProposalInexistent();
+        return voted[id][msg.sender];
     }
 
     /**
      * @dev returns the operations proposal index
      */
-    function getOperationsProposalIndex() external view returns (uint256) {
-        return _operationsProposalIndex;
+    function getProposalIndex() external view returns (uint256) {
+        return index;
     }
 
     /**
      * @dev returns proposal information
      * @param id the index of the proposal of interest
      */
-    function getOperationsProposalInfo(
+    function getProposalInfo(
         uint256 id
     )
         external
@@ -519,15 +545,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             bool
         )
     {
-        if (id > _operationsProposalIndex) revert ProposalInexistent();
+        if (id > index) revert ProposalInexistent();
         return (
-            operationsProposals[id].startBlockNum,
-            operationsProposals[id].endTimeStamp,
-            operationsProposals[id].status,
-            operationsProposals[id].details,
-            operationsProposals[id].votesFor,
-            operationsProposals[id].totalVotes,
-            operationsProposals[id].quadraticVoting
+            proposals[id].startBlockNum,
+            proposals[id].endTimeStamp,
+            proposals[id].status,
+            proposals[id].details,
+            proposals[id].votesFor,
+            proposals[id].totalVotes,
+            proposals[id].quadraticVoting
         );
     }
 
@@ -665,8 +691,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             quadraticVoting
         );
 
-        uint256 currentIndex = _operationsProposalIndex++;
-        operationsProposals[currentIndex] = proposal;
+        uint256 currentIndex = index++;
+        proposals[currentIndex] = proposal;
 
         staking.proposed(msg.sender, block.timestamp + proposeLockTime);
 
