@@ -28,7 +28,6 @@ artifacts
 artifacts-zk/
 abis/
 .DS_Store
-.github/
 typechain
 proposals/
 deployment-order
