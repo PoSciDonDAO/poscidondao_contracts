@@ -11,18 +11,19 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1
  * with a wallet. Inherits ERC1155 for multi-token standard support and ERC1155Burnable for burn functionality.
  */
 contract Participation is ERC1155Burnable, AccessControl {
-    error FrozenUri();
+    error Frozen();
     error Unauthorized(address user);
 
     // State variables
-    address public treasuryWallet; // @notice Wallet address for treasury operations.
-    address public govOps; // @notice Governance operations address for administrative actions.
-    string public name = "Participation Token"; // @notice Human-readable name of the token.
-    string public symbol = "PO"; // @notice Abbreviated symbol of the token.
-    bool internal frozenUri = false; // @notice Indicates if the URI has been frozen.
-    string private _uri; // @notice Base URI for token metadata.
-    uint256 private constant PARTICIPATION_TOKEN_ID = 0; // @notice ID for participation token.
-    uint256 private constant MINT_AMOUNT = 1; // @notice Standard mint amount.
+    address public treasuryWallet; /// @notice Wallet address for treasury operations.
+    address public govOps; /// @notice Governance operations address for administrative actions.
+    string public name = "Participation Token"; /// @notice Human-readable name of the token.
+    string public symbol = "PO"; /// @notice Abbreviated symbol of the token.
+    bool internal frozenUri = false; /// @notice Indicates if the URI has been frozen.
+    bool internal frozenGovOps = false; /// @notice Indicates if the GovOps contract address has been frozen.
+    string private _uri; /// @notice Base URI for token metadata.
+    uint256 private constant PARTICIPATION_TOKEN_ID = 0; /// @notice ID for participation token.
+    uint256 private constant MINT_AMOUNT = 1; /// @notice Standard mint amount.
 
     /**
      * @dev Modifier to restrict actions to the Governance Operations address.
@@ -34,16 +35,16 @@ contract Participation is ERC1155Burnable, AccessControl {
 
     // Events
     event MintedTokenInfo(address receiver, uint256 tokenId, uint256 amount);
-    event BurnedTokenInfo(address burner, uint256 tokenId, uint256 amount);
 
     /**
      * @dev Constructor for setting the base URI and treasury wallet address upon deployment.
      * @param baseURI_ Base URI for constructing token-specific URIs.
      * @param treasuryWallet_ Address of the treasury wallet.
      */
-    constructor(string memory baseURI_, address treasuryWallet_)
-        ERC1155(baseURI_)
-    {
+    constructor(
+        string memory baseURI_,
+        address treasuryWallet_
+    ) ERC1155(baseURI_) {
         treasuryWallet = treasuryWallet_;
         _setURI(baseURI_);
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
@@ -53,7 +54,10 @@ contract Participation is ERC1155Burnable, AccessControl {
      * @dev Sets the governance operations address.
      * @param newGovOps Address of the new governance operations.
      */
-    function setGovOps(address newGovOps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setGovOps(
+        address newGovOps
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if(frozenGovOps) revert Frozen();
         govOps = newGovOps;
     }
 
@@ -62,6 +66,13 @@ contract Participation is ERC1155Burnable, AccessControl {
      */
     function freezeUri() external onlyRole(DEFAULT_ADMIN_ROLE) {
         frozenUri = true;
+    }
+
+    /**
+     * @dev Freezes the base URI, preventing any further changes.
+     */
+    function freezeGovOps() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        frozenGovOps = true;
     }
 
     /**
@@ -78,8 +89,10 @@ contract Participation is ERC1155Burnable, AccessControl {
      * and if the URI has not been frozen.
      * @param baseURI New base URI to set.
      */
-    function setURI(string memory baseURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (frozenUri) revert FrozenUri();
+    function setURI(
+        string memory baseURI
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (frozenUri) revert Frozen();
         _setURI(baseURI);
     }
 
@@ -88,7 +101,9 @@ contract Participation is ERC1155Burnable, AccessControl {
      * @param interfaceId Interface identifier to query support of.
      * @return True if the contract supports the queried interface.
      */
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155, AccessControl) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId
+    ) public view virtual override(ERC1155, AccessControl) returns (bool) {
         return
             interfaceId == type(IERC1155).interfaceId ||
             interfaceId == type(IERC1155MetadataURI).interfaceId ||
@@ -100,7 +115,11 @@ contract Participation is ERC1155Burnable, AccessControl {
      * @dev Prevents token transfer functionality by always reverting the transaction.
      */
     function safeTransferFrom(
-        address, address, uint256, uint256, bytes memory
+        address,
+        address,
+        uint256,
+        uint256,
+        bytes memory
     ) public virtual override {
         revert("ERC1155Soulbound: token transfer disabled");
     }
@@ -109,7 +128,11 @@ contract Participation is ERC1155Burnable, AccessControl {
      * @dev Prevents batch token transfer functionality by always reverting the transaction.
      */
     function safeBatchTransferFrom(
-        address, address, uint256[] memory, uint256[] memory, bytes memory
+        address,
+        address,
+        uint256[] memory,
+        uint256[] memory,
+        bytes memory
     ) public virtual override {
         revert("ERC1155Soulbound: token transfer disabled");
     }
