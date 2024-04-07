@@ -46,7 +46,6 @@ contract ParticipationTest is Test {
             hubAddress
         );
 
-        po.grantBurnerRole(treasuryWallet);
         gov.setPoToken(address(po));
         staking.setSciToken(address(sci));
         staking.setGovOps(address(gov));
@@ -91,7 +90,7 @@ contract ParticipationTest is Test {
             false
         );
         gov.vote(id, true, 2000e18, phoneCircuitId);
-        uint256 balance = po.balanceOf(addr1);
+        uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         vm.stopPrank();
     }
@@ -110,17 +109,18 @@ contract ParticipationTest is Test {
             false
         );
         gov.vote(id, true, 2000e18, phoneCircuitId);
-        uint256 balance = po.balanceOf(addr1);
+        uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         staking.lock(2000e18);
         gov.vote(id, true, 2000e18, phoneCircuitId);
+        po.setApprovalForAll(treasuryWallet, true);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
-        po.burn(addr2, 1);
-        uint256 balance1 = po.balanceOf(addr2);
+        po.burn(addr2, 0, 1);
+        uint256 balance1 = po.balanceOf(addr2, 0);
         assertEq(balance1, 0);
         vm.stopPrank();
     }

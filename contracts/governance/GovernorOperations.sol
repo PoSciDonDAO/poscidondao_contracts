@@ -3,8 +3,8 @@ pragma solidity ^0.8.19;
 
 import "./../interface/IParticipation.sol";
 import "./../interface/IStaking.sol";
-import "./../interface/ISci.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
@@ -80,7 +80,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public terminationThreshold;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
-    mapping(address => uint256) private lockedForTermination;
     mapping(uint256 => mapping(address => bool)) private voted;
 
     ///*** ENUMERATORS ***///
@@ -479,7 +478,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amount
     ) external nonReentrant notTerminated {
 
-        ISci(sci).burn(msg.sender, amount);
+        ERC20Burnable(sci).burnFrom(msg.sender, amount);
 
         totBurnedForTermination += amount;
 

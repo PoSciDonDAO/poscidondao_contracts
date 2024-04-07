@@ -26,8 +26,8 @@ contract StakingTest is Test {
     address public treasuryWallet = vm.addr(7);
     address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
 
-    event Locked(address indexed token, address indexed user, uint256 amount);
-    event Freed(address indexed token, address indexed user, uint256 amount);
+    event Locked(address indexed user, uint256 amount);
+    event Freed(address indexed user, uint256 amount);
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
@@ -142,7 +142,7 @@ contract StakingTest is Test {
         vm.startPrank(addr2);
         vm.expectEmit(true, true, true, true);
 
-        emit Locked(address(sci), addr2, 100e18);
+        emit Locked(addr2, 100e18);
 
         staking.lock(100e18);
         vm.stopPrank();

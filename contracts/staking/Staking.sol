@@ -5,7 +5,6 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IStaking} from "contracts/interface/IStaking.sol";
-import {IParticipation} from "contracts/interface/IParticipation.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 
@@ -409,7 +408,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the address for the Participation (PO) token
+     * @dev returns the SCI token contract address
      */
     function getSciAddress() external view returns (address) {
         return address(_sci);
