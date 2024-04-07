@@ -20,18 +20,20 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const stakingAddress = "0x546A7848daa897aCdDd60Ae60685EbD4e8D6b43C";
+  const stakingAddress = "0x0B0464BBC11835EcF8F67Fcb2d98130304dcA162";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const usdc = "0x8d834c8641FbdBB0DFf24a5c343F2e459ea96923";
   const sciToken = "0xC927cB1f391607D376358661E60C9116AE6a531E";
   const poToken = "0xf5369906e03C0bA84956b7c214188cc38A11E9D3";
+  const hubAddress = "0x2aa822e264f8cc31a2b9c22f39e5551241e94dfb";
 
   const constructorArguments = [
-    stakingAddress,
-    treasuryWallet,
-    usdc,
-    sciToken,
-    poToken
+		stakingAddress,
+		treasuryWallet,
+		usdc,
+		sciToken,
+		poToken,
+		hubAddress,
   ];
 
   const Contract = await ethers.getContractFactory("GovernorOperations");

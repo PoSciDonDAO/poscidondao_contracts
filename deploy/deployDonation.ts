@@ -22,15 +22,9 @@ async function main() {
 
   const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
   const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
-  const usdc = "0x8d834c8641FbdBB0DFf24a5c343F2e459ea96923";
-  const weth = "0xb069c3128bF272480a1d638a7736b0C96215da12";
+  const usdc = "0x578928B093423E9622c7F7e7d741eF9397701930";
 
-  const constructorArguments = [
-    donationWallet,
-    treasuryWallet,
-    usdc,
-    weth
-  ];
+  const constructorArguments = [donationWallet, treasuryWallet, usdc];
 
   const Contract = await ethers.getContractFactory("Donation");
   // Estimate contract deployment fee

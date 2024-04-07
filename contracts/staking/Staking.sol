@@ -1,11 +1,10 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IStaking} from "contracts/interface/IStaking.sol";
-import {IParticipation} from "contracts/interface/IParticipation.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 
@@ -15,18 +14,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotClaim();
+    error CannotDelegateToAnotherDelegator();
+    error CannotDelegateToContract();
     error ContractsTerminated();
+    error DelegateAlreadyAdded(address delegate);
+    error DelegateNotAllowListed(address delegate);
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
-    error NotGovernanceContract();
+    error NoVotingPowerToDelegate();
+    error SelfDelegationNotAllowed();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
-    error UnauthorizedDelegation(
-        address owner,
-        address oldDelegate,
-        address newDelegate
-    );
 
     ///*** TOKEN ***//
     IERC20 private _sci;
@@ -49,15 +48,20 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     bool public terminated = false;
+    bool public terminatedOperations = false;
+    bool public terminatedResearchFunding = false;
     address public govOpsContract;
     address public govResContract;
     uint256 private totStaked;
+    uint256 private totDelegated;
+    uint256 public delegateThreshold;
     mapping(address => User) public users;
+    mapping(address => bool) private delegates;
 
     ///*** MODIFIERS ***///
     modifier gov() {
         if (!(msg.sender == govOpsContract || msg.sender == govResContract))
-            revert Unauthorized(_msgSender());
+            revert Unauthorized(msg.sender);
         _;
     }
 
@@ -67,18 +71,19 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event DelegateAdded(address indexed delegate);
+    event DelegateRemoved(address indexed delegate);
     event Delegated(
         address indexed owner,
         address indexed oldDelegate,
-        address indexed newDelegate
+        address indexed newDelegate,
+        uint256 delegatedAmount
     );
     event Freed(
-        address indexed token,
         address indexed user,
         uint256 amountFreed
     );
     event Locked(
-        address indexed token,
         address indexed user,
         uint256 amountLocked
     );
@@ -88,12 +93,19 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 indexed blockNumber
     );
     event Terminated(address admin, uint256 blockNumber);
+    event TerminatedByGovernance(
+        address govContract,
+        address admin,
+        uint256 blockNumber
+    );
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
     event ProposeLockEndTimeUpdated(address user, uint256 proposeLockEndTime);
 
     constructor(address treasuryWallet_, address sci_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _sci = IERC20(sci_);
+        delegateThreshold = 100e18;
+        delegates[address(0)] = true;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -104,6 +116,52 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function setSciToken(address sci) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _sci = IERC20(sci);
+    }
+
+    /**
+     * @dev sets the amount of staked sci tokens needed to become a delegate
+     * @param newThreshold the new threshold to become a delegate
+     */
+    function setDelegateThreshold(
+        uint256 newThreshold
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        delegateThreshold = newThreshold;
+    }
+
+    /**
+     * @dev Adds an address to the delegate whitelist if tokens have been staked
+     * @param newDelegate Address to be added to the whitelist
+     */
+    function addDelegate(
+        address newDelegate
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (delegates[newDelegate]) {
+            revert DelegateAlreadyAdded(newDelegate);
+        }
+        if (
+            users[newDelegate].lockedSci < delegateThreshold &&
+            newDelegate != address(0)
+        )
+            revert InsufficientBalance(
+                users[newDelegate].lockedSci,
+                delegateThreshold
+            );
+        delegates[newDelegate] = true;
+        emit DelegateAdded(newDelegate);
+    }
+
+    /**
+     * @dev Removes an address from the delegate whitelist
+     * @param formerDelegate Address to be removed from the whitelist
+     */
+    function removeDelegate(
+        address formerDelegate
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (!delegates[formerDelegate]) {
+            revert DelegateNotAllowListed(formerDelegate);
+        }
+        delegates[formerDelegate] = false;
+        emit DelegateRemoved(formerDelegate);
     }
 
     /**
@@ -126,26 +184,27 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev delegates the owner's voting rights
-     * @param owner the owner of the delegated voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
-    function delegate(
-        address owner,
-        address newDelegate
-    ) external notTerminated {
+    function delegate(address newDelegate) external nonReentrant notTerminated {
+        address owner = msg.sender;
         address oldDelegate = users[owner].delegate;
+        uint256 lockedSci = users[owner].lockedSci;
+
+        if (newDelegate != address(0) && !delegates[newDelegate])
+            revert DelegateNotAllowListed(newDelegate);
+
+        if (owner == newDelegate) revert SelfDelegationNotAllowed();
 
         if (oldDelegate == newDelegate) revert AlreadyDelegated();
 
-        //check if function caller can change delegation
-        if (
-            !(owner == _msgSender() ||
-                (oldDelegate == _msgSender() && newDelegate == address(0)))
-        ) revert UnauthorizedDelegation(owner, oldDelegate, newDelegate);
+        if (lockedSci == 0 && newDelegate != address(0))
+            revert NoVotingPowerToDelegate();
 
-        users[owner].delegate = newDelegate;
+        if (users[newDelegate].delegate != address(0)) {
+            revert CannotDelegateToAnotherDelegator();
+        }
 
-        //update vote unlock time
         if (oldDelegate != address(0)) {
             users[owner].voteLockEnd = Math.max(
                 users[owner].voteLockEnd,
@@ -159,27 +218,34 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             users[owner].votingRights += users[owner].lockedSci;
 
             _snapshot(owner, users[owner].votingRights);
+
+            totDelegated -= lockedSci;
         }
 
-        //update voting rights for delegate
         if (newDelegate != address(0)) {
             users[newDelegate].votingRights += users[owner].lockedSci;
 
             _snapshot(newDelegate, users[newDelegate].votingRights);
-            //update owner's voting power
+
             users[owner].votingRights = 0;
 
             _snapshot(owner, users[owner].votingRights);
+
+            totDelegated += lockedSci;
+
+            users[owner].delegate = newDelegate;
+        } else {
+            users[owner].delegate = address(0);
         }
 
-        emit Delegated(owner, oldDelegate, newDelegate);
+        emit Delegated(owner, oldDelegate, newDelegate, lockedSci);
     }
 
     /**
      * @dev locks a given amount of SCI tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lockSci(uint256 amount) external notTerminated nonReentrant {
+    function lock(uint256 amount) external nonReentrant notTerminated {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
         IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -191,10 +257,11 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
-            //update voting rights for delegated address
             users[delegated].votingRights += amount;
-            //snapshot of delegate's voting rights
+
             _snapshot(delegated, users[delegated].votingRights);
+
+            totDelegated += amount;
         } else {
             //update voting rights for user
             users[msg.sender].votingRights += amount;
@@ -202,14 +269,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Locked(address(_sci), msg.sender, amount);
+        emit Locked(msg.sender, amount);
     }
 
     /**
      * @dev frees locked tokens after vote or proposal lock end has passed
      * @param amount the amount of tokens that will be freed
      */
-    function freeSci(uint256 amount) external nonReentrant {
+    function free(uint256 amount) external nonReentrant {
         if (
             (users[msg.sender].voteLockEnd > block.timestamp ||
                 users[msg.sender].proposeLockEnd > block.timestamp) &&
@@ -235,7 +302,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
-            //check if delegate did not vote recently
             if (
                 users[delegated].voteLockEnd > block.timestamp && !(terminated)
             ) {
@@ -247,19 +313,22 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
                 users[delegated].voteLockEnd = 0;
             }
 
-            //remove delegate voting rights
             users[delegated].votingRights -= amount;
 
             _snapshot(delegated, users[delegated].votingRights);
+
+            totDelegated -= amount;
+
+            if (users[msg.sender].lockedSci == 0) {
+                users[msg.sender].delegate = address(0);
+            }
         } else {
-            //add new amount of votes as rights
             users[msg.sender].votingRights -= amount;
 
-            //snapshot of voting rights
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Freed(address(_sci), msg.sender, amount);
+        emit Freed(msg.sender, amount);
     }
 
     /**
@@ -295,11 +364,38 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev initiates termination by operations or research funding governance contracts
+     */
+    function terminateByGovernance(
+        address terminator
+    ) external gov nonReentrant notTerminated {
+        if (msg.sender == govOpsContract) {
+            terminatedOperations = true;
+
+            emit TerminatedByGovernance(
+                govOpsContract,
+                terminator,
+                block.number
+            );
+        } else if (msg.sender == govResContract) {
+            terminatedResearchFunding = true;
+
+            emit TerminatedByGovernance(
+                govResContract,
+                terminator,
+                block.number
+            );
+        }
+    }
+
+    /**
      * @dev terminates the staking smart contract
      */
-    function terminate(address admin) external gov notTerminated nonReentrant {
-        terminated = true;
-        emit Terminated(admin, block.number);
+    function terminate(address terminator) external {
+        if (terminatedOperations && terminatedResearchFunding) {
+            terminated = true;
+            emit Terminated(terminator, block.number);
+        }
     }
 
     /**
@@ -312,17 +408,24 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the address for the Participation (PO) token
+     * @dev returns the SCI token contract address
      */
     function getSciAddress() external view returns (address) {
         return address(_sci);
     }
 
     /**
-     * @dev returns the total amount of staked SCI and DON tokens
+     * @dev returns the total amount of staked SCI tokens
      */
     function getTotalStaked() external view returns (uint256) {
         return totStaked;
+    }
+
+    /**
+     * @dev returns the total amount of delegated SCI tokens
+     */
+    function getTotalDelegated() external view returns (uint256) {
+        return totDelegated;
     }
 
     /**
@@ -333,9 +436,18 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev returns true if address is a delegate
+     */
+    function getDelegate(address delegateAddress) external view returns (bool) {
+        return delegates[delegateAddress];
+    }
+
+    /**
      * @dev returns the propose lock end time
      */
-    function getProposeLockEndTime(address user) external view returns (uint256) {
+    function getProposeLockEndTime(
+        address user
+    ) external view returns (uint256) {
         return users[user].proposeLockEnd;
     }
 

@@ -27,6 +27,12 @@ contract SciTest is Test {
         vm.stopPrank();
     }
 
+    function test_InitialMinting() public {
+        uint256 expectedBalance = 1891000 * 10 ** sci.decimals();
+        uint256 actualBalance = sci.balanceOf(treasuryWallet);
+        assertEq(actualBalance, expectedBalance, "Initial minting to the treasury wallet is incorrect");
+    }
+
     function test_MintTokens() public {
         vm.startPrank(treasuryWallet);
             sci.mint(treasuryWallet, 1000000e18);
@@ -37,7 +43,7 @@ contract SciTest is Test {
     function test_BurnTokens() public {
         vm.startPrank(treasuryWallet);
             sci.mint(treasuryWallet, 1000000e18);
-            sci.burn(treasuryWallet, 1000000e18);
+            sci.burn(1000000e18);
             assertEq(sci.totalSupply(), sci.balanceOf(treasuryWallet));
         vm.stopPrank();
     }
