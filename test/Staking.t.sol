@@ -59,9 +59,9 @@ contract StakingTest is Test {
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
         govOps.setPoToken(address(po));
-        govOps.govParams("proposalLifeTime", 4 weeks);
-        govOps.govParams("quorum", 1000e18);
-        govOps.govParams("voteLockEnd", 2 weeks);
+        govOps.setGovParams("proposalLifeTime", 4 weeks);
+        govOps.setGovParams("quorum", 1000e18);
+        govOps.setGovParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 

@@ -58,22 +58,14 @@ contract GovernorResearchTest is Test {
             address(usdc),
             address(sci)
         );
+        govRes.setGovParams("proposalLifeTime", 4 weeks);
+        govRes.setGovParams("quorum", 1);
+        govRes.setGovParams("voteLockTime", 2 weeks);
+        govRes.setGovParams("proposeLockTime", 2 weeks);
 
         staking.setGovRes(address(govRes));
         staking.setGovOps(address(govOps));
         vm.stopPrank();
-
-        deal(address(sci), addr1, 10000000000e18);
-        deal(address(usdc), addr1, 10000e6);
-        deal(addr1, 10000 ether);
-
-        deal(address(sci), addr2, 10000000000e18);
-        deal(address(usdc), addr2, 10000e6);
-        deal(addr2, 10000 ether);
-
-        deal(address(sci), treasuryWallet, 10000000000e18);
-        deal(address(usdc), treasuryWallet, 100000000e6);
-        deal(treasuryWallet, 10000 ether);
 
         deal(address(sci), donationWallet, 10000000000e18);
         deal(address(usdc), donationWallet, 10000000e6);
@@ -86,18 +78,27 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
 
         vm.startPrank(addr1);
+        deal(address(sci), addr1, 10000000000e18);
+        deal(address(usdc), addr1, 10000e6);
+        deal(addr1, 10000 ether);
         sci.approve(address(govRes), 1000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
         staking.lock(2000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
+        deal(address(sci), addr2, 10000000000e18);
+        deal(address(usdc), addr2, 10000e6);
+        deal(addr2, 10000 ether);
         sci.approve(address(govRes), 1000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
         staking.lock(2000e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
+        deal(address(sci), treasuryWallet, 10000000000e18);
+        deal(address(usdc), treasuryWallet, 100000000e6);
+        deal(treasuryWallet, 10000 ether);
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
@@ -224,7 +225,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_finalize() public {
+    function test_FinalizeProposal() public {
         vm.startPrank(addr1);
         staking.lock(120e18);
         uint256 id = govRes.getProposalIndex();
@@ -415,47 +416,22 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_TerminateGovernorAndStakingSmartContracts() public {
-        vm.startPrank(treasuryWallet);
-        govRes.terminateResearch();
-        vm.stopPrank();
-        assertEq(govRes.terminated(), true);
-        vm.startPrank(addr1);
-        bytes4 selector = bytes4(keccak256("ContractTerminated(uint256)"));
-
-        vm.expectRevert(abi.encodeWithSelector(selector, block.number));
-        govRes.propose("Introduction", researchWallet, 500000e6, 0, 0);
-        vm.stopPrank();
-    }
-
-    function test_FreeTokensWhenTerminatedAndVoteLocked() public {
+    function test_TerminateResearchFunding() public {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Introduction", researchWallet, 50000e6, 0, 0);
         govRes.vote(id, true);
+        govRes.burnForTerminatingResearchFunding(19000000e18);
         vm.stopPrank();
-
         vm.startPrank(treasuryWallet);
-        govRes.terminateResearch();
+        govRes.terminateResearchFunding();
         vm.stopPrank();
-
+        assertEq(govRes.terminated(), true);
         vm.startPrank(addr1);
-        staking.free(4000e18);
+        bytes4 selector = bytes4(keccak256("ContractTerminated(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, block.number));
+        govRes.propose("Introduction", researchWallet, 500000e6, 0, 0);
         vm.stopPrank();
-        (
-            uint256 stakedSci,
-            uint256 votingRights,
-            uint256 voteLockEnd,
-            uint256 proposalLockEnd,
-            uint256 amtSnapshots,
-            address delegate
-        ) = staking.users(addr1);
-        assertEq(stakedSci, 0);
-        assertEq(votingRights, 0);
-        assertEq(proposalLockEnd, 0);
-        assertEq(voteLockEnd, 0);
-        assertEq(amtSnapshots, 1);
-        assertEq(delegate, address(0));
     }
 }

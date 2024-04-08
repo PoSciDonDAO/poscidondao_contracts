@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
@@ -11,6 +12,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
     error ContractTerminated(uint256 blockNumber);
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
@@ -48,8 +50,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
-    uint256 public proposalLockTime;
+    uint256 public proposeLockTime;
     uint256 public voteLockTime;
+    uint256 public terminationThreshold;
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
@@ -60,14 +63,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
-    uint256 public totStakedDueDiligence;
+    uint256 public totBurnedForTermination;
     uint256 private _index;
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
     bool public terminated = false;
     uint256 constant VOTE = 1;
     mapping(uint256 => Proposal) private proposals;
-    mapping(uint256 => mapping(address => uint8)) private votedResearch;
+    mapping(uint256 => mapping(address => uint8)) private voted;
     mapping(address => uint8) private proposedResearch;
 
     ///*** ENUMERATORS ***///
@@ -93,6 +96,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event BurnedForTermination(address owner, uint256 amount);
+    event Completed(uint256 indexed id);
+    event Cancelled(uint256 indexed id);
+    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
     event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
     event Voted(
         uint256 indexed id,
@@ -101,9 +108,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 amount
     );
     event Scheduled(uint256 indexed id, bool indexed research);
-    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
-    event Completed(uint256 indexed id);
-    event Cancelled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
 
     constructor(
@@ -121,10 +125,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         ddThreshold = 1000e18;
 
-        proposalLifeTime = 4 weeks;
+        proposalLifeTime = 0;
         quorum = 1;
-        voteLockTime = 2 weeks;
-        proposalLockTime = 4 weeks;
+        voteLockTime = 0;
+        proposeLockTime = 0;
+        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 500; // 5% of the total supply must be burned
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
@@ -152,16 +157,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address member
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         IStaking staking = IStaking(stakingAddress);
-        uint256 stakedAmount = staking.getStakedSci(member);
-        if (staking.getStakedSci(member) > ddThreshold) {
-            totStakedDueDiligence += stakedAmount;
-            grantRole(DUE_DILIGENCE_ROLE, member);
-        } else {
-            revert InsufficientBalance(
-                staking.getStakedSci(member),
-                ddThreshold
-            );
-        }
+        _validateStakingRequirements(staking, member);
+        _grantRole(DUE_DILIGENCE_ROLE, member);
     }
 
     /**
@@ -171,7 +168,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function revokeDueDiligenceRole(
         address member
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        revokeRole(DUE_DILIGENCE_ROLE, member);
+        _revokeRole(DUE_DILIGENCE_ROLE, member);
     }
 
     /**
@@ -196,9 +193,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev sets the staking address
      */
     function setStakingAddress(
-        address _newStakingAddress
+        address newStakingAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        stakingAddress = _newStakingAddress;
+        stakingAddress = newStakingAddress;
     }
 
     /**
@@ -206,7 +203,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function govParams(
+    function setGovParams(
         bytes32 param,
         uint256 data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -221,7 +218,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (param == "voteLockTime") voteLockTime = data;
 
         //the lock time of your tokens and ability to propose after proposing
-        if (param == "proposalLockTime") proposalLockTime = data;
+        if (param == "proposeLockTime") proposeLockTime = data;
+
+        //the amount of tokens that need to be burned to terminate DAO operations governance
+        if (param == "terminationThreshold") terminationThreshold = data;
     }
 
     /**
@@ -246,7 +246,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DUE_DILIGENCE_ROLE)
         returns (uint256)
     {
-        _validateResearchInput(
+        _validateInput(
             info,
             receivingWallet,
             amountUsdc,
@@ -255,13 +255,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         );
 
         IStaking staking = IStaking(stakingAddress);
-        _validateStakingForResearch(staking, msg.sender);
+        _validateStakingRequirements(staking, msg.sender);
 
-        (Payment payment, uint256 amount, uint256 sciAmount) = _determinePayment(
-            amountUsdc,
-            amountCoin,
-            amountSci
-        );
+        (
+            Payment payment,
+            uint256 amount,
+            uint256 sciAmount
+        ) = _determinePayment(amountUsdc, amountCoin, amountSci);
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
@@ -301,16 +301,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (votedResearch[id][msg.sender] == 1) revert VoteLock();
+        if (voted[id][msg.sender] == 1) revert VoteLock();
 
         IStaking staking = IStaking(stakingAddress);
 
         //check if DD member/voter still has enough tokens staked
-        if (staking.getStakedSci(msg.sender) < ddThreshold)
-            revert InsufficientBalance(
-                staking.getStakedSci(msg.sender),
-                ddThreshold
-            );
+        _validateStakingRequirements(staking, msg.sender);
 
         //vote for, against or abstain
         if (support) {
@@ -323,7 +319,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         proposals[id].totalVotes += 1;
 
         //set user as voted for proposal
-        votedResearch[id][msg.sender] = 1;
+        voted[id][msg.sender] = 1;
 
         //set the lock time in the staking contract
         staking.voted(msg.sender, block.timestamp + voteLockTime);
@@ -350,8 +346,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 block.timestamp,
                 proposals[id].endTimeStamp
             );
-        if (proposals[id].totalVotes < quorum)
-            revert QuorumNotReached();
+        if (proposals[id].totalVotes < quorum) revert QuorumNotReached();
 
         proposals[id].status = ProposalStatus.Scheduled;
 
@@ -405,30 +400,52 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancel(
-        uint256 id
-    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id >= _index) revert ProposalInexistent();
+    function cancel(uint256 id) external nonReentrant notTerminated {
+        if (terminated) {
+            proposals[id].status = ProposalStatus.Cancelled;
 
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
+            emit Cancelled(id);
+        } else {
+            if (id >= _index) revert ProposalInexistent();
 
-        proposals[id].status = ProposalStatus.Cancelled;
+            if (proposals[id].status != ProposalStatus.Active)
+                revert IncorrectPhase(proposals[id].status);
 
-        emit Cancelled(id);
+            proposals[id].status = ProposalStatus.Cancelled;
+
+            emit Cancelled(id);
+        }
     }
 
-    //scientists 
+    /**
+     * @dev burns a given amount of SCI tokens for termination
+     * @notice DD role members need to unstake their tokens and burn them here
+     * @param amount the amount of tokens that will be locked
+     */
+    function burnForTerminatingResearchFunding(
+        uint256 amount
+    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+        ERC20Burnable(sci).burnFrom(msg.sender, amount);
+
+        totBurnedForTermination += amount;
+
+        emit BurnedForTermination(msg.sender, amount);
+    }
 
     /**
      * @dev terminates the governance and staking smart contracts
      */
-    function terminateResearch()
+    function terminateResearchFunding()
         external
         notTerminated
         nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
+        if (totBurnedForTermination < terminationThreshold)
+            revert BurnThresholdNotReached(
+                totBurnedForTermination,
+                terminationThreshold
+            );
         IStaking staking = IStaking(stakingAddress);
         staking.terminateByGovernance(msg.sender);
         terminated = true;
@@ -439,8 +456,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
-    function getVotedResearch(uint256 id) external view returns (uint8) {
-        return votedResearch[id][msg.sender];
+    function getVoted(uint256 id) external view returns (uint8) {
+        if (id >= _index) revert ProposalInexistent();
+        return voted[id][msg.sender];
     }
 
     /**
@@ -451,8 +469,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns proposal information
-     * @param id the _index of the proposal of interest
+     * @notice Retrieves detailed information about a specific governance proposal.
+     * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
+     * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @return startBlockNum The block number at which the proposal was made. This helps in tracking the proposal's lifecycle and duration.
+     * @return endTimeStamp The timestamp (block time) by which the proposal voting must be concluded. After this time, the proposal may be finalized or executed based on its status and outcome.
+     * @return status The current status of the proposal, represented as a value from the `ProposalStatus` enum. This status could be Active, Scheduled, Executed, Completed, or Cancelled.
+     * @return details A `ProjectInfo` struct containing the proposal's detailed information such as the project description (IPFS link), the receiving wallet, payment options, and the amounts involved.
+     * @return votesFor The total number of votes in favor of the proposal. This count helps in determining if the proposal has met quorum requirements and the majority's consensus.
+     * @return totalVotes The total number of votes cast for the proposal, including both for and against. This is used to calculate the proposal's overall engagement and participation.
+     * @return quadraticVoting A boolean indicating whether the proposal uses quadratic voting for determining its outcome. Quadratic voting allows for a more nuanced expression of preference and consensus among voters.
      */
     function getProposalInfo(
         uint256 id
@@ -495,7 +521,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * Validation fails if 'info' is empty, 'receivingWallet' is a zero address,
      * or the payment amounts do not meet the specified criteria.
      */
-    function _validateResearchInput(
+    function _validateInput(
         string memory info,
         address receivingWallet,
         uint256 amountUsdc,
@@ -515,16 +541,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev Validates if the proposer meets the staking requirements for proposing research.
      * @param staking The staking contract interface used to check the staked SCI.
-     * @param proposer The address of the proposal initiator.
+     * @param member The address of the member initiating an action.
      *
      * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
      * The staked SCI amount and required threshold are provided in the revert message.
      */
-    function _validateStakingForResearch(
+    function _validateStakingRequirements(
         IStaking staking,
-        address proposer
+        address member
     ) internal view {
-        uint256 stakedSci = staking.getStakedSci(proposer);
+        uint256 stakedSci = staking.getStakedSci(member);
         if (stakedSci < ddThreshold) {
             revert InsufficientBalance(stakedSci, ddThreshold);
         }

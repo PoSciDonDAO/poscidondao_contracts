@@ -49,9 +49,9 @@ contract ParticipationTest is Test {
         gov.setPoToken(address(po));
         staking.setSciToken(address(sci));
         staking.setGovOps(address(gov));
-        gov.govParams("proposalLifeTime", 8 weeks);
-        gov.govParams("quorum", 1000e18);
-        gov.govParams("voteLockTime", 2 weeks);
+        gov.setGovParams("proposalLifeTime", 8 weeks);
+        gov.setGovParams("quorum", 1000e18);
+        gov.setGovParams("voteLockTime", 2 weeks);
         po.setGovOps(address(gov));
         vm.stopPrank();
 

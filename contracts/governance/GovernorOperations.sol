@@ -10,10 +10,16 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "./SybilResistance.sol";
 
+/**
+ * @title GovernorOperations
+ * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
+ * It integrates with external contracts for staking validation and participation rewards.
+ */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    // Custom errors for handling specific revert conditions
     error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
     error ContractTerminated(uint256 blockNumber);
     error IncorrectCoinValue();
@@ -66,6 +72,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public quorum;
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
+    uint256 public terminationThreshold;
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
@@ -78,12 +85,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public opThreshold;
     uint256 private _index;
     uint256 public totBurnedForTermination;
-    uint256 public terminationThreshold;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
     mapping(uint256 => mapping(address => bool)) private voted;
 
     ///*** ENUMERATORS ***///
+
+    /**
+     * @notice Enumerates the different states a proposal can be in.
+     */
     enum ProposalStatus {
         Active,
         Scheduled,
@@ -92,6 +102,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         Cancelled
     }
 
+    /**
+     * @notice Enumerates the different payment options for a proposal.
+     */
     enum Payment {
         None,
         Usdc,
@@ -101,6 +114,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** MODIFIER ***///
+
+    /**
+     * @notice Ensures operations can only proceed if the contract has not been terminated.
+     */
     modifier notTerminated() {
         if (terminated) revert ContractTerminated(block.number);
         _;
@@ -136,7 +153,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         po = IParticipation(po_);
         hub = Hub(hubAddress_);
         opThreshold = 100e18;
-        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 5100; //more than 51% of the total supply must be burned
+        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 5100; //at least 51% of the total supply must be burned
 
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
@@ -198,7 +215,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function govParams(
+    function setGovParams(
         bytes32 param,
         uint256 data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -439,7 +456,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     function complete(
         uint256 id
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external nonReentrant notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         if (id > _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)
@@ -454,21 +471,27 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the _index of the proposal of interest
      */
-    function cancel(uint256 id) external notTerminated {
-        if (id >= _index) revert ProposalInexistent();
+    function cancel(uint256 id) external nonReentrant {
+        if (terminated) {
+            proposals[id].status = ProposalStatus.Cancelled;
 
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
+            emit Cancelled(id);
+        } else {
+            if (id >= _index) revert ProposalInexistent();
 
-        if (block.timestamp < proposals[id].endTimeStamp)
-            revert ProposalOngoing(
-                id,
-                block.timestamp,
-                proposals[id].endTimeStamp
-            );
-        proposals[id].status = ProposalStatus.Cancelled;
+            if (proposals[id].status != ProposalStatus.Active)
+                revert IncorrectPhase(proposals[id].status);
 
-        emit Cancelled(id);
+            if (block.timestamp < proposals[id].endTimeStamp)
+                revert ProposalOngoing(
+                    id,
+                    block.timestamp,
+                    proposals[id].endTimeStamp
+                );
+            proposals[id].status = ProposalStatus.Cancelled;
+
+            emit Cancelled(id);
+        }
     }
 
     /**
@@ -490,12 +513,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function terminateOperations()
         external
-        notTerminated
         nonReentrant
+        notTerminated
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (totBurnedForTermination < terminationThreshold)
-            revert BurnThresholdNotReached(totBurnedForTermination, terminationThreshold);
+            revert BurnThresholdNotReached(
+                totBurnedForTermination,
+                terminationThreshold
+            );
         IStaking staking = IStaking(stakingAddress);
         staking.terminateByGovernance(msg.sender);
         terminated = true;
@@ -526,8 +552,38 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns proposal information
-     * @param id the _index of the proposal of interest
+     * @dev Retrieves the current governance parameters.
+     * @return proposalLifeTime_ The lifetime of a proposal from its creation to its completion.
+     * @return quorum_ The percentage of votes required for a proposal to be considered valid.
+     * @return proposeLockTime_ The lock time before which a new proposal cannot be made.
+     * @return voteLockTime_ The duration for which voting on a proposal is open.
+     * @return terminationThreshold_ The number of failed proposals after which the contract can be terminated.
+     */
+    function getGovernanceParameters()
+        public
+        view
+        returns (uint256, uint256, uint256, uint256, uint256)
+    {
+        return (
+            proposalLifeTime,
+            quorum,
+            proposeLockTime,
+            voteLockTime,
+            terminationThreshold
+        );
+    }
+
+    /**
+     * @notice Retrieves detailed information about a specific governance proposal.
+     * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
+     * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @return startBlockNum The block number at which the proposal was made. This helps in tracking the proposal's lifecycle and duration.
+     * @return endTimeStamp The timestamp (block time) by which the proposal voting must be concluded. After this time, the proposal may be finalized or executed based on its status and outcome.
+     * @return status The current status of the proposal, represented as a value from the `ProposalStatus` enum. This status could be Active, Scheduled, Executed, Completed, or Cancelled.
+     * @return details A `ProjectInfo` struct containing the proposal's detailed information such as the project description (IPFS link), the receiving wallet, payment options, and the amounts involved.
+     * @return votesFor The total number of votes in favor of the proposal. This count helps in determining if the proposal has met quorum requirements and the majority's consensus.
+     * @return totalVotes The total number of votes cast for the proposal, including both for and against. This is used to calculate the proposal's overall engagement and participation.
+     * @return quadraticVoting A boolean indicating whether the proposal uses quadratic voting for determining its outcome. Quadratic voting allows for a more nuanced expression of preference and consensus among voters.
      */
     function getProposalInfo(
         uint256 id

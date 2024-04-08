@@ -64,10 +64,10 @@ contract GovernorOperationsTest is Test {
         po.setGovOps(address(govOps));
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
-        govOps.govParams("proposalLifeTime", 4 weeks);
-        govOps.govParams("quorum", 100e18);
-        govOps.govParams("voteLockTime", 2 weeks);
-        govOps.govParams("proposeLockTime", 2 weeks);
+        govOps.setGovParams("proposalLifeTime", 4 weeks);
+        govOps.setGovParams("quorum", 100e18);
+        govOps.setGovParams("voteLockTime", 2 weeks);
+        govOps.setGovParams("proposeLockTime", 2 weeks);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
@@ -651,39 +651,42 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         assertEq(govOps.totBurnedForTermination(), 1900000e18);
         assertEq(govOps.terminated(), true);
-        // vm.startPrank(addr1);
-        // staking.free(2000e18);
-        // vm.stopPrank();
-        // (
-        //     uint256 stakedSci,
-        //     uint256 votingRights,
-        //     uint256 proposalLockEnd,
-        //     uint256 voteLockEnd,
-        //     uint256 amtSnapshots,
-        //     address delegate
-        // ) = staking.users(addr1);
-        // assertEq(staking.getTotalStaked(), 0);
-        // assertEq(stakedSci, 0);
-        // assertEq(votingRights, 0);
-        // assertEq(proposalLockEnd, 0);
-        // assertEq(voteLockEnd, 0);
-        // assertEq(amtSnapshots, 1);
-        // assertEq(delegate, address(0));
     }
 
     function test_GovOpsDoesNotWorkAfterTermination() public {
         vm.startPrank(addr1);
         govOps.burnForTerminatingOperations(1900000e18);
-        uint256 supply = sci.totalSupply();
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         govOps.terminateOperations();
         vm.stopPrank();
         assertEq(govOps.terminated(), true);
         vm.startPrank(addr1);
-        // bytes4 selector = bytes4(keccak256("ContractsTerminated()"));
-        // vm.expectRevert(abi.encodeWithSelector(selector));
-        // staking.lock(2000e18);
+        bytes4 selector1 = bytes4(keccak256("ContractTerminated(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
+        govOps.propose("Info", opWallet, 500000e6, 0, 0, true, false);
+        vm.stopPrank();
+    }
+
+    function test_CancelProposalsAfterTermination() public {
+        vm.startPrank(addr1);
+        staking.lock(2000e18);
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(0), 0, 0, 0, false, false);
+        govOps.burnForTerminatingOperations(1900000e18);
+        // uint256 supply = sci.totalSupply();
+        vm.stopPrank();
+        vm.startPrank(treasuryWallet);
+        govOps.terminateOperations();
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        govOps.cancel(id);
+        vm.stopPrank();
+        (, , GovernorOperations.ProposalStatus status, , , , ) = govOps
+            .getProposalInfo(id);        
+        assertTrue(status == GovernorOperations.ProposalStatus.Cancelled);
+        assertEq(govOps.terminated(), true);
+        vm.startPrank(addr1);
         bytes4 selector1 = bytes4(keccak256("ContractTerminated(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
         govOps.propose("Info", opWallet, 500000e6, 0, 0, true, false);
