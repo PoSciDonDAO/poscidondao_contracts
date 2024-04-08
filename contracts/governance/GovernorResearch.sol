@@ -60,12 +60,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
-    uint256 private _researchProposalIndex;
+    uint256 public totStakedDueDiligence;
+    uint256 private _index;
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
     bool public terminated = false;
     uint256 constant VOTE = 1;
-    mapping(uint256 => Proposal) private researchProposals;
+    mapping(uint256 => Proposal) private proposals;
     mapping(uint256 => mapping(address => uint8)) private votedResearch;
     mapping(address => uint8) private proposedResearch;
 
@@ -151,7 +152,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address member
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         IStaking staking = IStaking(stakingAddress);
+        uint256 stakedAmount = staking.getStakedSci(member);
         if (staking.getStakedSci(member) > ddThreshold) {
+            totStakedDueDiligence += stakedAmount;
             grantRole(DUE_DILIGENCE_ROLE, member);
         } else {
             revert InsufficientBalance(
@@ -200,25 +203,25 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the governance parameters given data
-     * @param _param the parameter of interest
-     * @param _data the data assigned to the parameter
+     * @param param the parameter of interest
+     * @param data the data assigned to the parameter
      */
     function govParams(
-        bytes32 _param,
-        uint256 _data
+        bytes32 param,
+        uint256 data
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         //the duration of the proposal
-        if (_param == "proposalLifeTime") proposalLifeTime = _data;
+        if (param == "proposalLifeTime") proposalLifeTime = data;
 
         //the amount of tokens needed to pass a proposal
         //provide a percentage of the total supply
-        if (_param == "quorum") quorum = _data;
+        if (param == "quorum") quorum = data;
 
         //the lock time of your tokens after voting
-        if (_param == "voteLockTime") voteLockTime = _data;
+        if (param == "voteLockTime") voteLockTime = data;
 
         //the lock time of your tokens and ability to propose after proposing
-        if (_param == "proposalLockTime") proposalLockTime = _data;
+        if (param == "proposalLockTime") proposalLockTime = data;
     }
 
     /**
@@ -230,7 +233,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param amountCoin the amount of Coin
      * @param amountSci the amount of SCI tokens
      */
-    function proposeResearch(
+    function propose(
         string memory info,
         address receivingWallet,
         uint256 amountUsdc,
@@ -243,7 +246,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DUE_DILIGENCE_ROLE)
         returns (uint256)
     {
-        validateResearchInput(
+        _validateResearchInput(
             info,
             receivingWallet,
             amountUsdc,
@@ -252,9 +255,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         );
 
         IStaking staking = IStaking(stakingAddress);
-        validateStakingForResearch(staking, msg.sender);
+        _validateStakingForResearch(staking, msg.sender);
 
-        (Payment payment, uint256 amount, uint256 sciAmount) = determinePayment(
+        (Payment payment, uint256 amount, uint256 sciAmount) = _determinePayment(
             amountUsdc,
             amountCoin,
             amountSci
@@ -269,7 +272,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             true // Assuming 'true' indicates the proposal is executable
         );
 
-        uint256 currentIndex = storeResearchProposal(projectInfo);
+        uint256 currentIndex = _storeProposal(projectInfo);
 
         emit Proposed(currentIndex, msg.sender, projectInfo);
 
@@ -282,19 +285,19 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param id the index of the proposal
      * @param support true if in support of proposal
      */
-    function voteOnResearch(
+    function vote(
         uint256 id,
         bool support
     ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         //check if proposal exists
-        if (id >= _researchProposalIndex) revert ProposalInexistent();
+        if (id >= _index) revert ProposalInexistent();
 
         //check if proposal is still active
-        if (researchProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(researchProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
         //check if proposal life time has not passed
-        if (block.timestamp > researchProposals[id].endTimeStamp)
+        if (block.timestamp > proposals[id].endTimeStamp)
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
@@ -311,13 +314,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         //vote for, against or abstain
         if (support) {
-            researchProposals[id].votesFor += VOTE;
+            proposals[id].votesFor += VOTE;
         } else {
-            researchProposals[id].votesAgainst += VOTE;
+            proposals[id].votesAgainst += VOTE;
         }
 
         //add to the total votes
-        researchProposals[id].totalVotes += 1;
+        proposals[id].totalVotes += 1;
 
         //set user as voted for proposal
         votedResearch[id][msg.sender] = 1;
@@ -333,24 +336,24 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev finalizes the voting phase for a research proposal
      * @param id the index of the proposal of interest
      */
-    function finalizeVotingResearchProposal(
+    function finalize(
         uint256 id
     ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id >= _researchProposalIndex) revert ProposalInexistent();
+        if (id >= _index) revert ProposalInexistent();
 
-        if (researchProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(researchProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
-        if (block.timestamp < researchProposals[id].endTimeStamp)
+        if (block.timestamp < proposals[id].endTimeStamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                researchProposals[id].endTimeStamp
+                proposals[id].endTimeStamp
             );
-        if (researchProposals[id].totalVotes < quorum)
+        if (proposals[id].totalVotes < quorum)
             revert QuorumNotReached();
 
-        researchProposals[id].status = ProposalStatus.Scheduled;
+        proposals[id].status = ProposalStatus.Scheduled;
 
         emit Scheduled(id, true);
     }
@@ -360,20 +363,20 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param id the index of the proposal of interest
      * @param donated set to true if funds are derived from the donation wallet
      */
-    function executeResearchProposal(
+    function execute(
         uint256 id,
         bool donated
     ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         // Check if proposal exists and has finalized voting
-        if (id >= _researchProposalIndex) revert ProposalInexistent();
-        if (researchProposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(researchProposals[id].status);
+        if (id >= _index) revert ProposalInexistent();
+        if (proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(proposals[id].status);
 
         // Extract proposal details
-        address receivingWallet = researchProposals[id].details.receivingWallet;
-        uint256 amount = researchProposals[id].details.amount;
-        uint256 amountSci = researchProposals[id].details.amountSci;
-        Payment payment = researchProposals[id].details.payment;
+        address receivingWallet = proposals[id].details.receivingWallet;
+        uint256 amount = proposals[id].details.amount;
+        uint256 amountSci = proposals[id].details.amountSci;
+        Payment payment = proposals[id].details.payment;
 
         // Determine the source wallet based on the 'donated' flag
         address sourceWallet = donated ? donationWallet : treasuryWallet;
@@ -394,7 +397,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             _transferCoin(sourceWallet, receivingWallet, amount);
         }
 
-        researchProposals[id].status = ProposalStatus.Executed;
+        proposals[id].status = ProposalStatus.Executed;
         emit Executed(id, donated, amount);
     }
 
@@ -402,18 +405,20 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancelResearchProposal(
+    function cancel(
         uint256 id
     ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id >= _researchProposalIndex) revert ProposalInexistent();
+        if (id >= _index) revert ProposalInexistent();
 
-        if (researchProposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(researchProposals[id].status);
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
 
-        researchProposals[id].status = ProposalStatus.Cancelled;
+        proposals[id].status = ProposalStatus.Cancelled;
 
         emit Cancelled(id);
     }
+
+    //scientists 
 
     /**
      * @dev terminates the governance and staking smart contracts
@@ -425,7 +430,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         IStaking staking = IStaking(stakingAddress);
-        staking.terminate(msg.sender);
+        staking.terminateByGovernance(msg.sender);
         terminated = true;
         emit Terminated(msg.sender, block.number);
     }
@@ -441,46 +446,38 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev returns the proposal index
      */
-    function getResearchProposalIndex() external view returns (uint256) {
-        return _researchProposalIndex;
+    function getProposalIndex() external view returns (uint256) {
+        return _index;
     }
 
     /**
      * @dev returns proposal information
-     * @param id the index of the proposal of interest
+     * @param id the _index of the proposal of interest
      */
-    function getResearchProposalInfo(
+    function getProposalInfo(
         uint256 id
     )
         external
         view
-        returns (uint256, uint256, ProposalStatus, uint256, uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            ProposalStatus,
+            ProjectInfo memory,
+            uint256,
+            uint256,
+            uint256
+        )
     {
-        if (id > _researchProposalIndex) revert ProposalInexistent();
+        if (id > _index) revert ProposalInexistent();
         return (
-            researchProposals[id].startBlockNum,
-            researchProposals[id].endTimeStamp,
-            researchProposals[id].status,
-            researchProposals[id].votesFor,
-            researchProposals[id].votesAgainst,
-            researchProposals[id].totalVotes
-        );
-    }
-
-    /**
-     * @dev returns research project info information
-     * @param id the index of the proposal of interest
-     */
-    function getResearchProposalProjectInfo(
-        uint256 id
-    ) external view returns (string memory, address, Payment, uint256, uint256) {
-        if (id > _researchProposalIndex) revert ProposalInexistent();
-        return (
-            researchProposals[id].details.info,
-            researchProposals[id].details.receivingWallet,
-            researchProposals[id].details.payment,
-            researchProposals[id].details.amount,
-            researchProposals[id].details.amountSci
+            proposals[id].startBlockNum,
+            proposals[id].endTimeStamp,
+            proposals[id].status,
+            proposals[id].details,
+            proposals[id].votesFor,
+            proposals[id].votesAgainst,
+            proposals[id].totalVotes
         );
     }
 
@@ -498,7 +495,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * Validation fails if 'info' is empty, 'receivingWallet' is a zero address,
      * or the payment amounts do not meet the specified criteria.
      */
-    function validateResearchInput(
+    function _validateResearchInput(
         string memory info,
         address receivingWallet,
         uint256 amountUsdc,
@@ -523,7 +520,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
      * The staked SCI amount and required threshold are provided in the revert message.
      */
-    function validateStakingForResearch(
+    function _validateStakingForResearch(
         IStaking staking,
         address proposer
     ) internal view {
@@ -546,7 +543,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * Only one of amountUsdc, amountCoin, or amountSci should be greater than zero, except for a specific combination
      * where SciUsdc is chosen as the payment method.
      */
-    function determinePayment(
+    function _determinePayment(
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci
@@ -575,11 +572,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param projectInfo Struct containing information about the project.
      * @return uint256 The index of the newly stored research proposal.
      *
-     * @notice The function increments the _researchProposalIndex after storing the proposal.
+     * @notice The function increments the _index after storing the proposal.
      * The proposal is stored with an Active status and initialized voting counters.
      * The function returns the index at which the new proposal is stored.
      */
-    function storeResearchProposal(
+    function _storeProposal(
         ProjectInfo memory projectInfo
     ) internal returns (uint256) {
         Proposal memory proposal = Proposal(
@@ -592,8 +589,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             0
         );
 
-        uint256 currentIndex = _researchProposalIndex++;
-        researchProposals[currentIndex] = proposal;
+        uint256 currentIndex = _index++;
+        proposals[currentIndex] = proposal;
 
         return currentIndex;
     }

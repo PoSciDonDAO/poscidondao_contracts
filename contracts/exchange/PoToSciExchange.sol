@@ -9,7 +9,7 @@ import {ERC1155Burnable} from "../../lib/openzeppelin-contracts/contracts/token/
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title PoToSciExchange
+ * @title PoToSciExchange Contract
  * @dev Contract to exchange Participation (PO) tokens for SCI tokens at a defined rate. 
  * Supports burning a percentage of SCI tokens as part of the exchange.
  */
@@ -18,18 +18,18 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
 
     error IncorrectInput(); // Custom error for invalid input validation.
 
-    /// @dev Interfaces for interacting with the ERC1155Burnable PO token, ERC20Burnable and IERC20 SCI token.
+    /// @notice Interfaces for interacting with the ERC1155Burnable PO token, ERC20Burnable and IERC20 SCI token.
     ERC1155Burnable private po;
     ERC20Burnable private bSci;
     IERC20 private eSci;
 
     /// @notice Address of the wallet holding rewards and responsible for executing token transfers.
     address public rewardWallet;
-    
+
     /// @notice Conversion rate for exchanging PO tokens to SCI tokens.
     uint256 public conversionRate;
 
-    /// @dev Event to log the exchange activity.
+    /// @notice Event to log the exchange activity.
     event Exchanged(
         address user,
         uint256 poAmount,
