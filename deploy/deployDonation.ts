@@ -20,11 +20,12 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
-  const usdc = "0x578928B093423E9622c7F7e7d741eF9397701930";
+  const donationWallet = "0x17F061d017FA5DF401326f1859779148aaA21831";
+  const treasuryWallet = "0x681237e285d8630e992D2DbbDd8F2FAf1435bD36";
+  const usdc = "0x235ae97b28466db30469b89a9fe4cff0659f82cb";
+  const weth = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
 
-  const constructorArguments = [donationWallet, treasuryWallet, usdc];
+  const constructorArguments = [donationWallet, treasuryWallet, usdc, weth];
 
   const Contract = await ethers.getContractFactory("Donation");
   // Estimate contract deployment fee
@@ -45,7 +46,7 @@ async function main() {
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
   console.log("Verifying contract in 2 minutes...");
-  await sleep(120000 * 1);
+  await sleep(600000 * 1);
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],

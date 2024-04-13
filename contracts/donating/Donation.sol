@@ -1,4 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+
+/**
+ * Copyright (c) 2024, PoSciDonDAO Foundation.
+ * 
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero 
+ * General Public License as published by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+ * implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public 
+ * License for more details.
+ * 
+ * You should have received a copy of the GNU Affero General Public License along with this program.  If not, 
+ * see <http://www.gnu.org/licenses/>.
+ */
 pragma solidity ^0.8.19;
 
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -6,6 +21,9 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.s
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+/// @title Donation Contract
+/// @notice Allows users to donate USDC, WETH or MATIC to a specified donation and treasury wallet.
+/// @dev This contract utilizes OpenZeppelin's SafeERC20, ReentrancyGuard, and AccessControl for secure and role-based interactions.
 contract Donation is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -14,7 +32,7 @@ contract Donation is AccessControl, ReentrancyGuard {
 
     uint256 public donationFraction;
     uint256 public donationThresholdMatic;
-    uint256 public donationThresholdUsdc;
+    uint256 public donationThresholdUsdc; 
     uint256 public donationThresholdWeth;
 
     address public donationWallet;
@@ -28,6 +46,13 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 donation
     );
 
+    /**
+     * @notice Initializes the contract with donation and treasury wallet addresses and default thresholds.
+     * @param donationWallet_ Address of the donation wallet.
+     * @param treasuryWallet_ Address of the treasury wallet.
+     * @param usdc_ Address of the USDC token contract.
+     * @param weth_ Address of the WETH token contract.
+     */
     constructor(
         address donationWallet_,
         address treasuryWallet_,
@@ -35,27 +60,39 @@ contract Donation is AccessControl, ReentrancyGuard {
         address weth_
     ) {
         donationFraction = 95;
-        donationThresholdMatic = 5e17;
-        donationThresholdUsdc = 1e6;
-        donationThresholdWeth = 1e15;
+        donationThresholdMatic = 5e17; //0.5 MATIC
+        donationThresholdUsdc = 1e6; //1 USDC
+        donationThresholdWeth = 1e15; //0.001 WETH
 
         donationWallet = donationWallet_;
         treasuryWallet = treasuryWallet_;
-        _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+
         usdc = usdc_;
         weth = weth_;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the staking contract address
-     * @param usdcAddress the address of the staking contract
+     * @dev Sets the address of the USDC token contract
+     * @param usdcAddress The USDC contract address
      */
     function setUsdcAddress(
         address usdcAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         usdc = usdcAddress;
+    }
+
+    /**
+     * @dev Sets the address of the WETH token contract
+     * @param wethAddress the WETH contract address
+     */
+    function setWethAddress(
+        address wethAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        weth = wethAddress;
     }
 
     /**
@@ -85,17 +122,15 @@ contract Donation is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sends MATIC donations to the donation & treasury wallet
-     * @param user the user that donates the Ether
+     * @dev Sends MATIC to the donation & treasury wallet
+     * @param user The user that donates MATIC
      */
     function donateMatic(address user) external payable nonReentrant {
-        //check if the donation Threshold has been reached
         if (msg.value < donationThresholdMatic) revert InsufficientDonation();
 
         uint256 amountDonation = (msg.value / 100) * donationFraction;
         uint256 amountTreasury = (msg.value / 100) * (100 - donationFraction);
 
-        //transfer Eth to donation wallet if successful
         (bool sentDonation, ) = donationWallet.call{value: amountDonation}("");
         (bool sentTreasury, ) = treasuryWallet.call{value: amountTreasury}("");
         require(sentDonation && sentTreasury);
@@ -105,21 +140,19 @@ contract Donation is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sends donated USDC to the donation & treasury wallet
-     * @param user the user that donates the USDC
-     * @param usdcAmount the amount of donated USDC
+     * @dev Sends USDC to the donation & treasury wallets
+     * @param user The user that donates the USDC
+     * @param usdcAmount The amount of donated USDC
      */
     function donateUsdc(
         address user,
         uint256 usdcAmount
     ) external nonReentrant {
-        //check if the donation Threshold has been reached
         if (usdcAmount < donationThresholdUsdc) revert InsufficientDonation();
 
         uint256 amountDonation = (usdcAmount / 100) * donationFraction;
         uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
-        //pull usdc from wallet to donation wallet
         IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
         IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
 
@@ -128,21 +161,19 @@ contract Donation is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sends donated WETH to the donation & treasury wallet
-     * @param user the user that donates the USDC
-     * @param wethAmount the amount of donated USDC
+     * @dev Sends WETH to the donation & treasury wallets
+     * @param user the user that donates the WETH
+     * @param wethAmount the amount of donated WETH
      */
     function donateWeth(
         address user,
         uint256 wethAmount
     ) external nonReentrant {
-        //check if the donation Threshold has been reached
         if (wethAmount < donationThresholdWeth) revert InsufficientDonation();
 
         uint256 amountDonation = (wethAmount / 100) * donationFraction;
         uint256 amountTreasury = (wethAmount / 100) * (100 - donationFraction);
 
-        //pull usdc from wallet to donation wallet
         IERC20(weth).safeTransferFrom(user, donationWallet, amountDonation);
         IERC20(weth).safeTransferFrom(user, treasuryWallet, amountTreasury);
 
