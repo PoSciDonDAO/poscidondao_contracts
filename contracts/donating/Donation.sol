@@ -42,12 +42,12 @@ contract Donation is AccessControl, ReentrancyGuard {
 
     event DonationCompleted(
         address indexed user,
-        address asset,
-        uint256 donation
+        address indexed asset,
+        uint256 amount
     );
 
     /**
-     * @notice Initializes the contract with donation and treasury wallet addresses and default thresholds.
+     * @notice Initializes contract with key wallet addresses & thresholds.
      * @param donationWallet_ Address of the donation wallet.
      * @param treasuryWallet_ Address of the treasury wallet.
      * @param usdc_ Address of the USDC token contract.
@@ -60,9 +60,9 @@ contract Donation is AccessControl, ReentrancyGuard {
         address weth_
     ) {
         donationFraction = 95;
-        donationThresholdMatic = 5e17; //0.5 MATIC
-        donationThresholdUsdc = 1e6; //1 USDC
-        donationThresholdWeth = 1e15; //0.001 WETH
+        donationThresholdMatic = 1e17; //0.1 MATIC
+        donationThresholdUsdc = 1e5; //0.1 USDC
+        donationThresholdWeth = 1e14; //0.0001 WETH
 
         donationWallet = donationWallet_;
         treasuryWallet = treasuryWallet_;
@@ -123,9 +123,8 @@ contract Donation is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Sends MATIC to the donation & treasury wallet
-     * @param user The user that donates MATIC
      */
-    function donateMatic(address user) external payable nonReentrant {
+    function donateMatic() external payable nonReentrant {
         if (msg.value < donationThresholdMatic) revert InsufficientDonation();
 
         uint256 amountDonation = (msg.value / 100) * donationFraction;
@@ -136,16 +135,14 @@ contract Donation is AccessControl, ReentrancyGuard {
         require(sentDonation && sentTreasury);
 
         //emit event
-        emit DonationCompleted(user, address(0), msg.value);
+        emit DonationCompleted(msg.sender, address(0), msg.value);
     }
 
     /**
      * @dev Sends USDC to the donation & treasury wallets
-     * @param user The user that donates the USDC
      * @param usdcAmount The amount of donated USDC
      */
     function donateUsdc(
-        address user,
         uint256 usdcAmount
     ) external nonReentrant {
         if (usdcAmount < donationThresholdUsdc) revert InsufficientDonation();
@@ -153,20 +150,18 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 amountDonation = (usdcAmount / 100) * donationFraction;
         uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
-        IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
-        IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
+        IERC20(usdc).safeTransferFrom(msg.sender, donationWallet, amountDonation);
+        IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amountTreasury);
 
         //emit event
-        emit DonationCompleted(user, address(usdc), usdcAmount);
+        emit DonationCompleted(msg.sender, address(usdc), usdcAmount);
     }
 
     /**
      * @dev Sends WETH to the donation & treasury wallets
-     * @param user the user that donates the WETH
      * @param wethAmount the amount of donated WETH
      */
     function donateWeth(
-        address user,
         uint256 wethAmount
     ) external nonReentrant {
         if (wethAmount < donationThresholdWeth) revert InsufficientDonation();
@@ -174,10 +169,10 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 amountDonation = (wethAmount / 100) * donationFraction;
         uint256 amountTreasury = (wethAmount / 100) * (100 - donationFraction);
 
-        IERC20(weth).safeTransferFrom(user, donationWallet, amountDonation);
-        IERC20(weth).safeTransferFrom(user, treasuryWallet, amountTreasury);
+        IERC20(weth).safeTransferFrom(msg.sender, donationWallet, amountDonation);
+        IERC20(weth).safeTransferFrom(msg.sender, treasuryWallet, amountTreasury);
 
         //emit event
-        emit DonationCompleted(user, address(weth), wethAmount);
+        emit DonationCompleted(msg.sender, address(weth), wethAmount);
     }
 }

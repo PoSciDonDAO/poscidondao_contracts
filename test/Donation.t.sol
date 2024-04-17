@@ -26,7 +26,7 @@ contract DonationTest is Test {
     function setUp() public {
 
         usdc = new MockUsdc(10000000e6);
-        weth = new MockWeth(10000000e6);
+        weth = new MockWeth(10000000e18);
 
         vm.startPrank(dao);
             don = new Donation(
@@ -60,7 +60,7 @@ contract DonationTest is Test {
 
     function test_DonateUsdc() public {
         vm.startPrank(addr2);
-            don.donateUsdc(addr2, 1000e6);
+            don.donateUsdc(1000e6);
             assertEq(usdc.balanceOf(donationWallet), 950e6);
             assertEq(usdc.balanceOf(treasuryWallet), 50e6);
         vm.stopPrank();
@@ -70,7 +70,7 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
             emit DonationCompleted(addr2, address(usdc), 1000e6);
-            don.donateUsdc(addr2, 1000e6);
+            don.donateUsdc(1000e6);
         vm.stopPrank();
     }
 
@@ -78,13 +78,13 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
             vm.expectRevert(selector);
-            don.donateUsdc(addr2, 1e5);
+            don.donateUsdc(1e5);
         vm.stopPrank();
     }
 
     function test_DonateMatic() public {
         vm.startPrank(addr2);
-            don.donateMatic{value: 100e18}(addr2);
+            don.donateMatic{value: 100e18}();
             assertEq(donationWallet.balance, 95e18);
             assertEq(treasuryWallet.balance, 5e18);
         vm.stopPrank();
@@ -92,7 +92,7 @@ contract DonationTest is Test {
 
     function test_DonateWeth() public {
         vm.startPrank(addr2);
-            don.donateWeth(addr2, 1000e18);
+            don.donateWeth(1000e18);
             assertEq(weth.balanceOf(donationWallet), 950e18);
             assertEq(weth.balanceOf(treasuryWallet), 50e18);
         vm.stopPrank();
@@ -102,13 +102,13 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
             vm.expectRevert(selector);
-            don.donateMatic{value: 0.00001e18}(addr2);
+            don.donateMatic{value: 0.00001e18}();
         vm.stopPrank();
     }
 
     function test_DonateHighMaticAmount() public {
         vm.startPrank(addr2);
-            don.donateMatic{value: 1000000e18}(addr2);
+            don.donateMatic{value: 1000000e18}();
             assertEq(donationWallet.balance, 950000e18);
             assertEq(treasuryWallet.balance, 50000e18);
         vm.stopPrank();
@@ -118,7 +118,7 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
             emit DonationCompleted(addr2, address(0), 1e18);
-            don.donateMatic{value: 1e18}(addr2);
+            don.donateMatic{value: 1e18}();
         vm.stopPrank();
     }
 }

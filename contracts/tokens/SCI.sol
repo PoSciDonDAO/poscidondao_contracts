@@ -28,7 +28,7 @@ contract Sci is ERC20Burnable, AccessControl {
     constructor(address _treasuryWallet) ERC20("PoSciDonDAO", "SCI") {
         treasuryWallet = _treasuryWallet;
         _grantRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
-        _mint(_treasuryWallet, 1891000 * (10 ** decimals()));
+        _mint(_treasuryWallet, 18910000 * (10 ** decimals()));
     }
 
     /**

@@ -28,7 +28,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     error Unauthorized(address user);
 
     ///*** TOKEN ***//
-    IERC20 private _sci;
+    IERC20 private sci;
 
     ///*** STRUCTS ***///
     struct User {
@@ -81,11 +81,13 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     );
     event Freed(
         address indexed user,
-        uint256 amountFreed
+        address indexed asset,
+        uint256 amount
     );
     event Locked(
         address indexed user,
-        uint256 amountLocked
+        address indexed asset,
+        uint256 amount
     );
     event Snapshotted(
         address indexed owner,
@@ -103,7 +105,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     constructor(address treasuryWallet_, address sci_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-        _sci = IERC20(sci_);
+        sci = IERC20(sci_);
         delegateThreshold = 100e18;
         delegates[address(0)] = true;
     }
@@ -112,10 +114,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the sci token address.
-     * @param sci the address of the tradable ($SCI) token
+     * @param sciTokenAddress the address of the tradable ($SCI) token
      */
-    function setSciToken(address sci) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _sci = IERC20(sci);
+    function setSciToken(address sciTokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        sci = IERC20(sciTokenAddress);
     }
 
     /**
@@ -247,7 +249,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function lock(uint256 amount) external nonReentrant notTerminated {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
-        IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
 
         //add to total staked amount
         totStaked += amount;
@@ -269,7 +271,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Locked(msg.sender, amount);
+        emit Locked(msg.sender, address(sci), amount);
     }
 
     /**
@@ -292,7 +294,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
 
         //return SCI tokens
-        IERC20(_sci).safeTransfer(msg.sender, amount);
+        IERC20(sci).safeTransfer(msg.sender, amount);
 
         //deduct amount from total staked
         totStaked -= amount;
@@ -328,7 +330,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Freed(msg.sender, amount);
+        emit Freed(msg.sender, address(sci), amount);
     }
 
     /**
@@ -411,7 +413,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev returns the SCI token contract address
      */
     function getSciAddress() external view returns (address) {
-        return address(_sci);
+        return address(sci);
     }
 
     /**

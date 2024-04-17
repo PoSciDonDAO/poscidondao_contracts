@@ -22,7 +22,7 @@ async function main() {
 
   const donationWallet = "0x17F061d017FA5DF401326f1859779148aaA21831";
   const treasuryWallet = "0x681237e285d8630e992D2DbbDd8F2FAf1435bD36";
-  const usdc = "0x235ae97b28466db30469b89a9fe4cff0659f82cb";
+  const usdc = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
   const weth = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
 
   const constructorArguments = [donationWallet, treasuryWallet, usdc, weth];
