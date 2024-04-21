@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log(`Running deploy script for the MockWeth contract`);
+  console.log(`Running deploy script for the Swap contract`);
   // load wallet private key from env file
   const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -20,11 +20,13 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const amount = ethers.utils.parseUnits("100000", 18);
+  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const sci = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
+  const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
+  const weth = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
+  const constructorArguments = [treasuryWallet, sci, usdc, weth];
 
-  const constructorArguments = [amount];
-
-  const Contract = await ethers.getContractFactory("MockWeth");
+  const Contract = await ethers.getContractFactory("Swap");
   // Estimate contract deployment fee
   const estimatedGas = await ethers.provider.estimateGas(
     Contract.getDeployTransaction(...constructorArguments)
@@ -50,7 +52,6 @@ async function main() {
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],
-    // contract: "contracts/test/MockWeth.sol:MockWeth"
   });
   console.log(`${contract.address} has been verified`);
 }

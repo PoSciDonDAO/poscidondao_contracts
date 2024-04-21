@@ -20,10 +20,10 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const donationWallet = "0x17F061d017FA5DF401326f1859779148aaA21831";
-  const treasuryWallet = "0x681237e285d8630e992D2DbbDd8F2FAf1435bD36";
-  const usdc = "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359";
-  const weth = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
+  const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
+  const weth = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
 
   const constructorArguments = [donationWallet, treasuryWallet, usdc, weth];
 
@@ -46,7 +46,7 @@ async function main() {
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
   console.log("Verifying contract in 2 minutes...");
-  await sleep(600000 * 1);
+  await sleep(60000 * 1);
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],
