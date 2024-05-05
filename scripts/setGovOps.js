@@ -6,11 +6,11 @@ async function main() {
 	const INFURA_KEY = process.env.INFURA_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-mumbai.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x4c0a31795F7f5fE41431DBb176474F74f172B918";
+	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
+	const contractAddressStaking = "0x3E0270c0b83e1b9D7CAc49fEbF829596e8F35AB6";
 	const contractAddressParticipation =
-		"0xE0B812Cd0537316F7E1e569444020313a9682815";
-	const newGovOpsAddress = "0xF23140d8434136DFb0E166096543E1edB2EAe9de";
+		"0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
+	const newGovOpsAddress = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
 
 	if (!newGovOpsAddress) {
 		console.error(

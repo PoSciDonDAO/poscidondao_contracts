@@ -21,7 +21,7 @@ contract DonationTest is Test {
     address donationWallet = vm.addr(7);
     address treasuryWallet = vm.addr(8);
 
-    event DonationCompleted(address indexed user, address asset, uint256 donation);
+    event DonationCompleted(address indexed user, address indexed asset, uint256 donation);
 
     function setUp() public {
 
@@ -78,7 +78,7 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
             vm.expectRevert(selector);
-            don.donateUsdc(1e5);
+            don.donateUsdc(1e3);
         vm.stopPrank();
     }
 
@@ -102,7 +102,7 @@ contract DonationTest is Test {
         vm.startPrank(addr2);
             bytes4 selector = bytes4(keccak256("InsufficientDonation()"));
             vm.expectRevert(selector);
-            don.donateMatic{value: 0.00001e18}();
+            don.donateMatic{value: 1e15}();
         vm.stopPrank();
     }
 
@@ -114,7 +114,7 @@ contract DonationTest is Test {
         vm.stopPrank();
     }
 
-    function test_donateMaticMintEvent() public {
+    function test_DonateMaticMintEvent() public {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
             emit DonationCompleted(addr2, address(0), 1e18);

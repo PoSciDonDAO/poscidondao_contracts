@@ -28,7 +28,7 @@ contract SciTest is Test {
     }
 
     function test_InitialMinting() public {
-        uint256 expectedBalance = 1891000 * 10 ** sci.decimals();
+        uint256 expectedBalance = 4538400 * 10 ** sci.decimals();
         uint256 actualBalance = sci.balanceOf(treasuryWallet);
         assertEq(actualBalance, expectedBalance, "Initial minting to the treasury wallet is incorrect");
     }

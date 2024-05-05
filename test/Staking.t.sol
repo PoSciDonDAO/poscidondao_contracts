@@ -26,8 +26,16 @@ contract StakingTest is Test {
     address public treasuryWallet = vm.addr(7);
     address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
 
-    event Locked(address indexed user, uint256 amount);
-    event Freed(address indexed user, uint256 amount);
+    event Locked(
+        address indexed user,
+        address indexed asset,
+        uint256 amount
+    );
+    event Freed(
+        address indexed user,
+        address indexed asset,
+        uint256 amount
+    );
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
@@ -146,7 +154,7 @@ contract StakingTest is Test {
         vm.startPrank(addr2);
         vm.expectEmit(true, true, true, true);
 
-        emit Locked(addr2, 100e18);
+        emit Locked(addr2, address(sci), 100e18);
 
         staking.lock(100e18);
         vm.stopPrank();
@@ -386,8 +394,8 @@ contract StakingTest is Test {
 
     function test_TerminateStakingIfBothGovernorsAreTerminated() public {
         vm.startPrank(addr5);
-        govRes.burnForTerminatingResearchFunding(100000e18);
-        govOps.burnForTerminatingOperations(100000000e18);
+        govRes.burnForTerminatingResearchFunding(1000000e18);
+        govOps.burnForTerminatingOperations(300000000e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);

@@ -74,7 +74,6 @@ contract GovernorOperationsTest is Test {
         usdc.approve(address(govOps), 100000000000000e6);
         sci.approve(address(govOps), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
-        deal(address(sci), treasuryWallet, 10000e18);
         deal(address(usdc), treasuryWallet, 100000000e6);
         deal(treasuryWallet, 10000 ether);
         vm.stopPrank();
@@ -638,26 +637,24 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_TerminateGovOps() public {
-        vm.startPrank(addr1);
+        vm.startPrank(treasuryWallet);
         staking.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), 0, 0, 0, false, false);
         govOps.vote(id, true, 2000e18, phoneCircuitId);
-        govOps.burnForTerminatingOperations(1900000e18);
+        govOps.burnForTerminatingOperations(3900000e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
         govOps.terminateOperations();
         vm.stopPrank();
-        assertEq(govOps.totBurnedForTermination(), 1900000e18);
+        assertEq(govOps.totBurnedForTermination(), 3900000e18);
         assertEq(govOps.terminated(), true);
     }
 
     function test_GovOpsDoesNotWorkAfterTermination() public {
-        vm.startPrank(addr1);
-        govOps.burnForTerminatingOperations(1900000e18);
-        vm.stopPrank();
         vm.startPrank(treasuryWallet);
+        govOps.burnForTerminatingOperations(3900000e18);
         govOps.terminateOperations();
         vm.stopPrank();
         assertEq(govOps.terminated(), true);
@@ -669,11 +666,11 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_CancelProposalsAfterTermination() public {
-        vm.startPrank(addr1);
+        vm.startPrank(treasuryWallet);
         staking.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), 0, 0, 0, false, false);
-        govOps.burnForTerminatingOperations(1900000e18);
+        govOps.burnForTerminatingOperations(3900000e18);
         // uint256 supply = sci.totalSupply();
         vm.stopPrank();
         vm.startPrank(treasuryWallet);

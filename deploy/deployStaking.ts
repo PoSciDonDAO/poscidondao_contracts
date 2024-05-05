@@ -21,7 +21,7 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sciToken = "0x6753d635E379A914E74f90f44a60e2592802BF20";
+  const sciToken = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
 
   const constructorArguments = [treasuryWallet, sciToken];
 
