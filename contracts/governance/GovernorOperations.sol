@@ -8,7 +8,6 @@ import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ER
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "./SybilResistance.sol";
 
 /**
  * @title GovernorOperations
@@ -79,9 +78,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public treasuryWallet;
     address public usdc;
     address public sci;
+    address private signerAddress;
+    address public recoveredAddress;
 
     ///*** STORAGE & MAPPINGS ***///
-    Hub private hub;
     uint256 public opThreshold;
     uint256 private _index;
     uint256 public totBurnedForTermination;
@@ -144,17 +144,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address usdc_,
         address sci_,
         address po_,
-        address hubAddress_
+        address signerAddress_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
         po = IParticipation(po_);
-        hub = Hub(hubAddress_);
+        signerAddress = signerAddress_;
         opThreshold = 100e18;
-        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 5100; //at least 51% of the total supply must be burned
-
+        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 3300; //at least 33% of the total supply must be burned
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
@@ -164,15 +163,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
-
-    /**
-     * @dev sets the Hub address
-     */
-    function setHubAddress(
-        address hubAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        hub = Hub(hubAddress);
-    }
 
     /**
      * @dev sets the threshold for members to propose
@@ -300,74 +290,46 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return currentIndex;
     }
 
+
+    function voteQV(
+        uint id,
+        bool support,
+        uint votes,
+        bool isUnique,
+        bytes memory signature
+    ) external nonReentrant {
+        _commonVotingChecks(id, votes);
+        _quadraticVotingChecks(id, isUnique, signature);
+
+        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
+            msg.sender
+        );
+        if(votes > votingRights) revert InsufficientVotingRights(votingRights, votes);
+
+        uint256 actualVotes = _sqrt(votes);
+        _recordVote(id, support, actualVotes);
+    }
+
     /**
      * @dev vote for an option of a given proposal
      *      using the rights from the most recent snapshot
      * @param id the _index of the proposal
      * @param support user's choice to support a proposal or not
      * @param votes the amount of votes
-     * @param circuitId the identifier of holonym v3's zkp circuit
      */
-    function vote(
-        uint256 id,
+    function voteStandard(
+        uint id,
         bool support,
-        uint256 votes,
-        bytes32 circuitId
-    ) external nonReentrant notTerminated {
-        //check if proposal exists
-        if (id >= _index) revert ProposalInexistent();
+        uint votes
+    ) external nonReentrant {
+        _commonVotingChecks(id, votes);
 
-        //check if proposal is still active
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
+        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
+            msg.sender
+        );
+        if(votes > votingRights) revert InsufficientVotingRights(votingRights, votes);
 
-        //check if proposal life time has not passed
-        if (block.timestamp > proposals[id].endTimeStamp)
-            revert ProposalLifeTimePassed();
-
-        //check if user already voted for this proposal
-        if (voted[id][msg.sender] == true) revert VoteLock();
-
-        if (votes == 0) revert InvalidVotesInput();
-
-        if (proposals[id].quadraticVoting) {
-            SBT memory sbt = hub.getSBT(msg.sender, circuitId);
-            //getSBT reverts because there is no Hub.sol on optimism or polygon testnet
-            if (sbt.publicValues.length == 0 && block.timestamp > sbt.expiry) {
-                revert InexistentOrInvalidSBT();
-            }
-        }
-
-        IStaking staking = IStaking(stakingAddress);
-
-        uint256 votingRights = staking.getLatestUserRights(msg.sender);
-
-        if (votes > votingRights)
-            revert InsufficientVotingRights(votingRights, votes);
-
-        uint256 actualVotes;
-
-        if (proposals[id].quadraticVoting) {
-            actualVotes = _sqrt(votes);
-        } else {
-            actualVotes = votes;
-        }
-
-        if (support) {
-            proposals[id].votesFor += actualVotes;
-        } else {
-            proposals[id].votesAgainst += actualVotes;
-        }
-
-        proposals[id].totalVotes += actualVotes;
-
-        voted[id][msg.sender] = true;
-
-        staking.voted(msg.sender, block.timestamp + voteLockTime);
-
-        po.mint(msg.sender);
-
-        emit Voted(id, msg.sender, support, actualVotes);
+        _recordVote(id, support, votes);
     }
 
     /**
@@ -454,6 +416,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
     }
 
+    /**
+     * @dev completes a non-executable proposal 
+     * @param id the _index of the proposal of interest
+     */
     function complete(
         uint256 id
     ) external nonReentrant notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -552,6 +518,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev returns the signer address
+     */
+    function getSignerAddress() external view onlyRole(DEFAULT_ADMIN_ROLE) returns(address) {
+        return signerAddress;
+    }
+
+    /**
      * @dev Retrieves the current governance parameters.
      * @return proposalLifeTime_ The lifetime of a proposal from its creation to its completion.
      * @return quorum_ The percentage of votes required for a proposal to be considered valid.
@@ -613,6 +586,136 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERNAL FUNCTIONS ***///
+    /**
+     * @dev Performs common validation checks for all voting actions.
+     *      This function validates the existence and status of a proposal, ensures that voting
+     *      conditions such as proposal activity and timing constraints are met, and verifies
+     *      the signature of the voter where necessary.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param votes The number of votes the user wishes to cast.
+     *
+     *
+     */
+    function _commonVotingChecks(
+        uint id,
+        uint votes
+    ) internal view {
+        if (id >= _index) revert ProposalInexistent();
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
+        if (block.timestamp > proposals[id].endTimeStamp)
+            revert ProposalLifeTimePassed();
+        if (voted[id][msg.sender]) revert VoteLock();
+        if (votes == 0) revert InvalidVotesInput();
+    }
+
+    function _addressToString(address _addr) internal pure returns (string memory) {
+        bytes32 value = bytes32(uint256(uint160(_addr)));
+        bytes memory alphabet = "0123456789abcdef";
+
+        bytes memory str = new bytes(42);
+        str[0] = '0';
+        str[1] = 'x';
+        for (uint256 i = 0; i < 20; i++) {
+            str[2+i*2] = alphabet[uint8(value[i + 12] >> 4)];
+            str[3+i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
+        }
+        return string(str);
+    }
+
+    /**
+     * @dev Performs validation checks for quadratic voting actions.
+     *      This function validates the presence of Holonym's SBT in the user's account 
+     *      to ensure the account is unique.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param isUnique The status of the uniqueness of the account casting the vote.
+     * @param signature The signature of the data related to the account's uniqueness.
+     *
+     *
+     */
+    function _quadraticVotingChecks(uint256 id, bool isUnique, bytes memory signature) internal {
+        if (proposals[id].quadraticVoting) {
+            // Encode the voter's address and unique status, then hash it
+            bytes32 dataHash = keccak256(abi.encodePacked(msg.sender, isUnique));
+            // Prefix the hash according to Ethereum's standards and hash again
+            bytes32 ethSignedHash = keccak256(
+                abi.encodePacked("\x19Ethereum Signed Message:\n32", dataHash)
+            );
+
+            // Split the signature into its components (r, s, v)
+            (uint8 v, bytes32 r, bytes32 s) = _splitSignature(signature);
+            // Recover the address from the signature components and the hash
+            address recoveredAddress = ecrecover(ethSignedHash, v, r, s);
+
+            // Perform checks to validate the signature and the uniqueness
+            require(recoveredAddress != address(0), "Failed to recover address");
+            require(
+                recoveredAddress == signerAddress,
+                "Invalid or unauthorized signature"
+            );
+            require(isUnique, "User does not have a valid SBT");
+        }
+    }
+
+    /**
+     * @dev Records a vote on a proposal, updating the vote totals and voter status.
+     *      This function is called after all preconditions checked by `_commonVotingChecks` are met.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param support A boolean indicating whether the vote is in support of (true) or against (false) the proposal.
+     * @param actualVotes The effective number of votes to record, which may be adjusted for voting type, such as quadratic.
+     */
+    function _recordVote(uint id, bool support, uint actualVotes) internal {
+        if (support) {
+            proposals[id].votesFor += actualVotes;
+        } else {
+            proposals[id].votesAgainst += actualVotes;
+        }
+        proposals[id].totalVotes += actualVotes;
+
+        voted[id][msg.sender] = true;
+        IStaking(stakingAddress).voted(
+            msg.sender,
+            block.timestamp + voteLockTime
+        );
+        po.mint(msg.sender); // Assuming PO is some token or operation
+        emit Voted(id, msg.sender, support, actualVotes);
+    }
+
+    /**
+     * @dev Splits a signature into r, s and v components
+     * @param sig The full ECDSA signature
+     * @return v The recovery byte, V
+     * @return r The 32-byte R component of the signature
+     * @return s The 32-byte S component of the signature
+     */
+    function _splitSignature(
+        bytes memory sig
+    ) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
+        require(sig.length == 65, "splitSignature: invalid signature length");
+
+        assembly {
+            /*
+            First 32 bytes stores the length of the signature
+
+            Add 32 to skip the length field,
+            First 32 bytes after the length field is R,
+            Second 32 bytes after the length field is S,
+            Final byte (first byte of the next 32 bytes after S) is V
+            */
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // Correctly set the version of 'v' depending on the chain (EIP-155)
+        if (v < 27) {
+            v += 27;
+        }
+        return (v, r, s);
+    }
 
     /**
      * @dev Validates input parameters for an operation proposal.

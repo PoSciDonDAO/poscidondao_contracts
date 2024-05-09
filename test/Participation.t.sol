@@ -89,7 +89,7 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.vote(id, true, 2000e18, phoneCircuitId);
+        gov.voteStandard(id, true, 2000e18);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         vm.stopPrank();
@@ -108,14 +108,14 @@ contract ParticipationTest is Test {
             true,
             false
         );
-        gov.vote(id, true, 2000e18, phoneCircuitId);
+        gov.voteStandard(id, true, 2000e18);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         staking.lock(2000e18);
-        gov.vote(id, true, 2000e18, phoneCircuitId);
+        gov.voteStandard(id, true, 2000e18);
         po.setApprovalForAll(treasuryWallet, true);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);

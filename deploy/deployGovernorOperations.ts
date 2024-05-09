@@ -25,7 +25,7 @@ async function main() {
   const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
   const sciToken = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
   const poToken = "0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
-  const hubAddress = "0x2aa822e264f8cc31a2b9c22f39e5551241e94dfb";
+  const signerAddress = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
 
   const constructorArguments = [
 		stakingAddress,
@@ -33,7 +33,7 @@ async function main() {
 		usdc,
 		sciToken,
 		poToken,
-		hubAddress,
+		signerAddress,
   ];
 
   const Contract = await ethers.getContractFactory("GovernorOperations");

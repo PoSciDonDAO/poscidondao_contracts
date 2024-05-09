@@ -103,7 +103,7 @@ contract PoToSciExchangeTest is Test {
 
         staking.lock(5000e18);
 
-        gov.vote(id, true, 5000e18, phoneCircuitId);
+        gov.voteStandard(id, true, 5000e18);
         assertEq(po.balanceOf(addr2, 0), 1);
 
         ex.exchangePoForSci(addr2, 1);
@@ -125,7 +125,7 @@ contract PoToSciExchangeTest is Test {
         
         vm.startPrank(addr2);
         staking.lock(5000e18);
-        gov.vote(id, true, 5000e18, phoneCircuitId);
+        gov.voteStandard(id, true, 5000e18);
 
         ex.exchangePoForSci(addr2, 1);
         assertEq(po.balanceOf(addr2, 0), 0);
