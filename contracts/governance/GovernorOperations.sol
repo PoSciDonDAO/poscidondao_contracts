@@ -333,7 +333,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes memory signature
     ) external nonReentrant {
         _commonVotingChecks(id, votes);
-        _uniquenessCheck(id, isUnique, signature);
+        _uniquenessCheck(id, msg.sender, isUnique, signature);
 
         uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
             msg.sender
@@ -638,11 +638,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _uniquenessCheck(
         uint256 id,
+        address user,
         bool isUnique,
         bytes memory signature
     ) internal view {
         if (proposals[id].quadraticVoting) {
-            bool verified = _verify(msg.sender, isUnique, signature);
+            bool verified = verify(user, isUnique, signature);
             require(verified, "Invalid signature");
             require(isUnique, "User does not have a valid SBT");
         }
@@ -657,10 +658,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function _getMessageHash(
         address user,
         bool isUnique
-    ) internal pure returns (bytes32) {
+    ) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(user, isUnique));
     }
 
+    function _getEthSignedMessageHash(bytes32 _messageHash)
+        public
+        pure
+        returns (bytes32)
+    {
+        /*
+        Signature is produced by signing a keccak256 hash with the following format:
+        "\x19Ethereum Signed Message\n" + len(msg) + msg
+        */
+        return keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
+        );
+    }
     /**
      * @dev Verifies if a given signature is valid for the specified user and uniqueness.
      * @param user The address of the user to verify.
@@ -668,27 +682,30 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param signature The signature to verify.
      * @return True if the signature is valid, false otherwise.
      */
-    function _verify(
+    function verify(
         address user,
         bool isUnique,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) public view returns (bool) {
         bytes32 messageHash = _getMessageHash(user, isUnique);
-        return _recoverSigner(messageHash, signature) == signer;
+        bytes32 ethSignedMessageHash = _getEthSignedMessageHash(messageHash);
+
+        return _recoverSigner(ethSignedMessageHash, signature) == signer;
     }
 
     /**
      * @dev Recovers the signer address from a given hash and signature.
-     * @param _messageHash The hash of the message that was signed.
+     * @param _ethSignedMessageHash The hash of the message that was signed.
      * @param _signature The signature from which to recover the signer address.
      * @return The address of the signer.
      */
     function _recoverSigner(
-        bytes32 _messageHash,
+        bytes32 _ethSignedMessageHash,
         bytes memory _signature
-    ) internal pure returns (address) {
+    ) public pure returns (address) {
         (bytes32 r, bytes32 s, uint8 v) = _splitSignature(_signature);
-        return ecrecover(_messageHash, v, r, s);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
     }
 
     /**
@@ -700,7 +717,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _splitSignature(
         bytes memory sig
-    ) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+    ) public pure returns (bytes32 r, bytes32 s, uint8 v) {
         require(sig.length == 65, "invalid signature length");
         assembly {
             r := mload(add(sig, 32))
