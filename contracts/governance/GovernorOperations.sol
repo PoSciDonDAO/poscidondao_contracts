@@ -643,7 +643,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes memory signature
     ) internal view {
         if (proposals[id].quadraticVoting) {
-            bool verified = verify(user, isUnique, signature);
+            bool verified = _verify(user, isUnique, signature);
             require(verified, "Invalid signature");
             require(isUnique, "User does not have a valid SBT");
         }
@@ -658,12 +658,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function _getMessageHash(
         address user,
         bool isUnique
-    ) public pure returns (bytes32) {
+    ) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(user, isUnique));
     }
 
+    /**
+     * @dev Calculates the Ethereum specific prefixed hash of a given message hash.
+     * @param _messageHash The original hash of the message data.
+     * @return The Ethereum-specific signed version of the input hash.
+     */
     function _getEthSignedMessageHash(bytes32 _messageHash)
-        public
+        internal
         pure
         returns (bytes32)
     {
@@ -675,6 +680,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
         );
     }
+
     /**
      * @dev Verifies if a given signature is valid for the specified user and uniqueness.
      * @param user The address of the user to verify.
@@ -682,11 +688,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param signature The signature to verify.
      * @return True if the signature is valid, false otherwise.
      */
-    function verify(
+    function _verify(
         address user,
         bool isUnique,
         bytes memory signature
-    ) public view returns (bool) {
+    ) internal view returns (bool) {
         bytes32 messageHash = _getMessageHash(user, isUnique);
         bytes32 ethSignedMessageHash = _getEthSignedMessageHash(messageHash);
 
@@ -702,7 +708,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function _recoverSigner(
         bytes32 _ethSignedMessageHash,
         bytes memory _signature
-    ) public pure returns (address) {
+    ) internal pure returns (address) {
         (bytes32 r, bytes32 s, uint8 v) = _splitSignature(_signature);
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
@@ -717,7 +723,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _splitSignature(
         bytes memory sig
-    ) public pure returns (bytes32 r, bytes32 s, uint8 v) {
+    ) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
         require(sig.length == 65, "invalid signature length");
         assembly {
             r := mload(add(sig, 32))
