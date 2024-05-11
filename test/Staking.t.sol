@@ -24,7 +24,6 @@ contract StakingTest is Test {
     address public addr5 = vm.addr(5);
     address public donationWallet = vm.addr(6);
     address public treasuryWallet = vm.addr(7);
-    address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
 
     event Locked(
         address indexed user,
@@ -53,7 +52,7 @@ contract StakingTest is Test {
             address(usdc),
             address(sci),
             address(po),
-            hubAddress
+            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
         );
 
         govRes = new GovernorResearch(

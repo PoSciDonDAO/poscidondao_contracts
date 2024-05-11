@@ -25,7 +25,7 @@ contract ParticipationTest is Test {
     address operationsWallet = vm.addr(8);
     bytes32 govIdCircuitId = 0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
     bytes32 phoneCircuitId = 0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
-    address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
+    
 
     function setUp() public {
         usdc = new MockUsdc(10000000e6);
@@ -43,7 +43,7 @@ contract ParticipationTest is Test {
             address(usdc),
             address(sci),
             address(po),
-            hubAddress
+            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
         );
 
         gov.setPoToken(address(po));

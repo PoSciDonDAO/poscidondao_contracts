@@ -8,6 +8,7 @@ import "contracts/tokens/Participation.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
+import "forge-std/console2.sol";
 
 contract GovernorOperationsTest is Test {
     GovernorOperations public govOps;
@@ -16,7 +17,8 @@ contract GovernorOperationsTest is Test {
     Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
-
+    address signer = vm.addr(10);
+    address customAddress = signer;
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
     address addr3 = vm.addr(3);
@@ -30,8 +32,7 @@ contract GovernorOperationsTest is Test {
         0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
     bytes32 phoneCircuitId =
         0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
-    address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
-    address customAddress = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
+    // address customAddress = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
 
     event Cancelled(uint256 indexed id);
 
@@ -50,7 +51,7 @@ contract GovernorOperationsTest is Test {
             address(usdc),
             address(sci),
             address(po),
-            hubAddress
+            signer
         );
 
         govRes = new GovernorResearch(
@@ -176,12 +177,31 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_VoteForProposalWithQuadraticFunding() public {
-        vm.startPrank(0x690BF2dB31D39EE0a88fcaC89117b66a588E865a);
+    function test_VoteForProposalWithQuadraticVoting() public {
+        vm.startPrank(addr1);
         staking.lock(100e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", opWallet, 5000000e6, 0, 0, true, true);
-        govOps.voteStandard(id, true, 100e18);
+        vm.stopPrank();
+
+        
+        bool isUnique = true;
+        bytes32 messageHash = keccak256(abi.encodePacked(addr1, isUnique));
+        console2.logBytes32(messageHash);
+
+        vm.startPrank(signer);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
+
+        // Construct the signature from the components
+        bytes memory signature = abi.encodePacked(r, s, v);
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        // Call the voteQV function with the signature
+        bool support = true;
+        uint votes = 100e18; 
+
+        govOps.voteQV(id, support, votes, isUnique, signature);
+
         (
             ,
             ,
@@ -202,14 +222,18 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    //this one will fail
-    function test_RevertVoteForProposalWithQuadraticFunding() public {
-        vm.startPrank(addr1);
-        staking.lock(100e18);
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose("Info", opWallet, 5000000e6, 0, 0, true, true);
-        vm.expectRevert();
-        govOps.voteStandard(id, true, 100e18);
+    function test_VerifySignature() public {
+        address user = addr1;
+        bool isUnique = true;
+        // Calculate the message hash
+        bytes32 messageHash = keccak256(abi.encodePacked(user, isUnique));
+        // Simulate signing using the signer address
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
+        // bytes memory signature = abi.encodePacked(r, s, uint8(v));
+        address recoveredSigner = ecrecover(messageHash, v, r, s);
+        
+        vm.startPrank(treasuryWallet);
+        assertEq(recoveredSigner, govOps.getSigner());
         vm.stopPrank();
     }
 

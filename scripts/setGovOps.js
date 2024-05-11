@@ -10,7 +10,7 @@ async function main() {
 	const contractAddressStaking = "0x3E0270c0b83e1b9D7CAc49fEbF829596e8F35AB6";
 	const contractAddressParticipation =
 		"0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
-	const newGovOpsAddress = "0x393f6d183739A95e507166A95DB93f4EA7B1Ee99";
+	const newGovOpsAddress = "0xFBB46afaF02f61890ED4127223CaF187Ad47DF48";
 
 	if (!newGovOpsAddress) {
 		console.error(

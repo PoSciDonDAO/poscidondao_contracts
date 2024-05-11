@@ -20,6 +20,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     // Custom errors for handling specific revert conditions
     error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
+    error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
@@ -78,8 +79,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public treasuryWallet;
     address public usdc;
     address public sci;
-    address private signerAddress;
-    address public recoveredAddress;
+    address private signer;
+    // address public recoveredAddress;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public opThreshold;
@@ -144,17 +145,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address usdc_,
         address sci_,
         address po_,
-        address signerAddress_
+        address signer_
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
         po = IParticipation(po_);
-        signerAddress = signerAddress_;
+        signer = signer_;
         opThreshold = 100e18;
         terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 3300; //at least 33% of the total supply must be burned
-        proposalLifeTime = 15 minutes; //testing
+        proposalLifeTime = 3 hours; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
@@ -186,9 +187,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev sets the staking address
      */
     function setStakingAddress(
-        address _newStakingAddress
+        address newStakingAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        stakingAddress = _newStakingAddress;
+        stakingAddress = newStakingAddress;
+    }
+
+    /**
+     * @dev sets the signer address
+     */
+    function setSigner(
+        address newSigner
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        signer = newSigner;
     }
 
     /**
@@ -290,26 +300,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return currentIndex;
     }
 
-
-    function voteQV(
-        uint id,
-        bool support,
-        uint votes,
-        bool isUnique,
-        bytes memory signature
-    ) external nonReentrant {
-        _commonVotingChecks(id, votes);
-        _quadraticVotingChecks(id, isUnique, signature);
-
-        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
-            msg.sender
-        );
-        if(votes > votingRights) revert InsufficientVotingRights(votingRights, votes);
-
-        uint256 actualVotes = _sqrt(votes);
-        _recordVote(id, support, actualVotes);
-    }
-
     /**
      * @dev vote for an option of a given proposal
      *      using the rights from the most recent snapshot
@@ -324,12 +314,35 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) external nonReentrant {
         _commonVotingChecks(id, votes);
 
+        if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
+
         uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
             msg.sender
         );
-        if(votes > votingRights) revert InsufficientVotingRights(votingRights, votes);
+        if (votes > votingRights)
+            revert InsufficientVotingRights(votingRights, votes);
 
         _recordVote(id, support, votes);
+    }
+
+    function voteQV(
+        uint id,
+        bool support,
+        uint votes,
+        bool isUnique,
+        bytes memory signature
+    ) external nonReentrant {
+        _commonVotingChecks(id, votes);
+        _uniquenessCheck(id, isUnique, signature);
+
+        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
+            msg.sender
+        );
+        if (votes > votingRights)
+            revert InsufficientVotingRights(votingRights, votes);
+
+        uint256 actualVotes = _sqrt(votes);
+        _recordVote(id, support, actualVotes);
     }
 
     /**
@@ -417,7 +430,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev completes a non-executable proposal 
+     * @dev completes a non-executable proposal
      * @param id the _index of the proposal of interest
      */
     function complete(
@@ -520,8 +533,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev returns the signer address
      */
-    function getSignerAddress() external view onlyRole(DEFAULT_ADMIN_ROLE) returns(address) {
-        return signerAddress;
+    function getSigner()
+        external
+        view
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        returns (address)
+    {
+        return signer;
     }
 
     /**
@@ -597,10 +615,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *
      *
      */
-    function _commonVotingChecks(
-        uint id,
-        uint votes
-    ) internal view {
+    function _commonVotingChecks(uint id, uint votes) internal view {
         if (id >= _index) revert ProposalInexistent();
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
@@ -610,23 +625,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (votes == 0) revert InvalidVotesInput();
     }
 
-    function _addressToString(address _addr) internal pure returns (string memory) {
-        bytes32 value = bytes32(uint256(uint160(_addr)));
-        bytes memory alphabet = "0123456789abcdef";
-
-        bytes memory str = new bytes(42);
-        str[0] = '0';
-        str[1] = 'x';
-        for (uint256 i = 0; i < 20; i++) {
-            str[2+i*2] = alphabet[uint8(value[i + 12] >> 4)];
-            str[3+i*2] = alphabet[uint8(value[i + 12] & 0x0f)];
-        }
-        return string(str);
-    }
-
     /**
      * @dev Performs validation checks for quadratic voting actions.
-     *      This function validates the presence of Holonym's SBT in the user's account 
+     *      This function validates the presence of Holonym's SBT in the user's account
      *      to ensure the account is unique.
      *
      * @param id The index of the proposal on which to vote.
@@ -635,27 +636,76 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *
      *
      */
-    function _quadraticVotingChecks(uint256 id, bool isUnique, bytes memory signature) internal {
+    function _uniquenessCheck(
+        uint256 id,
+        bool isUnique,
+        bytes memory signature
+    ) internal view {
         if (proposals[id].quadraticVoting) {
-            // Encode the voter's address and unique status, then hash it
-            bytes32 dataHash = keccak256(abi.encodePacked(msg.sender, isUnique));
-            // Prefix the hash according to Ethereum's standards and hash again
-            bytes32 ethSignedHash = keccak256(
-                abi.encodePacked("\x19Ethereum Signed Message:\n32", dataHash)
-            );
-
-            // Split the signature into its components (r, s, v)
-            (uint8 v, bytes32 r, bytes32 s) = _splitSignature(signature);
-            // Recover the address from the signature components and the hash
-            address recoveredAddress = ecrecover(ethSignedHash, v, r, s);
-
-            // Perform checks to validate the signature and the uniqueness
-            require(recoveredAddress != address(0), "Failed to recover address");
-            require(
-                recoveredAddress == signerAddress,
-                "Invalid or unauthorized signature"
-            );
+            bool verified = _verify(msg.sender, isUnique, signature);
+            require(verified, "Invalid signature");
             require(isUnique, "User does not have a valid SBT");
+        }
+    }
+
+    /**
+     * @dev Calculates a keccak256 hash for the given parameters.
+     * @param user The user's Ethereum address.
+     * @param isUnique Boolean flag representing whether the user's status is unique.
+     * @return The calculated keccak256 hash.
+     */
+    function _getMessageHash(
+        address user,
+        bool isUnique
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(user, isUnique));
+    }
+
+    /**
+     * @dev Verifies if a given signature is valid for the specified user and uniqueness.
+     * @param user The address of the user to verify.
+     * @param isUnique Boolean flag to check along with the user address.
+     * @param signature The signature to verify.
+     * @return True if the signature is valid, false otherwise.
+     */
+    function _verify(
+        address user,
+        bool isUnique,
+        bytes memory signature
+    ) internal view returns (bool) {
+        bytes32 messageHash = _getMessageHash(user, isUnique);
+        return _recoverSigner(messageHash, signature) == signer;
+    }
+
+    /**
+     * @dev Recovers the signer address from a given hash and signature.
+     * @param _messageHash The hash of the message that was signed.
+     * @param _signature The signature from which to recover the signer address.
+     * @return The address of the signer.
+     */
+    function _recoverSigner(
+        bytes32 _messageHash,
+        bytes memory _signature
+    ) internal pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = _splitSignature(_signature);
+        return ecrecover(_messageHash, v, r, s);
+    }
+
+    /**
+     * @dev Splits a signature into its r, s, and v components.
+     * @param sig The full ECDSA signature.
+     * @return r The 32-byte R component of the signature.
+     * @return s The 32-byte S component of the signature.
+     * @return v The recovery byte, V.
+     */
+    function _splitSignature(
+        bytes memory sig
+    ) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
         }
     }
 
@@ -682,39 +732,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         );
         po.mint(msg.sender); // Assuming PO is some token or operation
         emit Voted(id, msg.sender, support, actualVotes);
-    }
-
-    /**
-     * @dev Splits a signature into r, s and v components
-     * @param sig The full ECDSA signature
-     * @return v The recovery byte, V
-     * @return r The 32-byte R component of the signature
-     * @return s The 32-byte S component of the signature
-     */
-    function _splitSignature(
-        bytes memory sig
-    ) internal pure returns (uint8 v, bytes32 r, bytes32 s) {
-        require(sig.length == 65, "splitSignature: invalid signature length");
-
-        assembly {
-            /*
-            First 32 bytes stores the length of the signature
-
-            Add 32 to skip the length field,
-            First 32 bytes after the length field is R,
-            Second 32 bytes after the length field is S,
-            Final byte (first byte of the next 32 bytes after S) is V
-            */
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        // Correctly set the version of 'v' depending on the chain (EIP-155)
-        if (v < 27) {
-            v += 27;
-        }
-        return (v, r, s);
     }
 
     /**
