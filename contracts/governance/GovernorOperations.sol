@@ -22,6 +22,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
     error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
+    error ExecutableProposalsCannotBeCompleted();
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
@@ -46,7 +47,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STRUCTS ***///
     struct Proposal {
         uint256 startBlockNum;
-        uint256 endTimeStamp;
+        uint256 endTimestamp;
         ProposalStatus status;
         ProjectInfo details;
         uint256 votesFor;
@@ -107,11 +108,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @notice Enumerates the different payment options for a proposal.
      */
     enum Payment {
-        None,
         Usdc,
         Sci,
         Coin,
-        SciUsdc
+        SciUsdc,
+        None
     }
 
     ///*** MODIFIER ***///
@@ -126,17 +127,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event BurnedForTermination(address owner, uint256 amount);
-    event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
+    event Cancelled(uint256 indexed id);
+    event Completed(uint256 indexed id);
+    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
+    event Proposed(uint256 indexed id, address indexed user, ProjectInfo details);
     event Voted(
         uint256 indexed id,
-        address indexed voter,
+        address indexed user,
         bool indexed support,
         uint256 amount
     );
     event Scheduled(uint256 indexed id);
-    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
-    event Completed(uint256 indexed id);
-    event Cancelled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
 
     constructor(
@@ -155,7 +156,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         signer = signer_;
         opThreshold = 100e18;
         terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 3300; //at least 33% of the total supply must be burned
-        proposalLifeTime = 3 hours; //testing
+        proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
@@ -311,7 +312,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint id,
         bool support,
         uint votes
-    ) external nonReentrant {
+    ) external nonReentrant notTerminated {
         _commonVotingChecks(id, votes);
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
@@ -331,7 +332,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint votes,
         bool isUnique,
         bytes memory signature
-    ) external nonReentrant {
+    ) external nonReentrant notTerminated {
         _commonVotingChecks(id, votes);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
@@ -349,14 +350,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev finalizes the voting phase for an operations proposal
      * @param id the _index of the proposal of interest
      */
-    function finalize(uint256 id) external notTerminated {
+    function finalize(uint256 id) external nonReentrant notTerminated {
         if (id >= _index) revert ProposalInexistent();
 
-        if (block.timestamp < proposals[id].endTimeStamp)
+        if (block.timestamp < proposals[id].endTimestamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                proposals[id].endTimeStamp
+                proposals[id].endTimestamp
             );
 
         if (proposals[id].status != ProposalStatus.Active)
@@ -441,6 +442,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
+        if(proposals[id].details.executable) {
+            revert ExecutableProposalsCannotBeCompleted();
+        }
+
         proposals[id].status = ProposalStatus.Completed;
 
         emit Completed(id);
@@ -461,11 +466,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (proposals[id].status != ProposalStatus.Active)
                 revert IncorrectPhase(proposals[id].status);
 
-            if (block.timestamp < proposals[id].endTimeStamp)
+            if (block.timestamp < proposals[id].endTimestamp)
                 revert ProposalOngoing(
                     id,
                     block.timestamp,
-                    proposals[id].endTimeStamp
+                    proposals[id].endTimestamp
                 );
             proposals[id].status = ProposalStatus.Cancelled;
 
@@ -544,11 +549,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Retrieves the current governance parameters.
-     * @return proposalLifeTime_ The lifetime of a proposal from its creation to its completion.
-     * @return quorum_ The percentage of votes required for a proposal to be considered valid.
-     * @return proposeLockTime_ The lock time before which a new proposal cannot be made.
-     * @return voteLockTime_ The duration for which voting on a proposal is open.
-     * @return terminationThreshold_ The number of failed proposals after which the contract can be terminated.
+     * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
+     * @return quorum The percentage of votes required for a proposal to be considered valid.
+     * @return proposeLockTime The lock time before which a new proposal cannot be made.
+     * @return voteLockTime The duration for which voting on a proposal is open.
+     * @return terminationThreshold The number of failed proposals after which the contract can be terminated.
      */
     function getGovernanceParameters()
         public
@@ -569,7 +574,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      * @return startBlockNum The block number at which the proposal was made. This helps in tracking the proposal's lifecycle and duration.
-     * @return endTimeStamp The timestamp (block time) by which the proposal voting must be concluded. After this time, the proposal may be finalized or executed based on its status and outcome.
+     * @return endTimestamp The timestamp (block time) by which the proposal voting must be concluded. After this time, the proposal may be finalized or executed based on its status and outcome.
      * @return status The current status of the proposal, represented as a value from the `ProposalStatus` enum. This status could be Active, Scheduled, Executed, Completed, or Cancelled.
      * @return details A `ProjectInfo` struct containing the proposal's detailed information such as the project description (IPFS link), the receiving wallet, payment options, and the amounts involved.
      * @return votesFor The total number of votes in favor of the proposal. This count helps in determining if the proposal has met quorum requirements and the majority's consensus.
@@ -594,7 +599,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (id > _index) revert ProposalInexistent();
         return (
             proposals[id].startBlockNum,
-            proposals[id].endTimeStamp,
+            proposals[id].endTimestamp,
             proposals[id].status,
             proposals[id].details,
             proposals[id].votesFor,
@@ -619,7 +624,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (id >= _index) revert ProposalInexistent();
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
-        if (block.timestamp > proposals[id].endTimeStamp)
+        if (block.timestamp > proposals[id].endTimestamp)
             revert ProposalLifeTimePassed();
         if (voted[id][msg.sender]) revert VoteLock();
         if (votes == 0) revert InvalidVotesInput();
@@ -667,18 +672,20 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param _messageHash The original hash of the message data.
      * @return The Ethereum-specific signed version of the input hash.
      */
-    function _getEthSignedMessageHash(bytes32 _messageHash)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function _getEthSignedMessageHash(
+        bytes32 _messageHash
+    ) internal pure returns (bytes32) {
         /*
         Signature is produced by signing a keccak256 hash with the following format:
         "\x19Ethereum Signed Message\n" + len(msg) + msg
         */
-        return keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
-        );
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19Ethereum Signed Message:\n32",
+                    _messageHash
+                )
+            );
     }
 
     /**
@@ -749,11 +756,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         proposals[id].totalVotes += actualVotes;
 
         voted[id][msg.sender] = true;
+
         IStaking(stakingAddress).voted(
             msg.sender,
             block.timestamp + voteLockTime
         );
-        po.mint(msg.sender); // Assuming PO is some token or operation
+        po.mint(msg.sender);
         emit Voted(id, msg.sender, support, actualVotes);
     }
 
@@ -819,7 +827,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 opThreshold
             );
 
-        if (staking.getProposeLockEndTime(proposer) > block.timestamp)
+        if (staking.getProposeLockEnd(proposer) > block.timestamp)
             revert ProposeLock();
     }
 

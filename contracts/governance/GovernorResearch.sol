@@ -18,9 +18,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error InvalidInfo();
     error InvalidInput();
     error ProposalLifeTimePassed();
-    error ProposalLock();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached();
@@ -30,7 +30,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** STRUCTS ***///
     struct Proposal {
         uint256 startBlockNum;
-        uint256 endTimeStamp;
+        uint256 endTimestamp;
         ProposalStatus status;
         ProjectInfo details;
         uint256 votesFor;
@@ -50,7 +50,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
-    uint256 public proposeLockTime;
     uint256 public voteLockTime;
     uint256 public terminationThreshold;
 
@@ -70,7 +69,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     uint256 constant VOTE = 1;
     mapping(uint256 => Proposal) private proposals;
-    mapping(uint256 => mapping(address => uint8)) private voted;
+    mapping(uint256 => mapping(address => bool)) private voted;
     mapping(address => uint8) private proposedResearch;
 
     ///*** ENUMERATORS ***///
@@ -97,17 +96,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event BurnedForTermination(address owner, uint256 amount);
-    event Completed(uint256 indexed id);
     event Cancelled(uint256 indexed id);
+    event Completed(uint256 indexed id);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
-    event Proposed(uint256 indexed id, address proposer, ProjectInfo details);
+    event Proposed(
+        uint256 indexed id,
+        address indexed user,
+        ProjectInfo details
+    );
     event Voted(
         uint256 indexed id,
-        address indexed voter,
+        address indexed user,
         bool indexed support,
         uint256 amount
     );
-    event Scheduled(uint256 indexed id, bool indexed research);
+    event Scheduled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
 
     constructor(
@@ -125,16 +128,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         ddThreshold = 1000e18;
 
-        proposalLifeTime = 0;
+        proposalLifeTime = 15 minutes;
         quorum = 1;
         voteLockTime = 0;
-        proposeLockTime = 0;
         terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 500; // 5% of the total supply must be burned
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
 
         _grantRole(DUE_DILIGENCE_ROLE, treasuryWallet_);
+        _grantRole(DUE_DILIGENCE_ROLE, donationWallet_);
         _setRoleAdmin(DUE_DILIGENCE_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
@@ -217,9 +220,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         //the lock time of your tokens after voting
         if (param == "voteLockTime") voteLockTime = data;
 
-        //the lock time of your tokens and ability to propose after proposing
-        if (param == "proposeLockTime") proposeLockTime = data;
-
         //the amount of tokens that need to be burned to terminate DAO operations governance
         if (param == "terminationThreshold") terminationThreshold = data;
     }
@@ -261,7 +261,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             Payment payment,
             uint256 amount,
             uint256 sciAmount
-        ) = _determinePayment(amountUsdc, amountCoin, amountSci);
+        ) = _determinePaymentDetails(amountUsdc, amountCoin, amountSci);
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
@@ -269,7 +269,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             payment,
             amount,
             sciAmount,
-            true // Assuming 'true' indicates the proposal is executable
+            true
         );
 
         uint256 currentIndex = _storeProposal(projectInfo);
@@ -297,11 +297,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             revert IncorrectPhase(proposals[id].status);
 
         //check if proposal life time has not passed
-        if (block.timestamp > proposals[id].endTimeStamp)
+        if (block.timestamp > proposals[id].endTimestamp)
             revert ProposalLifeTimePassed();
 
         //check if user already voted for this proposal
-        if (voted[id][msg.sender] == 1) revert VoteLock();
+        if (voted[id][msg.sender] == true) revert VoteLock();
 
         IStaking staking = IStaking(stakingAddress);
 
@@ -316,10 +316,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         }
 
         //add to the total votes
-        proposals[id].totalVotes += 1;
+        proposals[id].totalVotes += VOTE;
 
         //set user as voted for proposal
-        voted[id][msg.sender] = 1;
+        voted[id][msg.sender] = true;
 
         //set the lock time in the staking contract
         staking.voted(msg.sender, block.timestamp + voteLockTime);
@@ -334,23 +334,23 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function finalize(
         uint256 id
-    ) external notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
         if (id >= _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
 
-        if (block.timestamp < proposals[id].endTimeStamp)
+        if (block.timestamp < proposals[id].endTimestamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                proposals[id].endTimeStamp
+                proposals[id].endTimestamp
             );
         if (proposals[id].totalVotes < quorum) revert QuorumNotReached();
 
         proposals[id].status = ProposalStatus.Scheduled;
 
-        emit Scheduled(id, true);
+        emit Scheduled(id);
     }
 
     /**
@@ -400,7 +400,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancel(uint256 id) external nonReentrant notTerminated {
+    function cancel(
+        uint256 id
+    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
         if (terminated) {
             proposals[id].status = ProposalStatus.Cancelled;
 
@@ -411,6 +413,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             if (proposals[id].status != ProposalStatus.Active)
                 revert IncorrectPhase(proposals[id].status);
 
+            if (block.timestamp < proposals[id].endTimestamp)
+                revert ProposalOngoing(
+                    id,
+                    block.timestamp,
+                    proposals[id].endTimestamp
+                );
             proposals[id].status = ProposalStatus.Cancelled;
 
             emit Cancelled(id);
@@ -456,7 +464,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev returns if user has voted for a given proposal
      * @param id the proposal id
      */
-    function getVoted(uint256 id) external view returns (uint8) {
+    function getVoted(uint256 id) external view returns (bool) {
         if (id >= _index) revert ProposalInexistent();
         return voted[id][msg.sender];
     }
@@ -469,6 +477,26 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Retrieves the current governance parameters.
+     * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
+     * @return quorum The percentage of votes required for a proposal to be considered valid.
+     * @return voteLockTime The duration for which voting on a proposal is open.
+     * @return terminationThreshold The number of failed proposals after which the contract can be terminated.
+     */
+    function getGovernanceParameters()
+        public
+        view
+        returns (uint256, uint256, uint256, uint256)
+    {
+        return (
+            proposalLifeTime,
+            quorum,
+            voteLockTime,
+            terminationThreshold
+        );
+    }
+
+    /**
      * @notice Retrieves detailed information about a specific governance proposal.
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
@@ -478,7 +506,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @return details A `ProjectInfo` struct containing the proposal's detailed information such as the project description (IPFS link), the receiving wallet, payment options, and the amounts involved.
      * @return votesFor The total number of votes in favor of the proposal. This count helps in determining if the proposal has met quorum requirements and the majority's consensus.
      * @return totalVotes The total number of votes cast for the proposal, including both for and against. This is used to calculate the proposal's overall engagement and participation.
-     * @return quadraticVoting A boolean indicating whether the proposal uses quadratic voting for determining its outcome. Quadratic voting allows for a more nuanced expression of preference and consensus among voters.
      */
     function getProposalInfo(
         uint256 id
@@ -491,18 +518,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             ProposalStatus,
             ProjectInfo memory,
             uint256,
-            uint256,
             uint256
         )
     {
         if (id > _index) revert ProposalInexistent();
         return (
             proposals[id].startBlockNum,
-            proposals[id].endTimeStamp,
+            proposals[id].endTimestamp,
             proposals[id].status,
             proposals[id].details,
             proposals[id].votesFor,
-            proposals[id].votesAgainst,
             proposals[id].totalVotes
         );
     }
@@ -528,12 +553,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 amountCoin,
         uint256 amountSci
     ) internal pure {
-        bool validInput = bytes(info).length > 0 &&
-            receivingWallet != address(0) &&
-            ((amountUsdc > 0 && amountCoin == 0) ||
+        if (bytes(info).length == 0) revert InvalidInfo();
+
+        if (
+            receivingWallet == address(0) ||
+            !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
                 (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                (amountSci > 0 && amountCoin == 0));
-        if (!validInput) {
+                (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
+        ) {
             revert InvalidInput();
         }
     }
@@ -541,16 +568,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev Validates if the proposer meets the staking requirements for proposing research.
      * @param staking The staking contract interface used to check the staked SCI.
-     * @param member The address of the member initiating an action.
+     * @param proposer The address of the member initiating an action.
      *
      * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
      * The staked SCI amount and required threshold are provided in the revert message.
      */
     function _validateStakingRequirements(
         IStaking staking,
-        address member
+        address proposer
     ) internal view {
-        uint256 stakedSci = staking.getStakedSci(member);
+        uint256 stakedSci = staking.getStakedSci(proposer);
         if (stakedSci < ddThreshold) {
             revert InsufficientBalance(stakedSci, ddThreshold);
         }
@@ -569,7 +596,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * Only one of amountUsdc, amountCoin, or amountSci should be greater than zero, except for a specific combination
      * where SciUsdc is chosen as the payment method.
      */
-    function _determinePayment(
+    function _determinePaymentDetails(
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci

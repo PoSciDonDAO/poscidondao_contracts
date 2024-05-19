@@ -6,7 +6,7 @@ interface IStaking {
 
     function getLatestUserRights(address user) external view returns (uint256);
 
-    function getProposeLockEndTime(address user) external view returns (uint256);
+    function getProposeLockEnd(address user) external view returns (uint256);
 
     function getStakedSci(address user) external view returns (uint256);
 

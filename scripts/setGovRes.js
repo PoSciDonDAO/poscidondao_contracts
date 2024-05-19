@@ -8,11 +8,9 @@ async function main() {
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressStaking = "0x3E0270c0b83e1b9D7CAc49fEbF829596e8F35AB6";
-	const contractAddressParticipation =
-		"0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
-	const newGovOpsAddress = "0xFB37F57eee81feEbbe623BDb386a89b72eb47D6E";
+	const newGovResAddress = "0x5C0F2d60347B6ca0448251A27E8038c5A313C4bB";
 
-	if (!newGovOpsAddress) {
+	if (!newGovResAddress) {
 		console.error(
 			"You must provide the new address as a command line argument."
 		);
@@ -25,8 +23,8 @@ async function main() {
 
 	// Define the smart contract interface (ABI) for the function you want to call
 	const abi = [
-		// Replace this with the actual ABI for your setGovOps function
-		"function setGovOps(address newGovOpsAddress)",
+		// Replace this with the actual ABI for your setGovRes function
+		"function setGovRes(address newGovRes)",
 	];
 
 	// Connect to your contract
@@ -35,24 +33,15 @@ async function main() {
 		abi,
 		wallet
 	);
-	const contractParticipation = new ethers.Contract(
-		contractAddressParticipation,
-		abi,
-		wallet
-	);
 
-	// Call the setGovOps function
+	// Call the setGovRes function
 	try {
-		const tx1 = await contractStaking.setGovOps(newGovOpsAddress);
+		const tx1 = await contractStaking.setGovRes(newGovResAddress);
 		console.log("Transaction hash:", tx1.hash);
 		const receipt1 = await tx1.wait();
 		console.log("Transaction confirmed in block:", receipt1.blockNumber);
-		const tx2 = await contractParticipation.setGovOps(newGovOpsAddress);
-		console.log("Transaction hash:", tx2.hash);
-		const receipt2 = await tx2.wait();
-		console.log("Transaction confirmed in block:", receipt2.blockNumber);
 	} catch (error) {
-		console.error("Error calling setGovOps:", error);
+		console.error("Error calling setGovRes:", error);
 	}
 }
 

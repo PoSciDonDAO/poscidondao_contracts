@@ -447,7 +447,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev returns the propose lock end time
      */
-    function getProposeLockEndTime(
+    function getProposeLockEnd(
         address user
     ) external view returns (uint256) {
         return users[user].proposeLockEnd;
@@ -456,7 +456,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev returns the vote lock end time
      */
-    function getVoteLockEndTime(address user) external view returns (uint256) {
+    function getVoteLockEnd(address user) external view returns (uint256) {
         return users[user].voteLockEnd;
     }
 

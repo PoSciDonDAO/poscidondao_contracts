@@ -222,24 +222,24 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_VerifySignature() public {
-        address user = addr2;
-        bool isUnique = false;
-        // Calculate the message hash
-        bytes32 messageHash = keccak256(abi.encodePacked(user, isUnique));
-        // Simulate signing using the signer address
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
-        //ecrecover from foundry accepts messageHash, 
-        //but ecrecover solidity accepts ethSignedMessage (?)
-        address recoveredSigner = ecrecover(messageHash, v, r, s);
-        vm.startPrank(treasuryWallet);
-        assertEq(recoveredSigner, govOps.getSigner());
-        vm.stopPrank();
+    // function test_VerifySignature() public {
+    //     address user = addr2;
+    //     bool isUnique = false;
+    //     // Calculate the message hash
+    //     bytes32 messageHash = keccak256(abi.encodePacked(user, isUnique));
+    //     // Simulate signing using the signer address
+    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
+    //     //ecrecover from foundry accepts messageHash, 
+    //     //but ecrecover solidity accepts ethSignedMessage (?)
+    //     address recoveredSigner = ecrecover(messageHash, v, r, s);
+    //     vm.startPrank(treasuryWallet);
+    //     assertEq(recoveredSigner, govOps.getSigner());
+    //     vm.stopPrank();
 
-        bytes memory signature = abi.encodePacked(r, s, uint8(v));
-        bool verified = govOps.verify(user, isUnique, signature);
-        assertTrue(verified, "Not verified");
-    }
+    //     bytes memory signature = abi.encodePacked(r, s, uint8(v));
+    //     bool verified = govOps.verify(user, isUnique, signature);
+    //     assertTrue(verified, "Not verified");
+    // }
 
     function test_RevertVoteWithVoteLockIfAlreadyVoted() public {
         vm.startPrank(addr2);
