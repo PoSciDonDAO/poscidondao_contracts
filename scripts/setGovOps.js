@@ -7,17 +7,10 @@ async function main() {
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x3E0270c0b83e1b9D7CAc49fEbF829596e8F35AB6";
+	const contractAddressStaking = "0xF1a9241FC89E256A3CF18410e1515D3342331308";
 	const contractAddressParticipation =
 		"0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
-	const newGovOpsAddress = "0xFB37F57eee81feEbbe623BDb386a89b72eb47D6E";
-
-	if (!newGovOpsAddress) {
-		console.error(
-			"You must provide the new address as a command line argument."
-		);
-		process.exit(1);
-	}
+	const newGovOpsAddress = "0x25fbFc486E057b136ea9C0658Ff2F3a4288cccDE";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

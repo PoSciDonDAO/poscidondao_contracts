@@ -124,7 +124,7 @@ contract GovernorResearchTest is Test {
             GovernorResearch.ProposalStatus status,
             GovernorResearch.ProjectInfo memory details,
             uint256 votesFor,
-            uint256 votesAgainst,
+            
             uint256 totalVotes
         ) = govRes.getProposalInfo(id);
 
@@ -132,7 +132,6 @@ contract GovernorResearchTest is Test {
         assertEq(endTimeStamp, block.timestamp + govRes.proposalLifeTime());
         assertTrue(status == GovernorResearch.ProposalStatus.Active);
         assertEq(votesFor, 0);
-        assertEq(votesAgainst, 0);
         assertEq(totalVotes, 0);
         assertEq(details.info, "Introduction");
         assertEq(details.receivingWallet, researchWallet);
@@ -154,12 +153,11 @@ contract GovernorResearchTest is Test {
             ,
             ,
             uint256 votesFor,
-            uint256 votesAgainst,
+            
             uint256 totalVotes
         ) = govRes.getProposalInfo(id);
 
         assertEq(votesFor, 1);
-        assertEq(votesAgainst, 0);
         assertEq(totalVotes, 1);
 
         (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
@@ -236,7 +234,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(addr1);
         vm.warp(4.1 weeks);
         govRes.finalize(id);
-        (, , GovernorResearch.ProposalStatus status, , , , ) = govRes
+        (, , GovernorResearch.ProposalStatus status, , , ) = govRes
             .getProposalInfo(id);
         assertTrue(status == GovernorResearch.ProposalStatus.Scheduled);
         vm.stopPrank();
@@ -314,7 +312,6 @@ contract GovernorResearchTest is Test {
             GovernorResearch.ProposalStatus status,
             GovernorResearch.ProjectInfo memory details,
             ,
-            ,
 
         ) = govRes.getProposalInfo(id);
         assertTrue(status == GovernorResearch.ProposalStatus.Executed);
@@ -332,7 +329,7 @@ contract GovernorResearchTest is Test {
         govRes.finalize(id);
         govRes.execute(id, false);
 
-        (, , , GovernorResearch.ProjectInfo memory details, , , ) = govRes
+        (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
 
         assertEq(sci.balanceOf(details.receivingWallet), 1000e18);
@@ -351,7 +348,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(treasuryWallet);
         govRes.execute{value: 1 ether}(id, false);
 
-        (, , , GovernorResearch.ProjectInfo memory details, , , ) = govRes
+        (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
 
         assertEq(details.receivingWallet.balance, 1 ether);
@@ -407,9 +404,10 @@ contract GovernorResearchTest is Test {
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Introduction", researchWallet, 0, 500 ether, 0);
         vm.stopPrank();
+        vm.warp(block.timestamp + 4.1 weeks);
         vm.startPrank(treasuryWallet);
         govRes.cancel(id);
-        (, , GovernorResearch.ProposalStatus status, , , , ) = govRes
+        (, , GovernorResearch.ProposalStatus status, , , ) = govRes
             .getProposalInfo(id);
         assertTrue(status == GovernorResearch.ProposalStatus.Cancelled);
         vm.stopPrank();

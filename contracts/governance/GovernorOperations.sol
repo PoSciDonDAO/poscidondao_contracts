@@ -130,7 +130,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
-    event Proposed(uint256 indexed id, address indexed user, ProjectInfo details);
+    event Proposed(
+        uint256 indexed id,
+        address indexed user,
+        ProjectInfo details
+    );
     event Voted(
         uint256 indexed id,
         address indexed user,
@@ -442,7 +446,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
-        if(proposals[id].details.executable) {
+        if (proposals[id].details.executable) {
             revert ExecutableProposalsCannotBeCompleted();
         }
 
@@ -854,7 +858,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         pure
         returns (Payment payment, uint256 amount, uint256 sciAmount)
     {
-        if (!executable) return (Payment.None, 0, 0); // Default for non-executable, adjust as needed
+        if (!executable) return (Payment.None, 0, 0);
 
         uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
             (amountCoin > 0 ? 1 : 0) +
@@ -869,6 +873,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
 
         revert IncorrectPaymentOption();
+        // revert("Incorrect payment option");
     }
 
     /**
