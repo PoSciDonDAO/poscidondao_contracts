@@ -125,6 +125,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _;
     }
 
+    modifier onlyStaking() {
+        if (msg.sender != stakingAddress) revert Unauthorized(msg.sender);
+        _;
+    }
+
     /*** EVENTS ***/
     event BurnedForTermination(address owner, uint256 amount);
     event Cancelled(uint256 indexed id);
@@ -159,7 +164,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         po = IParticipation(po_);
         signer = signer_;
         opThreshold = 100e18;
-        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 3300; //at least 33% of the total supply must be burned
+        terminationThreshold = 3300;
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
@@ -169,6 +174,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev terminates the governance smart contract
+     */
+    function setTerminated() external notTerminated onlyStaking {
+        terminated = true;
+        emit Terminated(msg.sender, block.number);
+    }
 
     /**
      * @dev sets the threshold for members to propose
@@ -483,40 +496,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev locks a given amount of SCI tokens for termination
-     * @param amount the amount of tokens that will be locked
-     */
-    function burnForTerminatingOperations(
-        uint256 amount
-    ) external nonReentrant notTerminated {
-        ERC20Burnable(sci).burnFrom(msg.sender, amount);
-
-        totBurnedForTermination += amount;
-
-        emit BurnedForTermination(msg.sender, amount);
-    }
-
-    /**
-     * @dev terminates the governance and staking smart contracts
-     */
-    function terminateOperations()
-        external
-        nonReentrant
-        notTerminated
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        if (totBurnedForTermination < terminationThreshold)
-            revert BurnThresholdNotReached(
-                totBurnedForTermination,
-                terminationThreshold
-            );
-        IStaking staking = IStaking(stakingAddress);
-        staking.terminateByGovernance(msg.sender);
-        terminated = true;
-        emit Terminated(msg.sender, block.number);
-    }
-
-    /**
      * @dev returns the PO token address
      */
     function getPoToken() external view returns (address) {
@@ -567,9 +546,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return (
             proposalLifeTime,
             quorum,
-            proposeLockTime,
             voteLockTime,
-            terminationThreshold
+            terminationThreshold,
+            proposeLockTime
         );
     }
 

@@ -413,22 +413,33 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_TerminateResearchFunding() public {
-        vm.startPrank(addr1);
-        staking.lock(2000e18);
-        uint256 id = govRes.getProposalIndex();
-        govRes.propose("Introduction", researchWallet, 50000e6, 0, 0);
-        govRes.vote(id, true);
-        govRes.burnForTerminatingResearchFunding(19000000e18);
-        vm.stopPrank();
+        function test_GovOpsDoesNotWorkAfterTermination() public {
         vm.startPrank(treasuryWallet);
-        govRes.terminateResearchFunding();
+        staking.burnForTermination(2500000e18);
+        staking.terminate();
         vm.stopPrank();
         assertEq(govRes.terminated(), true);
         vm.startPrank(addr1);
-        bytes4 selector = bytes4(keccak256("ContractTerminated(uint256)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, block.number));
-        govRes.propose("Introduction", researchWallet, 500000e6, 0, 0);
+        bytes4 selector1 = bytes4(keccak256("ContractTerminated(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
+        govRes.propose("Info", researchWallet, 0, 50000e6, 0);
+        vm.stopPrank();
+    }
+
+    function test_CancelProposalsIfStillOngoingAfterTermination() public {
+        vm.startPrank(treasuryWallet);
+        staking.lock(2000e18);
+        uint256 id = govRes.getProposalIndex();
+        govRes.propose("Info", researchWallet, 0, 50000e6, 0);
+        staking.burnForTermination(2500000e18);
+        staking.terminate();
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        govRes.cancel(id);
+        assertEq(govRes.terminated(), true);
+        bytes4 selector1 = bytes4(keccak256("ContractTerminated(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
+        govRes.propose("Info", researchWallet, 0, 50000e6, 0);
         vm.stopPrank();
     }
 }

@@ -4,7 +4,6 @@ pragma solidity ^0.8.19;
 import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
@@ -62,7 +61,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
-    uint256 public totBurnedForTermination;
     uint256 private _index;
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
@@ -88,9 +86,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         SciUsdc
     }
 
-    ///*** MODIFIER ***///
+    ///*** MODIFIERS ***///
     modifier notTerminated() {
         if (terminated) revert ContractTerminated(block.number);
+        _;
+    }
+
+    modifier onlyStaking() {
+        if (msg.sender != stakingAddress) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -131,7 +134,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         proposalLifeTime = 15 minutes;
         quorum = 1;
         voteLockTime = 0;
-        terminationThreshold = (IERC20(sci).totalSupply() / 10000) * 500; // 5% of the total supply must be burned
+        terminationThreshold = 500; // 5% of the total supply must be burned
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
@@ -142,6 +145,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev terminates the governance smart contract
+     */
+    function setTerminated() external notTerminated onlyStaking {
+        terminated = true;
+        emit Terminated(msg.sender, block.number);
+    }
 
     /**
      * @dev sets the threshold for DD members to propose
@@ -402,7 +413,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function cancel(
         uint256 id
-    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         if (terminated) {
             proposals[id].status = ProposalStatus.Cancelled;
 
@@ -423,41 +434,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
             emit Cancelled(id);
         }
-    }
-
-    /**
-     * @dev burns a given amount of SCI tokens for termination
-     * @notice DD role members need to unstake their tokens and burn them here
-     * @param amount the amount of tokens that will be locked
-     */
-    function burnForTerminatingResearchFunding(
-        uint256 amount
-    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
-        ERC20Burnable(sci).burnFrom(msg.sender, amount);
-
-        totBurnedForTermination += amount;
-
-        emit BurnedForTermination(msg.sender, amount);
-    }
-
-    /**
-     * @dev terminates the governance and staking smart contracts
-     */
-    function terminateResearchFunding()
-        external
-        notTerminated
-        nonReentrant
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
-        if (totBurnedForTermination < terminationThreshold)
-            revert BurnThresholdNotReached(
-                totBurnedForTermination,
-                terminationThreshold
-            );
-        IStaking staking = IStaking(stakingAddress);
-        staking.terminateByGovernance(msg.sender);
-        terminated = true;
-        emit Terminated(msg.sender, block.number);
     }
 
     /**
@@ -488,12 +464,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         view
         returns (uint256, uint256, uint256, uint256)
     {
-        return (
-            proposalLifeTime,
-            quorum,
-            voteLockTime,
-            terminationThreshold
-        );
+        return (proposalLifeTime, quorum, voteLockTime, terminationThreshold);
     }
 
     /**

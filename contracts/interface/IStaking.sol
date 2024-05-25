@@ -25,7 +25,5 @@ interface IStaking {
         uint256 proposeLockEnd
     ) external returns (bool);
 
-    function terminateByGovernance(address terminator) external;
-
     function voted(address user, uint256 voteLockEnd) external returns (bool);
 }

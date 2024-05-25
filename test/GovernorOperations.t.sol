@@ -664,26 +664,10 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_TerminateGovOps() public {
-        vm.startPrank(treasuryWallet);
-        staking.lock(2000e18);
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose("Info", address(0), 0, 0, 0, false, false);
-        govOps.voteStandard(id, true, 2000e18);
-        govOps.burnForTerminatingOperations(3900000e18);
-        vm.stopPrank();
-
-        vm.startPrank(treasuryWallet);
-        govOps.terminateOperations();
-        vm.stopPrank();
-        assertEq(govOps.totBurnedForTermination(), 3900000e18);
-        assertEq(govOps.terminated(), true);
-    }
-
     function test_GovOpsDoesNotWorkAfterTermination() public {
         vm.startPrank(treasuryWallet);
-        govOps.burnForTerminatingOperations(3900000e18);
-        govOps.terminateOperations();
+        staking.burnForTermination(2500000e18);
+        staking.terminate();
         vm.stopPrank();
         assertEq(govOps.terminated(), true);
         vm.startPrank(addr1);
@@ -693,16 +677,13 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_CancelProposalsAfterTermination() public {
+    function test_CancelProposalsIfStillOngoingAfterTermination() public {
         vm.startPrank(treasuryWallet);
         staking.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), 0, 0, 0, false, false);
-        govOps.burnForTerminatingOperations(3900000e18);
-        // uint256 supply = sci.totalSupply();
-        vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        govOps.terminateOperations();
+        staking.burnForTermination(2500000e18);
+        staking.terminate();
         vm.stopPrank();
         vm.startPrank(addr1);
         govOps.cancel(id);

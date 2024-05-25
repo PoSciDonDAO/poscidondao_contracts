@@ -77,11 +77,11 @@ contract StakingTest is Test {
         deal(address(usdc), addr2, 10000e18);
         deal(address(usdc), addr3, 10000e18);
 
-        deal(address(sci), addr1, 100000000e18);
-        deal(address(sci), addr2, 100000000e18);
-        deal(address(sci), addr3, 100000000e18);
-        deal(address(sci), addr4, 100000000e18);
-        deal(address(sci), addr5, 10000000000000e18);
+        deal(address(sci), addr1, 1000000e18);
+        deal(address(sci), addr2, 1000000e18);
+        deal(address(sci), addr3, 1000000e18);
+        deal(address(sci), addr4, 1000000e18);
+        deal(address(sci), addr5, 1000000e18);
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
@@ -114,6 +114,7 @@ contract StakingTest is Test {
         staking.addDelegate(addr2);
         staking.addDelegate(addr3);
         govRes.grantDueDiligenceRole(addr5);
+        sci.approve(address(staking), 100000000000000e18);
         vm.stopPrank();
     }
 
@@ -391,18 +392,17 @@ contract StakingTest is Test {
         assertEq(delegate, address(0));
     }
 
-    function test_TerminateStakingIfBothGovernorsAreTerminated() public {
-        vm.startPrank(addr5);
-        govRes.burnForTerminatingResearchFunding(1000000e18);
-        govOps.burnForTerminatingOperations(300000000e18);
+    function test_TerminateDAO() public {
+        vm.startPrank(treasuryWallet);
+        staking.burnForTermination(2500000e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
-        govRes.terminateResearchFunding();
-        govOps.terminateOperations();
-        staking.terminate(msg.sender);
+        staking.terminate();
         vm.stopPrank();
 
         assertEq(staking.terminated(), true);
+        assertEq(govOps.terminated(), true);
+        assertEq(govRes.terminated(), true);
     }
 }
