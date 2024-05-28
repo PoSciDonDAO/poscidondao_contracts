@@ -82,6 +82,7 @@ contract StakingTest is Test {
         deal(address(sci), addr3, 1000000e18);
         deal(address(sci), addr4, 1000000e18);
         deal(address(sci), addr5, 1000000e18);
+        deal(address(sci), treasuryWallet, 10000000e18);
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
@@ -394,7 +395,8 @@ contract StakingTest is Test {
 
     function test_TerminateDAO() public {
         vm.startPrank(treasuryWallet);
-        staking.burnForTermination(2500000e18);
+        staking.burnForTermination(18910000 / 10000 * staking.terminationThreshold() * 1e18);
+        assertEq(18910000 / 10000 * staking.terminationThreshold() * 1e18, 4727500e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);

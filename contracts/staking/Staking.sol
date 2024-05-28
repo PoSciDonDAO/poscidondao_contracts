@@ -64,6 +64,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     uint256 public delegateThreshold;
     uint256 public terminationThreshold;
     uint256 public totBurnedForTermination;
+    uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
     mapping(address => User) public users;
     mapping(address => bool) private delegates;
 
@@ -392,7 +393,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function terminate() external nonReentrant notTerminated {
         if (
             totBurnedForTermination <
-            (IERC20(sci).totalSupply() / 10000) * terminationThreshold
+            (TOTAL_SUPPLY_SCI / 10000) * terminationThreshold
         ) revert CannotBeTerminated();
 
         IGov(govOpsContract).setTerminated();

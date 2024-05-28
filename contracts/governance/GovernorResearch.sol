@@ -11,7 +11,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
     error ContractTerminated(uint256 blockNumber);
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
@@ -87,18 +86,23 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     ///*** MODIFIERS ***///
+
+    /**
+     * @notice Ensures operations can only proceed if the contract has not been terminated.
+     */
     modifier notTerminated() {
         if (terminated) revert ContractTerminated(block.number);
         _;
     }
-
+    /**
+     * @notice Ensures function can only be called by the staking contract.
+     */
     modifier onlyStaking() {
         if (msg.sender != stakingAddress) revert Unauthorized(msg.sender);
         _;
     }
 
     /*** EVENTS ***/
-    event BurnedForTermination(address owner, uint256 amount);
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
@@ -134,7 +138,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         proposalLifeTime = 15 minutes;
         quorum = 1;
         voteLockTime = 0;
-        terminationThreshold = 500; // 5% of the total supply must be burned
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
@@ -230,9 +233,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         //the lock time of your tokens after voting
         if (param == "voteLockTime") voteLockTime = data;
-
-        //the amount of tokens that need to be burned to terminate DAO operations governance
-        if (param == "terminationThreshold") terminationThreshold = data;
     }
 
     /**
@@ -457,14 +457,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
      * @return quorum The percentage of votes required for a proposal to be considered valid.
      * @return voteLockTime The duration for which voting on a proposal is open.
-     * @return terminationThreshold The number of failed proposals after which the contract can be terminated.
      */
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256)
     {
-        return (proposalLifeTime, quorum, voteLockTime, terminationThreshold);
+        return (proposalLifeTime, quorum, voteLockTime);
     }
 
     /**

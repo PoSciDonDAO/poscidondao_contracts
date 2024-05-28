@@ -18,8 +18,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    // Custom errors for handling specific revert conditions
-    error BurnThresholdNotReached(uint256 totBurned, uint256 threshold);
     error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
     error ExecutableProposalsCannotBeCompleted();
@@ -73,7 +71,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public quorum;
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
-    uint256 public terminationThreshold;
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
@@ -86,7 +83,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STORAGE & MAPPINGS ***///
     uint256 public opThreshold;
     uint256 private _index;
-    uint256 public totBurnedForTermination;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
     mapping(uint256 => mapping(address => bool)) private voted;
@@ -115,7 +111,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         None
     }
 
-    ///*** MODIFIER ***///
+    ///*** MODIFIERS ***///
 
     /**
      * @notice Ensures operations can only proceed if the contract has not been terminated.
@@ -125,13 +121,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _;
     }
 
+    /**
+     * @notice Ensures function can only be called by the staking contract.
+     */
     modifier onlyStaking() {
         if (msg.sender != stakingAddress) revert Unauthorized(msg.sender);
         _;
     }
 
     /*** EVENTS ***/
-    event BurnedForTermination(address owner, uint256 amount);
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
     event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
@@ -164,7 +162,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         po = IParticipation(po_);
         signer = signer_;
         opThreshold = 100e18;
-        terminationThreshold = 3300;
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
@@ -249,9 +246,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         //the lock time of your tokens and ability to propose after proposing
         if (param == "proposeLockTime") proposeLockTime = data;
-
-        //the amount of tokens that need to be burned to terminate DAO operations governance
-        if (param == "terminationThreshold") terminationThreshold = data;
     }
 
     /**
@@ -536,18 +530,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @return quorum The percentage of votes required for a proposal to be considered valid.
      * @return proposeLockTime The lock time before which a new proposal cannot be made.
      * @return voteLockTime The duration for which voting on a proposal is open.
-     * @return terminationThreshold The number of failed proposals after which the contract can be terminated.
      */
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256)
     {
         return (
             proposalLifeTime,
             quorum,
             voteLockTime,
-            terminationThreshold,
             proposeLockTime
         );
     }
