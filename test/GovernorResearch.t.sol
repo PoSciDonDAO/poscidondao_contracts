@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "lib/forge-std/src/Test.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/governance/GovernorResearch.sol";
-import "contracts/tokens/Participation.sol";
+import "contracts/tokens/Po.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
@@ -12,7 +12,7 @@ import "contracts/staking/Staking.sol";
 contract GovernorResearchTest is Test {
     GovernorOperations public govOps;
     GovernorResearch public govRes;
-    Participation public po;
+    Po public po;
     Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
@@ -38,7 +38,7 @@ contract GovernorResearchTest is Test {
 
         staking = new Staking(treasuryWallet, address(sci));
 
-        po = new Participation("", treasuryWallet);
+        po = new Po("", treasuryWallet);
 
         staking.setSciToken(address(sci));
 
@@ -415,7 +415,7 @@ contract GovernorResearchTest is Test {
 
         function test_GovOpsDoesNotWorkAfterTermination() public {
         vm.startPrank(treasuryWallet);
-        staking.burnForTermination(2500000e18);
+        staking.burnForTermination(5000000e18);
         staking.terminate();
         vm.stopPrank();
         assertEq(govRes.terminated(), true);
@@ -431,7 +431,7 @@ contract GovernorResearchTest is Test {
         staking.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", researchWallet, 0, 50000e6, 0);
-        staking.burnForTermination(2500000e18);
+        staking.burnForTermination(5000000e18);
         staking.terminate();
         vm.stopPrank();
         vm.startPrank(addr1);

@@ -7,10 +7,10 @@ async function main() {
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x6433AB497156e9F7b526428b4c94fC1509971637";
+	const contractAddressStaking = "0x472f15509BB0d0233Ab325849440e34f3447e195";
 	const contractAddressParticipation =
-		"0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb";
-	const newGovOpsAddress = "0xCF1648C891c48dA4e388D0f3CC0370004D732258";
+		"0x8DED292CbF0803Aa2F57F937470d54F1F732D808";
+	const newGovOpsAddress = "0xC7852A93533e4b46d5B229Fc7d132894a427263c";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import "./../interface/IParticipation.sol";
+import "./../interface/IPo.sol";
 import "./../interface/IStaking.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
@@ -64,7 +64,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERFACE ***///
-    IParticipation private po;
+    IPo private po;
 
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
@@ -159,10 +159,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
-        po = IParticipation(po_);
+        po = IPo(po_);
         signer = signer_;
         opThreshold = 100e18;
-        proposalLifeTime = 15 minutes; //testing
+        proposalLifeTime = 7 days; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
@@ -222,7 +222,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setPoToken(
         address po_
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        po = IParticipation(po_);
+        po = IPo(po_);
     }
 
     /**

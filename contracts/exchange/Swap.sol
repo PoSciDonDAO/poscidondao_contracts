@@ -44,6 +44,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     uint256 public totSciSwapped;
     uint256 public deploymentTime;
     uint256 public end;
+    uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
 
     event Swapped(
         address indexed user,
@@ -78,7 +79,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         rateUsdc = 2100;
         rateMatic = 3000;
         rateWeth = 14762;
-        sciSwapCap = (IERC20(sci).totalSupply() / 10000) * 50;
+        sciSwapCap = ( TOTAL_SUPPLY_SCI / 10000) * 50;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         deploymentTime = block.timestamp;
@@ -127,7 +128,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     function setSciSwapCap(
         uint256 _sciSwapCap
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        sciSwapCap = (IERC20(sci).totalSupply() / 10000) * _sciSwapCap;
+        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * _sciSwapCap;
     }
 
     /**

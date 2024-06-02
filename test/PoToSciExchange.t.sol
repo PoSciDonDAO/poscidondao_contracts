@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/governance/GovernorOperations.sol";
-import "contracts/tokens/Participation.sol";
+import "contracts/tokens/Po.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/staking/Staking.sol";
@@ -11,7 +11,7 @@ import "contracts/exchange/PoToSciExchange.sol";
 
 contract PoToSciExchangeTest is Test {
     GovernorOperations public gov;
-    Participation public po;
+    Po public po;
     MockUsdc public usdc;
     Staking public staking;
     Sci public sci;
@@ -39,7 +39,7 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(treasuryWallet);
         sci = new Sci(treasuryWallet);
 
-        po = new Participation("", treasuryWallet);
+        po = new Po("", treasuryWallet);
         staking = new Staking(treasuryWallet, address(sci));
 
         gov = new GovernorOperations(
@@ -106,9 +106,9 @@ contract PoToSciExchangeTest is Test {
         gov.voteStandard(id, true, 5000e18);
         assertEq(po.balanceOf(addr2, 0), 1);
 
-        ex.exchangePoForSci(addr2, 1);
+        ex.exchangePoForSci(1);
         assertEq(po.balanceOf(addr2, 0), 0);
-        assertEq(sci.balanceOf(addr2), 1.8e18);
+        assertEq(sci.balanceOf(addr2), 2e18);
         vm.stopPrank();
     }
 
@@ -127,8 +127,8 @@ contract PoToSciExchangeTest is Test {
         staking.lock(5000e18);
         gov.voteStandard(id, true, 5000e18);
 
-        ex.exchangePoForSci(addr2, 1);
+        ex.exchangePoForSci(1);
         assertEq(po.balanceOf(addr2, 0), 0);
-        assertEq(sci.balanceOf(addr2), 4.5e17);
+        assertEq(sci.balanceOf(addr2), 5e17);
     }
 }

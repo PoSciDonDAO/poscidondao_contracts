@@ -4,7 +4,6 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {ERC1155Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
@@ -20,8 +19,7 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
 
     /// @notice Interfaces for interacting with the ERC1155Burnable PO token, ERC20Burnable and IERC20 SCI token.
     ERC1155Burnable private po;
-    ERC20Burnable private bSci;
-    IERC20 private eSci;
+    IERC20 private sci;
 
     /// @notice Address of the wallet holding rewards and responsible for executing token transfers.
     address public rewardWallet;
@@ -32,9 +30,8 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     /// @notice Event to log the exchange activity.
     event Exchanged(
         address user,
-        uint256 poAmount,
-        uint256 sciAmountReceived,
-        uint256 sciAmountBurned
+        uint256 amount,
+        uint256 amountSci
     );
 
     /**
@@ -46,10 +43,9 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     constructor(address rewardWallet_, address sci_, address po_) {
         rewardWallet = rewardWallet_;
         po = ERC1155Burnable(po_);
-        bSci = ERC20Burnable(sci_);
-        eSci = IERC20(sci_);
+        sci = IERC20(sci_);
         _grantRole(DEFAULT_ADMIN_ROLE, rewardWallet_);
-        conversionRate = 2e18; // Initial conversion rate, e.g., 2 SCI per PO, scaled by 1e18.
+        conversionRate = 2e18;
     }
 
     /**
@@ -66,35 +62,28 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     /**
      * @dev Allows a user to exchange their PO tokens for SCI tokens according to the current conversion rate.
      * Burns a percentage of the SCI tokens as part of the exchange process.
-     * @param user Address of the user performing the exchange.
      * @param poAmount The amount of PO tokens to exchange.
      */
-    function exchangePoForSci(address user, uint256 poAmount) external nonReentrant {
+    function exchangePoForSci(uint256 poAmount) external nonReentrant {
         if (poAmount == 0) {
             revert IncorrectInput();
         }
 
-        // Burn the specified amount of PO tokens from the user's balance.
-        po.burn(user, 0, poAmount);
-
         // Calculate the total amount of SCI tokens to mint based on the conversion rate.
         uint256 sciAmount = poAmount * conversionRate;
 
-        // Calculate the amount of SCI tokens to burn as a percentage of the total.
-        uint256 sciAmountToBurn = (sciAmount * 100) / 1000;
-
         // Transfer the net SCI tokens to the user, after deducting the burn amount.
-        eSci.safeTransferFrom(rewardWallet, user, (sciAmount - sciAmountToBurn));
+        // Requires approval
+        sci.safeTransferFrom(rewardWallet, msg.sender, sciAmount);
 
-        // Burn the specified amount of SCI tokens from the reward wallet.
-        bSci.burnFrom(rewardWallet, sciAmountToBurn);
+        // Burn the specified amount of PO tokens from the user's balance.
+        po.burn(msg.sender, 0, poAmount);
 
         // Emit an event logging the exchange details.
         emit Exchanged(
-            user,
+            msg.sender,
             poAmount,
-            sciAmount - sciAmountToBurn,
-            sciAmountToBurn
+            sciAmount
         );
     }
 }

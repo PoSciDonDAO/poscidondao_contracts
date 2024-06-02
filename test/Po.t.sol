@@ -3,14 +3,14 @@ pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/governance/GovernorOperations.sol";
-import "contracts/tokens/Participation.sol";
+import "contracts/tokens/Po.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/staking/Staking.sol";
 
-contract ParticipationTest is Test {
+contract PoTest is Test {
     GovernorOperations public gov;
-    Participation public po;
+    Po public po;
     MockUsdc public usdc;
     Staking public staking;
     Sci public sci;
@@ -23,9 +23,10 @@ contract ParticipationTest is Test {
     address treasuryWallet = vm.addr(6);
     address donationWallet = vm.addr(7);
     address operationsWallet = vm.addr(8);
-    bytes32 govIdCircuitId = 0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
-    bytes32 phoneCircuitId = 0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
-    
+    bytes32 govIdCircuitId =
+        0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
+    bytes32 phoneCircuitId =
+        0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
 
     function setUp() public {
         usdc = new MockUsdc(10000000e6);
@@ -33,7 +34,7 @@ contract ParticipationTest is Test {
         vm.startPrank(treasuryWallet);
         sci = new Sci(treasuryWallet);
 
-        po = new Participation("", treasuryWallet);
+        po = new Po("", treasuryWallet);
 
         staking = new Staking(treasuryWallet, address(sci));
 
@@ -74,9 +75,16 @@ contract ParticipationTest is Test {
         sci.approve(address(gov), 10000e18);
         sci.approve(address(staking), 10000000000000000e18);
         vm.stopPrank();
+
+        vm.startPrank(addr3);
+        deal(address(sci), addr3, 100000000e18);
+        deal(addr3, 10000 ether);
+        sci.approve(address(gov), 10000e18);
+        sci.approve(address(staking), 10000000000000000e18);
+        vm.stopPrank();
     }
 
-    function test_ReceiveParticipationTokens() public {
+    function test_ReceivePoTokens() public {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
@@ -92,10 +100,11 @@ contract ParticipationTest is Test {
         gov.voteStandard(id, true, 2000e18);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
+        assertEq(po.totalSupply(), 1);
         vm.stopPrank();
     }
 
-    function test_BurnParticipationTokensWhenTreasuryIsBurner() public {
+    function test_BurnPoToken() public {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
@@ -111,17 +120,19 @@ contract ParticipationTest is Test {
         gov.voteStandard(id, true, 2000e18);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
+        po.burn(addr1, 0, 1);
+        uint256 balance1 = po.balanceOf(addr1, 0);
+        assertEq(po.totalSupply(), 0);
+        assertEq(balance1, 0);
         vm.stopPrank();
-
         vm.startPrank(addr2);
         staking.lock(2000e18);
         gov.voteStandard(id, true, 2000e18);
-        po.setApprovalForAll(treasuryWallet, true);
         vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        po.burn(addr2, 0, 1);
-        uint256 balance1 = po.balanceOf(addr2, 0);
-        assertEq(balance1, 0);
+        vm.startPrank(addr3);
+        staking.lock(2000e18);
+        gov.voteStandard(id, true, 2000e18);
         vm.stopPrank();
+        assertEq(po.totalSupply(), 2);
     }
 }

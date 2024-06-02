@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-	console.log(`Running deploy script for the GovernorResearch contract`);
+	console.log(`Running deploy script for the PoToSciExchange contract`);
 	// load wallet private key from env file
 	const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -20,21 +20,13 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const stakingAddress = "0x472f15509BB0d0233Ab325849440e34f3447e195";
 	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-	const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-	const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-	const sciToken = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
+  const sciToken = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
+  const poToken = "0x8DED292CbF0803Aa2F57F937470d54F1F732D808";
 
-	const constructorArguments = [
-		stakingAddress,
-		treasuryWallet,
-		donationWallet,
-		usdc,
-		sciToken,
-	];
+	const constructorArguments = [treasuryWallet, sciToken, poToken];
 
-	const Contract = await ethers.getContractFactory("GovernorResearch");
+	const Contract = await ethers.getContractFactory("PoToSciExchange");
 	// Estimate contract deployment fee
 	const estimatedGas = await ethers.provider.estimateGas(
 		Contract.getDeployTransaction(...constructorArguments)
@@ -55,7 +47,7 @@ async function main() {
 	const contract = await Contract.deploy(...constructorArguments);
 	console.log("Deployed Contract Address:", contract.address);
 	console.log("Verifying contract in 2 minutes...");
-	await sleep(120000 * 1);
+	await sleep(60000 * 1);
 	await run("verify:verify", {
 		address: contract.address,
 		constructorArguments: [...constructorArguments],

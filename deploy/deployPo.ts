@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log(`Running deploy script for the Participation contract`);
+  console.log(`Running deploy script for the PO token contract`);
   // load wallet private key from env file
   const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -25,7 +25,7 @@ async function main() {
 
   const constructorArguments = [URI, treasuryWallet];
 
-  const Contract = await ethers.getContractFactory("Participation");
+  const Contract = await ethers.getContractFactory("Po");
   // Estimate contract deployment fee
   const estimatedGas = await ethers.provider.estimateGas(
     Contract.getDeployTransaction(...constructorArguments)

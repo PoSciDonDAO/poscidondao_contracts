@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/tokens/Participation.sol";
+import "contracts/tokens/Po.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
@@ -12,7 +12,7 @@ import "contracts/governance/GovernorResearch.sol";
 contract StakingTest is Test {
     GovernorOperations public govOps;
     GovernorResearch public govRes;
-    Participation public po;
+    Po public po;
     Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
@@ -25,16 +25,8 @@ contract StakingTest is Test {
     address public donationWallet = vm.addr(6);
     address public treasuryWallet = vm.addr(7);
 
-    event Locked(
-        address indexed user,
-        address indexed asset,
-        uint256 amount
-    );
-    event Freed(
-        address indexed user,
-        address indexed asset,
-        uint256 amount
-    );
+    event Locked(address indexed user, address indexed asset, uint256 amount);
+    event Freed(address indexed user, address indexed asset, uint256 amount);
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
@@ -42,7 +34,7 @@ contract StakingTest is Test {
         vm.startPrank(treasuryWallet);
         sci = new Sci(treasuryWallet);
 
-        po = new Participation("", treasuryWallet);
+        po = new Po("", treasuryWallet);
 
         staking = new Staking(treasuryWallet, address(sci));
 
@@ -395,8 +387,13 @@ contract StakingTest is Test {
 
     function test_TerminateDAO() public {
         vm.startPrank(treasuryWallet);
-        staking.burnForTermination(18910000 / 10000 * staking.terminationThreshold() * 1e18);
-        assertEq(18910000 / 10000 * staking.terminationThreshold() * 1e18, 4727500e18);
+        staking.burnForTermination(100000e18);
+        staking.burnForTermination(4627500e18);
+
+        assertEq(
+            (18910000 / 10000) * staking.terminationThreshold() * 1e18,
+            4727500e18
+        );
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);

@@ -134,6 +134,16 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function setDelegateThreshold(
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        terminationThreshold = newThreshold;
+    }
+
+    /**
+     * @dev sets the amount of burned sci tokens needed terminate the DAO
+     * @param newThreshold the new threshold to terminate the DAO, precision = 10000
+     */
+    function setTerminationThreshold(
+        uint256 newThreshold
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delegateThreshold = newThreshold;
     }
 

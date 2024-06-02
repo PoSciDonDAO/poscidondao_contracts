@@ -7,8 +7,8 @@ async function main() {
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x6433AB497156e9F7b526428b4c94fC1509971637";
-	const newGovResAddress = "0x9Ab8E08bFCc46961cb541c1cA6954D6757D3AD48";
+	const contractAddressStaking = "0x472f15509BB0d0233Ab325849440e34f3447e195";
+	const newGovResAddress = "0x8798C06cb431557EbB048Ed8F984b06Ae7fee729";
 
 	if (!newGovResAddress) {
 		console.error(
