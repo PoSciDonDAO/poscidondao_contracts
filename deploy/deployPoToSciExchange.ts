@@ -21,8 +21,8 @@ async function main() {
 	}
 
 	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sciToken = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
-  const poToken = "0x8DED292CbF0803Aa2F57F937470d54F1F732D808";
+  const sciToken = "0x210268375372626a9ED4D1e14298B3ab4135ac02";
+  const poToken = "0x91a81E15401b9Cb546288e2583Bb72605d0e48D9";
 
 	const constructorArguments = [treasuryWallet, sciToken, poToken];
 

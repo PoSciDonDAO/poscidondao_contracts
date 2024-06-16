@@ -21,7 +21,7 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sci = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
+  const sci = "0x210268375372626a9ED4D1e14298B3ab4135ac02";
   const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
   const weth = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
   const constructorArguments = [treasuryWallet, sci, usdc, weth];

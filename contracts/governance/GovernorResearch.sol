@@ -177,9 +177,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
      * @dev sets the GovernorOperations contract address
      */
     function setGovOps(
-        address newGovResAddress
+        address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govOpsAddress = newGovResAddress;
+        govOpsAddress = newGovOpsAddress;
     }
 
     /**
