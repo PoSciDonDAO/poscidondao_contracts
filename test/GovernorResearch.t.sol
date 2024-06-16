@@ -42,14 +42,6 @@ contract GovernorResearchTest is Test {
 
         staking.setSciToken(address(sci));
 
-        govOps = new GovernorOperations(
-            address(staking),
-            treasuryWallet,
-            address(usdc),
-            address(sci),
-            address(po),
-            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
-        );
         govRes = new GovernorResearch(
             address(staking),
             treasuryWallet,
@@ -57,10 +49,21 @@ contract GovernorResearchTest is Test {
             address(usdc),
             address(sci)
         );
-        govRes.setGovParams("proposalLifeTime", 4 weeks);
-        govRes.setGovParams("quorum", 1);
-        govRes.setGovParams("voteLockTime", 2 weeks);
-        govRes.setGovParams("proposeLockTime", 2 weeks);
+
+        govOps = new GovernorOperations(
+            address(govRes),
+            address(staking),
+            treasuryWallet,
+            address(usdc),
+            address(sci),
+            address(po),
+            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
+        );
+        po.setGovOps(address(govOps));
+        // govOps.setGovParams("proposalLifeTime", 4 weeks);
+        // govOps.setGovParams("quorum", 100e18);
+        // govOps.setGovParams("voteLockTime", 2 weeks);
+        // govOps.setGovParams("proposeLockTime", 2 weeks);
 
         staking.setGovRes(address(govRes));
         staking.setGovOps(address(govOps));
@@ -101,8 +104,50 @@ contract GovernorResearchTest is Test {
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
-        govRes.grantDueDiligenceRole(addr1);
-        govRes.grantDueDiligenceRole(addr2);
+        // govRes.grantDueDiligenceRole(addr1);
+        // govRes.grantDueDiligenceRole(addr2);
+        govRes.setGovOps(address(govOps));
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        staking.lock(2000e18);
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        staking.lock(20000000e18);
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            addr1,
+            0,
+            0,
+            0,
+            GovernorOperations.Execution.Election,
+            false
+        );
+        uint256 id1 = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            addr2,
+            0,
+            0,
+            0,
+            GovernorOperations.Execution.Election,
+            false
+        );
+        govOps.voteStandard(id, true, 20000000e18);
+        govOps.voteStandard(id1, true, 20000000e18);
+        vm.warp(0.1 weeks);
+        govOps.finalize(id);
+        govOps.finalize(id1);
+        vm.stopPrank();
+        vm.startPrank(treasuryWallet);
+        govOps.execute(id);
+        govOps.execute(id1);
+        vm.stopPrank();
+        vm.startPrank(treasuryWallet);
+        govRes.setGovParams("proposalLifeTime", 4 weeks);
+        govRes.setGovParams("quorum", 1);
+        govRes.setGovParams("voteLockTime", 2 weeks);
+        govRes.setGovParams("proposeLockTime", 2 weeks);
         vm.stopPrank();
     }
 
@@ -124,7 +169,6 @@ contract GovernorResearchTest is Test {
             GovernorResearch.ProposalStatus status,
             GovernorResearch.ProjectInfo memory details,
             uint256 votesFor,
-            
             uint256 totalVotes
         ) = govRes.getProposalInfo(id);
 
@@ -147,15 +191,9 @@ contract GovernorResearchTest is Test {
         govRes.propose("Introduction", researchWallet, 5000000e6, 0, 0);
         govRes.vote(id, true);
 
-        (
-            ,
-            ,
-            ,
-            ,
-            uint256 votesFor,
-            
-            uint256 totalVotes
-        ) = govRes.getProposalInfo(id);
+        (, , , , uint256 votesFor, uint256 totalVotes) = govRes.getProposalInfo(
+            id
+        );
 
         assertEq(votesFor, 1);
         assertEq(totalVotes, 1);
@@ -215,7 +253,7 @@ contract GovernorResearchTest is Test {
                 selector,
                 id,
                 block.timestamp,
-                proposalLifeTime + 1
+                proposalLifeTime + 0.1 weeks
             )
         );
         govRes.finalize(id);
@@ -413,7 +451,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-        function test_GovOpsDoesNotWorkAfterTermination() public {
+    function test_GovOpsDoesNotWorkAfterTermination() public {
         vm.startPrank(treasuryWallet);
         staking.burnForTermination(5000000e18);
         staking.terminate();

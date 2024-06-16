@@ -16,7 +16,7 @@ contract Po is ERC1155Burnable, AccessControl {
 
     // State variables
     address public treasuryWallet; /// @notice Wallet address for treasury operations.
-    address public govOps; /// @notice Governance operations address for administrative actions.
+    address public govOpsAddress; /// @notice Governance operations address for administrative actions.
     string public name = "Participation Token"; /// @notice Human-readable name of the token.
     string public symbol = "PO"; /// @notice Abbreviated symbol of the token.
     bool internal frozenUri = false; /// @notice Indicates if the URI has been frozen.
@@ -29,8 +29,8 @@ contract Po is ERC1155Burnable, AccessControl {
     /**
      * @dev Modifier to restrict actions to the Governance Operations address.
      */
-    modifier gov() {
-        if (msg.sender != govOps) revert Unauthorized(msg.sender);
+    modifier onlyGov() {
+        if (msg.sender != govOpsAddress) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -50,13 +50,13 @@ contract Po is ERC1155Burnable, AccessControl {
 
     /**
      * @dev Sets the governance operations address.
-     * @param newGovOps Address of the new governance operations.
+     * @param newGovOpsAddress Address of the new governance operations.
      */
     function setGovOps(
-        address newGovOps
+        address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (frozenGovOps) revert Frozen();
-        govOps = newGovOps;
+        govOpsAddress = newGovOpsAddress;
     }
 
     /**
@@ -84,7 +84,7 @@ contract Po is ERC1155Burnable, AccessControl {
      * @dev Mints a specified amount of participation tokens to a user.
      * @param user Address of the user to mint tokens to.
      */
-    function mint(address user) external gov {
+    function mint(address user) external onlyGov {
         _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
         _totalSupply += MINT_AMOUNT;
     }

@@ -38,21 +38,22 @@ contract StakingTest is Test {
 
         staking = new Staking(treasuryWallet, address(sci));
 
-        govOps = new GovernorOperations(
-            address(staking),
-            treasuryWallet,
-            address(usdc),
-            address(sci),
-            address(po),
-            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
-        );
-
         govRes = new GovernorResearch(
             address(staking),
             treasuryWallet,
             donationWallet,
             address(usdc),
             address(sci)
+        );
+
+        govOps = new GovernorOperations(
+            address(govRes),
+            address(staking),
+            treasuryWallet,
+            address(usdc),
+            address(sci),
+            address(po),
+            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
         );
 
         staking.setGovOps(address(govOps));
@@ -106,7 +107,6 @@ contract StakingTest is Test {
         vm.startPrank(treasuryWallet);
         staking.addDelegate(addr2);
         staking.addDelegate(addr3);
-        govRes.grantDueDiligenceRole(addr5);
         sci.approve(address(staking), 100000000000000e18);
         vm.stopPrank();
     }

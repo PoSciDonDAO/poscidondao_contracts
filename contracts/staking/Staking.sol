@@ -69,7 +69,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     mapping(address => bool) private delegates;
 
     ///*** MODIFIERS ***///
-    modifier gov() {
+    modifier onlyGov() {
         if (!(msg.sender == govOpsContract || msg.sender == govResContract))
             revert Unauthorized(msg.sender);
         _;
@@ -358,7 +358,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function voted(
         address user,
         uint256 voteLockEnd
-    ) external gov returns (bool) {
+    ) external onlyGov returns (bool) {
         if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
@@ -374,7 +374,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function proposed(
         address user,
         uint256 proposeLockEnd
-    ) external gov returns (bool) {
+    ) external onlyGov returns (bool) {
         if (users[user].proposeLockEnd < proposeLockEnd) {
             users[user].proposeLockEnd = proposeLockEnd;
         }

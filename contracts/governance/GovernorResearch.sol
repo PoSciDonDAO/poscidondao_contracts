@@ -2,12 +2,13 @@
 pragma solidity ^0.8.19;
 
 import "./../interface/IStaking.sol";
+import "./../interface/IGovernorResearch.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
-contract GovernorResearch is AccessControl, ReentrancyGuard {
+contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
@@ -52,6 +53,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     uint256 public terminationThreshold;
 
     ///*** KEY ADDRESSES ***///
+    address public govOpsAddress;
     address public stakingAddress;
     address public treasuryWallet;
     address public donationWallet;
@@ -99,6 +101,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     modifier onlyStaking() {
         if (msg.sender != stakingAddress) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyGov() {
+        if (!(msg.sender == govOpsAddress)) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -167,12 +174,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev sets the GovernorOperations contract address
+     */
+    function setGovOps(
+        address newGovResAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        govOpsAddress = newGovResAddress;
+    }
+
+    /**
      * @dev grants Due Diligence role to member
      * @param member the address of the DAO member
      */
     function grantDueDiligenceRole(
         address member
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyGov {
         IStaking staking = IStaking(stakingAddress);
         _validateStakingRequirements(staking, member);
         _grantRole(DUE_DILIGENCE_ROLE, member);
@@ -184,7 +200,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function revokeDueDiligenceRole(
         address member
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyGov {
         _revokeRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -538,16 +554,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev Validates if the proposer meets the staking requirements for proposing research.
      * @param staking The staking contract interface used to check the staked SCI.
-     * @param proposer The address of the member initiating an action.
+     * @param member The address of the member initiating an action.
      *
      * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
      * The staked SCI amount and required threshold are provided in the revert message.
      */
     function _validateStakingRequirements(
         IStaking staking,
-        address proposer
+        address member
     ) internal view {
-        uint256 stakedSci = staking.getStakedSci(proposer);
+        uint256 stakedSci = staking.getStakedSci(member);
         if (stakedSci < ddThreshold) {
             revert InsufficientBalance(stakedSci, ddThreshold);
         }

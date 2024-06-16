@@ -10,7 +10,7 @@ async function main() {
 	const contractAddressStaking = "0x472f15509BB0d0233Ab325849440e34f3447e195";
 	const contractAddressParticipation =
 		"0x8DED292CbF0803Aa2F57F937470d54F1F732D808";
-	const newGovOpsAddress = "0xC7852A93533e4b46d5B229Fc7d132894a427263c";
+	const newGovOpsAddress = "0xf1c28Ea9F8F6De12953E072e815dBB874b74845f";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

@@ -43,6 +43,7 @@ contract PoToSciExchangeTest is Test {
         staking = new Staking(treasuryWallet, address(sci));
 
         gov = new GovernorOperations(
+            address(addr5),
             address(staking),
             treasuryWallet,
             address(usdc),
@@ -97,7 +98,7 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
-        gov.propose(info, operationsWallet, 50000e6, 0, 0, true, false);
+        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.Execution.Transaction, false);
         vm.stopPrank();
         vm.startPrank(addr2);
 
@@ -120,7 +121,7 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
-        gov.propose(info, operationsWallet, 50000e6, 0, 0, true, false);
+        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.Execution.Transaction, false);
         vm.stopPrank();
         
         vm.startPrank(addr2);

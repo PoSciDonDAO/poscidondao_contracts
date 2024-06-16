@@ -39,6 +39,7 @@ contract PoTest is Test {
         staking = new Staking(treasuryWallet, address(sci));
 
         gov = new GovernorOperations(
+            address(addr5),
             address(staking),
             treasuryWallet,
             address(usdc),
@@ -94,7 +95,7 @@ contract PoTest is Test {
             5000000e6,
             0,
             0,
-            true,
+            GovernorOperations.Execution.Transaction,
             false
         );
         gov.voteStandard(id, true, 2000e18);
@@ -114,7 +115,7 @@ contract PoTest is Test {
             5000000e6,
             0,
             0,
-            true,
+            GovernorOperations.Execution.Transaction,
             false
         );
         gov.voteStandard(id, true, 2000e18);
