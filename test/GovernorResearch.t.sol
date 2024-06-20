@@ -120,7 +120,7 @@ contract GovernorResearchTest is Test {
             0,
             0,
             0,
-            GovernorOperations.Execution.Election,
+            GovernorOperations.ProposalType.Election,
             false
         );
         uint256 id1 = govOps.getProposalIndex();
@@ -130,7 +130,7 @@ contract GovernorResearchTest is Test {
             0,
             0,
             0,
-            GovernorOperations.Execution.Election,
+            GovernorOperations.ProposalType.Election,
             false
         );
         govOps.voteStandard(id, true, 20000000e18);
@@ -178,7 +178,7 @@ contract GovernorResearchTest is Test {
         assertEq(votesFor, 0);
         assertEq(totalVotes, 0);
         assertEq(details.info, "Introduction");
-        assertEq(details.receivingWallet, researchWallet);
+        assertEq(details.targetWallet, researchWallet);
         assertEq(details.amount, 5000000e6);
         assertEq(details.amountSci, 0);
         vm.stopPrank();
@@ -353,7 +353,7 @@ contract GovernorResearchTest is Test {
 
         ) = govRes.getProposalInfo(id);
         assertTrue(status == GovernorResearch.ProposalStatus.Executed);
-        assertEq(usdc.balanceOf(details.receivingWallet), details.amount);
+        assertEq(usdc.balanceOf(details.targetWallet), details.amount);
         vm.stopPrank();
     }
 
@@ -370,7 +370,7 @@ contract GovernorResearchTest is Test {
         (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
 
-        assertEq(sci.balanceOf(details.receivingWallet), 1000e18);
+        assertEq(sci.balanceOf(details.targetWallet), 1000e18);
         vm.stopPrank();
     }
 
@@ -389,7 +389,7 @@ contract GovernorResearchTest is Test {
         (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
 
-        assertEq(details.receivingWallet.balance, 1 ether);
+        assertEq(details.targetWallet.balance, 1 ether);
         vm.stopPrank();
     }
 

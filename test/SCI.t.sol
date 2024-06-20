@@ -85,7 +85,7 @@ contract SciTest is Test {
             0,
             0,
             5000000e18,
-            GovernorOperations.Execution.Minting,
+            GovernorOperations.ProposalType.Minting,
             false
         );
         govOps.voteStandard(id, true, 20000000e18);
@@ -93,7 +93,7 @@ contract SciTest is Test {
         govOps.finalize(id);
         (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
             .getProposalInfo(id);
-        assertTrue(details.execution == GovernorOperations.Execution.Minting);
+        assertTrue(details.proposalType == GovernorOperations.ProposalType.Minting);
         assertEq(details.amountSci, 5000000e18);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);

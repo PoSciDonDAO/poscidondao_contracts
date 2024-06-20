@@ -20,7 +20,7 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const govResAddress = "0xfF200d8Af1e2cE9c2b7bc09a6Ca0ec69f13555bA";
+	const govResAddress = "0x2E1dD2068f17737E2052b4cb55CaAB7d41F7B41c";
 	const stakingAddress = "0x8ACFE27d85B2ead0bB457a39E60269b2eD364A3c";
 	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 	const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";

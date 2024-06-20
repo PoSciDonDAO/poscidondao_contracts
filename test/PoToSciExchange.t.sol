@@ -98,7 +98,7 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
-        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.Execution.Transaction, false);
+        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.ProposalType.Transaction, false);
         vm.stopPrank();
         vm.startPrank(addr2);
 
@@ -121,7 +121,7 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = gov.getProposalIndex();
-        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.Execution.Transaction, false);
+        gov.propose(info, operationsWallet, 50000e6, 0, 0, GovernorOperations.ProposalType.Transaction, false);
         vm.stopPrank();
         
         vm.startPrank(addr2);

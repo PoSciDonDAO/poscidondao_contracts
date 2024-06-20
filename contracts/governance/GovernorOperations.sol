@@ -20,6 +20,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error CannotImpeachUserWithoutDDRole();
     error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
     error ExecutableProposalsCannotBeCompleted();
@@ -65,7 +66,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         Payment payment;
         uint256 amount; //amount of usdc or coin
         uint256 amountSci; //amount of sci token
-        Execution execution; //execution option for proposal
+        ProposalType proposalType; //proposalType option for proposal
     }
 
     ///*** INTERFACES ***///
@@ -119,9 +120,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Enumerates the different execution options for a proposal.
+     * @notice Enumerates the different proposalType options for a proposal.
      */
-    enum Execution {
+    enum ProposalType {
         Minting,
         Election,
         Impeachment,
@@ -151,7 +152,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
     event EmergencyCancelled(uint256 indexed id, string reason);
-    event Executed(uint256 indexed id, Execution indexed execution);
+    event Executed(uint256 indexed id, ProposalType indexed proposalType);
     event Proposed(
         uint256 indexed id,
         address indexed user,
@@ -286,7 +287,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param amountUsdc Amount of USDC.
      * @param amountCoin Amount of Coin.
      * @param amountSci Amount of SCI tokens.
-     * @param execution the type of execution this proposal needs
+     * @param proposalType the type of proposalType this proposal needs
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
      * @return uint256 Index of the newly created proposal.
      */
@@ -296,7 +297,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci,
-        Execution execution,
+        ProposalType proposalType,
         bool quadraticVoting
     ) external nonReentrant notTerminated returns (uint256) {
         _validateInput(
@@ -305,7 +306,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             amountUsdc,
             amountCoin,
             amountSci,
-            execution
+            proposalType
         );
 
         IStaking staking = IStaking(stakingAddress);
@@ -320,7 +321,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 amountUsdc,
                 amountCoin,
                 amountSci,
-                execution
+                proposalType
             );
 
         ProjectInfo memory projectInfo = ProjectInfo(
@@ -329,7 +330,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             payment,
             amount,
             sciAmount,
-            execution
+            proposalType
         );
 
         uint256 currentIndex = _storeProposal(
@@ -433,15 +434,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //check if proposal exists
         if (id >= _index) revert ProposalInexistent();
 
+        if (proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(proposals[id].status);
         address targetWallet = proposals[id].details.targetWallet;
         uint256 amount = proposals[id].details.amount;
         uint256 amountSci = proposals[id].details.amountSci;
         Payment payment = proposals[id].details.payment;
 
-        if (proposals[id].details.execution == Execution.Transaction) {
+        if (proposals[id].details.proposalType == ProposalType.Transaction) {
             //check if proposal has finalized voting
-            if (proposals[id].status != ProposalStatus.Scheduled)
-                revert IncorrectPhase(proposals[id].status);
+
             if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
                 _transferToken(
                     IERC20(usdc),
@@ -464,16 +466,29 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             proposals[id].status = ProposalStatus.Executed;
 
-            emit Executed(id, proposals[id].details.execution);
-        } else if (proposals[id].details.execution == Execution.Minting) {
+            emit Executed(id, proposals[id].details.proposalType);
+        } else if (proposals[id].details.proposalType == ProposalType.Minting) {
             sciInterface.mint(amountSci);
-            emit Executed(id, proposals[id].details.execution);
-        } else if (proposals[id].details.execution == Execution.Election) {
+
+            proposals[id].status = ProposalStatus.Executed;
+
+            emit Executed(id, proposals[id].details.proposalType);
+        } else if (
+            proposals[id].details.proposalType == ProposalType.Election
+        ) {
             govRes.grantDueDiligenceRole(targetWallet);
-            emit Executed(id, proposals[id].details.execution);
-        } else if (proposals[id].details.execution == Execution.Impeachment) {
+
+            proposals[id].status = ProposalStatus.Executed;
+            
+            emit Executed(id, proposals[id].details.proposalType);
+        } else if (
+            proposals[id].details.proposalType == ProposalType.Impeachment
+        ) {
             govRes.revokeDueDiligenceRole(targetWallet);
-            emit Executed(id, proposals[id].details.execution);
+
+            proposals[id].status = ProposalStatus.Executed;
+            
+            emit Executed(id, proposals[id].details.proposalType);
         } else {
             revert ProposalIsNotExecutable();
         }
@@ -491,7 +506,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
-        if (!(proposals[id].details.execution == Execution.Other)) {
+        if (!(proposals[id].details.proposalType == ProposalType.Other)) {
             revert ExecutableProposalsCannotBeCompleted();
         }
 
@@ -802,7 +817,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param amountUsdc Amount of USDC involved in the proposal.
      * @param amountCoin Amount of Coin involved in the proposal.
      * @param amountSci Amount of SCI tokens involved in the proposal.
-     * @param execution Boolean indicating whether the proposal is executable.
+     * @param proposalType Boolean indicating whether the proposal is executable.
      *
      * @notice Reverts with InvalidInfo if the info is empty.
      * Reverts with InvalidInputForExecutable or InvalidInputForNonExecutable
@@ -814,11 +829,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci,
-        Execution execution
-    ) internal pure {
+        ProposalType proposalType
+    ) internal {
         if (bytes(info).length == 0) revert InvalidInfo();
 
-        if (execution == Execution.Transaction) {
+        if (proposalType == ProposalType.Transaction) {
             if (
                 targetWallet == address(0) ||
                 !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
@@ -827,7 +842,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             ) {
                 revert InvalidInputForTransactionExecutable();
             }
-        } else if (execution == Execution.Minting) {
+        } else if (proposalType == ProposalType.Minting) {
             if (
                 !(amountSci > 0) ||
                 (amountCoin > 0 && amountUsdc > 0) ||
@@ -835,9 +850,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             ) {
                 revert InvalidInputForMintingExecutable();
             }
+        } else if (proposalType == ProposalType.Impeachment) {
+            if (!hasRole(govRes.DUE_DILIGENCE_ROLE(), targetWallet)) {
+                revert CannotImpeachUserWithoutDDRole();
+            }
         } else if (
-            execution == Execution.Election ||
-            execution == Execution.Impeachment
+            proposalType == ProposalType.Election ||
+            proposalType == ProposalType.Impeachment
         ) {
             if (
                 targetWallet == address(0) ||
@@ -886,7 +905,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param amountUsdc Amount of USDC involved in the proposal.
      * @param amountCoin Amount of Coin involved in the proposal.
      * @param amountSci Amount of SCI tokens involved in the proposal.
-     * @param execution Enum indicating in which way the proposal must be executed.
+     * @param proposalType Enum indicating in which way the proposal must be executed.
      * @return payment The determined payment method from the Payment enum.
      * @return amount The amount of USDC or Coin to be used.
      * @return sciAmount The amount of SCI tokens to be used.
@@ -898,14 +917,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci,
-        Execution execution
+        ProposalType proposalType
     )
         internal
         pure
         returns (Payment payment, uint256 amount, uint256 sciAmount)
     {
-        if (execution == Execution.Other || execution == Execution.Election || execution == Execution.Impeachment)
-            return (Payment.None, 0, 0);
+        if (
+            proposalType == ProposalType.Other ||
+            proposalType == ProposalType.Election ||
+            proposalType == ProposalType.Impeachment
+        ) return (Payment.None, 0, 0);
 
         uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
             (amountCoin > 0 ? 1 : 0) +

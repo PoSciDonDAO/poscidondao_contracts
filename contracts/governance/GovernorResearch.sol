@@ -39,11 +39,10 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
 
     struct ProjectInfo {
         string info; //IPFS link
-        address receivingWallet; //wallet address to send funds to
+        address targetWallet; //wallet address to send funds to
         Payment payment;
         uint256 amount; //amount of usdc or coin
         uint256 amountSci; //amount of sci token
-        bool executable;
     }
 
     ///*** GOVERNANCE PARAMETERS ***///
@@ -255,14 +254,14 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
      * @dev proposes a research project in need of funding
      *      at least one option needs to be proposed
      * @param info ipfs hash of project proposal
-     * @param receivingWallet the address of the research group receiving funds if proposal passed
+     * @param targetWallet the address of the research group receiving funds if proposal passed
      * @param amountUsdc the amount of USDC
      * @param amountCoin the amount of Coin
      * @param amountSci the amount of SCI tokens
      */
     function propose(
         string memory info,
-        address receivingWallet,
+        address targetWallet,
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci
@@ -275,7 +274,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     {
         _validateInput(
             info,
-            receivingWallet,
+            targetWallet,
             amountUsdc,
             amountCoin,
             amountSci
@@ -292,11 +291,10 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
-            receivingWallet,
+            targetWallet,
             payment,
             amount,
-            sciAmount,
-            true
+            sciAmount
         );
 
         uint256 currentIndex = _storeProposal(projectInfo);
@@ -395,7 +393,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             revert IncorrectPhase(proposals[id].status);
 
         // Extract proposal details
-        address receivingWallet = proposals[id].details.receivingWallet;
+        address targetWallet = proposals[id].details.targetWallet;
         uint256 amount = proposals[id].details.amount;
         uint256 amountSci = proposals[id].details.amountSci;
         Payment payment = proposals[id].details.payment;
@@ -405,18 +403,18 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
 
         // Transfer funds based on payment type
         if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-            _transferToken(IERC20(usdc), sourceWallet, receivingWallet, amount);
+            _transferToken(IERC20(usdc), sourceWallet, targetWallet, amount);
         }
         if (payment == Payment.Sci || payment == Payment.SciUsdc) {
             _transferToken(
                 IERC20(sci),
                 sourceWallet,
-                receivingWallet,
+                targetWallet,
                 amountSci
             );
         }
         if (payment == Payment.Coin) {
-            _transferCoin(sourceWallet, receivingWallet, amount);
+            _transferCoin(sourceWallet, targetWallet, amount);
         }
 
         proposals[id].status = ProposalStatus.Executed;
@@ -523,18 +521,18 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     /**
      * @dev Validates the input parameters for a research proposal.
      * @param info The description or details of the research proposal, expected not to be empty.
-     * @param receivingWallet The wallet address that will receive funds if the proposal is approved.
+     * @param targetWallet The wallet address that will receive funds if the proposal is approved.
      * @param amountUsdc The amount of USDC tokens involved in the proposal (6 decimals).
      * @param amountCoin The amount of Coin tokens involved in the proposal (18 decimals).
      * @param amountSci The amount of SCI tokens involved in the proposal (18 decimals).
      *
      * @notice This function reverts with InvalidInput if the validation fails.
-     * Validation fails if 'info' is empty, 'receivingWallet' is a zero address,
+     * Validation fails if 'info' is empty, 'targetWallet' is a zero address,
      * or the payment amounts do not meet the specified criteria.
      */
     function _validateInput(
         string memory info,
-        address receivingWallet,
+        address targetWallet,
         uint256 amountUsdc,
         uint256 amountCoin,
         uint256 amountSci
@@ -542,7 +540,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         if (bytes(info).length == 0) revert InvalidInfo();
 
         if (
-            receivingWallet == address(0) ||
+            targetWallet == address(0) ||
             !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
                 (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
                 (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))

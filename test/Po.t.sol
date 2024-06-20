@@ -95,7 +95,7 @@ contract PoTest is Test {
             5000000e6,
             0,
             0,
-            GovernorOperations.Execution.Transaction,
+            GovernorOperations.ProposalType.Transaction,
             false
         );
         gov.voteStandard(id, true, 2000e18);
@@ -115,7 +115,7 @@ contract PoTest is Test {
             5000000e6,
             0,
             0,
-            GovernorOperations.Execution.Transaction,
+            GovernorOperations.ProposalType.Transaction,
             false
         );
         gov.voteStandard(id, true, 2000e18);
