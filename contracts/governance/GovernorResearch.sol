@@ -18,7 +18,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInfo();
-    error InvalidInput();
+    error InvalidInputOtherProposal();
+    error InvalidInputTransactionProposal();
     error ProposalLifeTimePassed();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
@@ -43,6 +44,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         Payment payment;
         uint256 amount; //amount of usdc or coin
         uint256 amountSci; //amount of sci token
+        ProposalType proposalType; //proposalType option for proposal
     }
 
     ///*** GOVERNANCE PARAMETERS ***///
@@ -77,6 +79,11 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         Executed,
         Completed, //Completed status only for proposals that cannot be executed
         Cancelled
+    }
+
+    enum ProposalType {
+        Other,
+        Transaction
     }
 
     enum Payment {
@@ -204,6 +211,14 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev checks if user has the DD role
+     * @param member the address of the DAO member
+     */
+    function checkDueDiligenceRole(address member) external view returns(bool) {
+        return hasRole(DUE_DILIGENCE_ROLE, member);
+    }
+
+    /**
      * @dev sets the treasury wallet address
      */
     function setTreasuryWallet(
@@ -264,7 +279,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         address targetWallet,
         uint256 amountUsdc,
         uint256 amountCoin,
-        uint256 amountSci
+        uint256 amountSci,
+        ProposalType proposalType
     )
         external
         nonReentrant
@@ -277,7 +293,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             targetWallet,
             amountUsdc,
             amountCoin,
-            amountSci
+            amountSci,
+            proposalType
         );
 
         IStaking staking = IStaking(stakingAddress);
@@ -294,7 +311,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             targetWallet,
             payment,
             amount,
-            sciAmount
+            sciAmount,
+            proposalType
         );
 
         uint256 currentIndex = _storeProposal(projectInfo);
@@ -406,12 +424,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             _transferToken(IERC20(usdc), sourceWallet, targetWallet, amount);
         }
         if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-            _transferToken(
-                IERC20(sci),
-                sourceWallet,
-                targetWallet,
-                amountSci
-            );
+            _transferToken(IERC20(sci), sourceWallet, targetWallet, amountSci);
         }
         if (payment == Payment.Coin) {
             _transferCoin(sourceWallet, targetWallet, amount);
@@ -535,17 +548,24 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         address targetWallet,
         uint256 amountUsdc,
         uint256 amountCoin,
-        uint256 amountSci
+        uint256 amountSci,
+        ProposalType proposalType
     ) internal pure {
         if (bytes(info).length == 0) revert InvalidInfo();
 
-        if (
-            targetWallet == address(0) ||
-            !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
-                (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
-        ) {
-            revert InvalidInput();
+        if (proposalType == ProposalType.Transaction) {
+            if (
+                targetWallet == address(0) ||
+                !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
+                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
+                    (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
+            ) {
+                revert InvalidInputTransactionProposal();
+            }
+        } else {
+            if ((amountUsdc > 0 || amountCoin > 0 || amountSci > 0)) {
+                revert InvalidInputOtherProposal();
+            }
         }
     }
 

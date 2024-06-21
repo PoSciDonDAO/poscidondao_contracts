@@ -123,11 +123,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @notice Enumerates the different proposalType options for a proposal.
      */
     enum ProposalType {
+        Other,
+        Transaction,
         Minting,
         Election,
-        Impeachment,
-        Transaction,
-        Other
+        Impeachment
     }
 
     ///*** MODIFIERS ***///
@@ -436,14 +436,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
+
         address targetWallet = proposals[id].details.targetWallet;
         uint256 amount = proposals[id].details.amount;
         uint256 amountSci = proposals[id].details.amountSci;
         Payment payment = proposals[id].details.payment;
 
         if (proposals[id].details.proposalType == ProposalType.Transaction) {
-            //check if proposal has finalized voting
-
             if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
                 _transferToken(
                     IERC20(usdc),
@@ -461,7 +460,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             }
             if (payment == Payment.Coin) {
-                _transferCoin(treasuryWallet, targetWallet, amount); //only treasury wallet can execute this proposal
+                _transferCoin(treasuryWallet, targetWallet, amount);
             }
 
             proposals[id].status = ProposalStatus.Executed;
@@ -851,7 +850,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 revert InvalidInputForMintingExecutable();
             }
         } else if (proposalType == ProposalType.Impeachment) {
-            if (!hasRole(govRes.DUE_DILIGENCE_ROLE(), targetWallet)) {
+            bool hasDDRole = govRes.checkDueDiligenceRole(targetWallet);
+            if (!hasDDRole) {
                 revert CannotImpeachUserWithoutDDRole();
             }
         } else if (

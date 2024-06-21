@@ -615,6 +615,9 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_ExecuteProposalForImpeachment() public {
+        vm.startPrank(addr3);
+        staking.lock(2000e18);
+        vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
@@ -624,7 +627,7 @@ contract GovernorOperationsTest is Test {
             0,
             0,
             0,
-            GovernorOperations.ProposalType.Impeachment,
+            GovernorOperations.ProposalType.Election,
             false
         );
         govOps.voteStandard(id, true, 2000e18);
@@ -633,6 +636,27 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
         govOps.execute(id);
+        assertEq(govRes.hasRole(DUE_DILIGENCE_ROLE, addr3), true);
+        // vm.warp(1 weeks);
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        uint256 id2 = govOps.getProposalIndex();
+
+        govOps.propose(
+            "Info",
+            addr3,
+            0,
+            0,
+            0,
+            GovernorOperations.ProposalType.Impeachment,
+            false
+        );
+        govOps.voteStandard(id2, true, 2000e18);
+        vm.warp(8.1 weeks);
+        govOps.finalize(id2);
+        vm.stopPrank();
+        vm.startPrank(treasuryWallet);
+        govOps.execute(id2);
         assertEq(govRes.hasRole(DUE_DILIGENCE_ROLE, addr3), false);
         vm.stopPrank();
     }
