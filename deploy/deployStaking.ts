@@ -21,7 +21,7 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sciToken = "0x210268375372626a9ED4D1e14298B3ab4135ac02";
+  const sciToken = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
 
   const constructorArguments = [treasuryWallet, sciToken];
 
@@ -38,7 +38,7 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} MATIC`
+    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);

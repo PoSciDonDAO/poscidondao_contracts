@@ -21,10 +21,9 @@ async function main() {
   }
 
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const sci = "0x210268375372626a9ED4D1e14298B3ab4135ac02";
-  const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-  const weth = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
-  const constructorArguments = [treasuryWallet, sci, usdc, weth];
+  const sci = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
+  const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+  const constructorArguments = [treasuryWallet, sci, usdc];
 
   const Contract = await ethers.getContractFactory("Swap");
   // Estimate contract deployment fee
@@ -41,7 +40,7 @@ async function main() {
   console.log(
     `Estimated deployment cost: ${ethers.utils.formatEther(
       estimatedCost
-    )} MATIC`
+    )} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);

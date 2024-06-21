@@ -22,10 +22,9 @@ async function main() {
 
   const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-  const usdc = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-  const weth = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
+  const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 
-  const constructorArguments = [donationWallet, treasuryWallet, usdc, weth];
+  const constructorArguments = [donationWallet, treasuryWallet, usdc];
 
   const Contract = await ethers.getContractFactory("Donation");
   // Estimate contract deployment fee
@@ -40,7 +39,7 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} MATIC`
+    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);

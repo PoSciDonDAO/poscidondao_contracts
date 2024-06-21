@@ -23,7 +23,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 
 /**
  * @title SCI Token Swap Contract
- * @dev Contract to exchange USDC, WETH, or MATIC for SCI tokens at predefined rates.
+ * @dev Contract to exchange USDC, WETH, or ETH for SCI tokens at predefined rates.
  *      This contract handles the accounting of swapped tokens and enforces a cap on the maximum amount of SCI that can be swapped.
  */
 contract Swap is AccessControl, ReentrancyGuard {
@@ -34,12 +34,10 @@ contract Swap is AccessControl, ReentrancyGuard {
 
     address private sci;
     address public usdc;
-    address public weth;
     address public treasuryWallet;
 
     uint256 public rateUsdc;
-    uint256 public rateMatic;
-    uint256 public rateWeth;
+    uint256 public rateEth;
     uint256 public sciSwapCap;
     uint256 public totSciSwapped;
     uint256 public deploymentTime;
@@ -63,22 +61,18 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @param treasuryWallet_ The address of the treasury wallet where funds will be collected.
      * @param sci_ Address of the SCI token being swapped.
      * @param usdc_ Address of the USDC token acceptable for swaps.
-     * @param weth_ Address of the WETH token acceptable for swaps.
      */
     constructor(
         address treasuryWallet_,
         address sci_,
-        address usdc_,
-        address weth_
+        address usdc_
     ) {
         treasuryWallet = treasuryWallet_;
         sci = sci_;
         usdc = usdc_;
-        weth = weth_;
 
         rateUsdc = 2100;
-        rateMatic = 3000;
-        rateWeth = 14762;
+        rateEth = 3000;
         sciSwapCap = ( TOTAL_SUPPLY_SCI / 10000) * 50;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
@@ -86,49 +80,42 @@ contract Swap is AccessControl, ReentrancyGuard {
         end = block.timestamp + 3 days;
     }
 
-
+    /**
+     * @notice Sets the swap rate for USDC.
+     * @param endTimestamp The new swap rate for USDC in terms of SCI tokens.
+     */
     function setEnd(uint256 endTimestamp) public {
         end = endTimestamp;
     }
 
     /**
      * @notice Sets the swap rate for USDC.
-     * @param _rateUsdc The new swap rate for USDC in terms of SCI tokens.
+     * @param newUsdcRate The new swap rate for USDC in terms of SCI tokens.
      */
     function setRateUsdc(
-        uint256 _rateUsdc
+        uint256 newUsdcRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        rateUsdc = _rateUsdc;
+        rateUsdc = newUsdcRate;
     }
 
     /**
-     * @notice Sets the swap rate for MATIC.
-     * @param _rateMatic The new swap rate for MATIC in terms of SCI tokens.
+     * @notice Sets the swap rate for ETH.
+     * @param newEthRate The new swap rate for ETH in terms of SCI tokens.
      */
-    function setRateMatic(
-        uint256 _rateMatic
+    function setRateEth(
+        uint256 newEthRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        rateMatic = _rateMatic;
-    }
-
-    /**
-     * @notice Sets the swap rate for WETH.
-     * @param _rateWeth The new swap rate for WETH in terms of SCI tokens.
-     */
-    function setRateWeth(
-        uint256 _rateWeth
-    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        rateWeth = _rateWeth;
+        rateEth = newEthRate;
     }
 
     /**
      * @notice Sets the maximum cap for SCI tokens that can be swapped.
-     * @param _sciSwapCap The new cap, expressed as a percentage of the total SCI supply.
+     * @param newSciSwapCap The new cap, expressed as a percentage of the total SCI supply.
      */
     function setSciSwapCap(
-        uint256 _sciSwapCap
+        uint256 newSciSwapCap
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * _sciSwapCap;
+        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * newSciSwapCap;
     }
 
     /**
@@ -145,27 +132,14 @@ contract Swap is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Handles the swap of WETH for SCI tokens.
-     * @param amount The amount of WETH to swap.
+     * @notice Handles the swap of ETH for SCI tokens.
+     * @dev This function is payable and accepts ETH directly.
      */
-    function swapWeth(uint256 amount) external nonReentrant notExpired {
-        if (totSciSwapped == sciSwapCap) revert SoldOut();
-        IERC20(weth).safeTransferFrom(msg.sender, treasuryWallet, amount);
-        uint256 sciAmount = amount * rateWeth;
-        IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
-        totSciSwapped += sciAmount;
-        emit Swapped(msg.sender, address(weth), amount, sciAmount);
-    }
-
-    /**
-     * @notice Handles the swap of MATIC for SCI tokens.
-     * @dev This function is payable and accepts MATIC directly.
-     */
-    function swapMatic() external payable nonReentrant notExpired {
+    function swapEth() external payable nonReentrant notExpired {
         if (totSciSwapped == sciSwapCap) revert SoldOut();
         (bool sent, ) = treasuryWallet.call{value: msg.value}("");
         require(sent);
-        uint256 sciAmount = (msg.value * 10000 / rateMatic);
+        uint256 sciAmount = (msg.value * 10000 / rateEth);
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
         totSciSwapped += sciAmount;
         emit Swapped(msg.sender, address(0), msg.value, sciAmount);

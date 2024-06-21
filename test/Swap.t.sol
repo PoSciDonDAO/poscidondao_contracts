@@ -96,7 +96,7 @@ contract SwapTest is Test {
         assertEq(
             address(treasuryWallet).balance,
             1e18,
-            "Treasury MATIC balance should increase"
+            "Treasury ETH balance should increase"
         );
         assertEq(
             sci.balanceOf(addr1),

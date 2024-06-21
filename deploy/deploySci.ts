@@ -39,7 +39,7 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} MATIC`
+    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
