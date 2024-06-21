@@ -12,7 +12,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error CannotExecuteOtherProposalType();
     error ContractTerminated(uint256 blockNumber);
+    error ExecutableProposalsCannotBeCompleted();
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
@@ -73,6 +75,18 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     mapping(address => uint8) private proposedResearch;
 
     ///*** ENUMERATORS ***///
+
+    /**
+     * @notice Enumerates the different proposalType options for a proposal.
+     */
+    enum ProposalType {
+        Other,
+        Transaction
+    }
+
+    /**
+     * @notice Enumerates the different states a proposal can be in.
+     */
     enum ProposalStatus {
         Active,
         Scheduled,
@@ -81,16 +95,15 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         Cancelled
     }
 
-    enum ProposalType {
-        Other,
-        Transaction
-    }
-
+    /**
+     * @notice Enumerates the different payment options for a proposal.
+     */
     enum Payment {
         Usdc,
         Sci,
         Coin,
-        SciUsdc
+        SciUsdc,
+        None
     }
 
     ///*** MODIFIERS ***///
@@ -214,7 +227,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
      * @dev checks if user has the DD role
      * @param member the address of the DAO member
      */
-    function checkDueDiligenceRole(address member) external view returns(bool) {
+    function checkDueDiligenceRole(
+        address member
+    ) external view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -304,7 +319,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             Payment payment,
             uint256 amount,
             uint256 sciAmount
-        ) = _determinePaymentDetails(amountUsdc, amountCoin, amountSci);
+        ) = _determinePaymentDetails(amountUsdc, amountCoin, amountSci, proposalType);
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
@@ -410,6 +425,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
+        if (proposals[id].details.proposalType == ProposalType.Other)
+            revert CannotExecuteOtherProposalType();
+
         // Extract proposal details
         address targetWallet = proposals[id].details.targetWallet;
         uint256 amount = proposals[id].details.amount;
@@ -432,6 +450,27 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Executed;
         emit Executed(id, donated, amount);
+    }
+
+    /**
+     * @dev completes a non-executable proposal
+     * @param id the _index of the proposal of interest
+     */
+    function complete(
+        uint256 id
+    ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
+        if (id > _index) revert ProposalInexistent();
+
+        if (proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(proposals[id].status);
+
+        if (!(proposals[id].details.proposalType == ProposalType.Other)) {
+            revert ExecutableProposalsCannotBeCompleted();
+        }
+
+        proposals[id].status = ProposalStatus.Completed;
+
+        emit Completed(id);
     }
 
     /**
@@ -563,7 +602,12 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
                 revert InvalidInputTransactionProposal();
             }
         } else {
-            if ((amountUsdc > 0 || amountCoin > 0 || amountSci > 0)) {
+            if (
+                amountUsdc > 0 ||
+                amountCoin > 0 ||
+                amountSci > 0 ||
+                targetWallet != address(0)
+            ) {
                 revert InvalidInputOtherProposal();
             }
         }
@@ -603,12 +647,16 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     function _determinePaymentDetails(
         uint256 amountUsdc,
         uint256 amountCoin,
-        uint256 amountSci
+        uint256 amountSci,
+        ProposalType proposalType
     )
         internal
         pure
         returns (Payment payment, uint256 amount, uint256 sciAmount)
     {
+        if (
+            proposalType == ProposalType.Other
+        ) return (Payment.None, 0, 0);
         uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
             (amountCoin > 0 ? 1 : 0) +
             (amountSci > 0 ? 1 : 0);

@@ -374,6 +374,22 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
+    function test_CompleteProposalWithOtherType() public {
+        vm.startPrank(addr2);
+        staking.lock(1800e18);
+        uint256 id = govRes.getProposalIndex();
+        govRes.propose("Introduction", address(0), 0, 0, 0, GovernorResearch.ProposalType.Other);
+        govRes.vote(id, true);
+        vm.warp(4.1 weeks);
+        govRes.finalize(id);
+        govRes.complete(id);
+        (, ,             GovernorResearch.ProposalStatus status, GovernorResearch.ProjectInfo memory details, , ) = govRes
+            .getProposalInfo(id);
+        assertTrue(details.proposalType == GovernorResearch.ProposalType.Other);
+        assertTrue(status == GovernorResearch.ProposalStatus.Completed);
+        vm.stopPrank();
+    }
+
     function test_ExecuteProposalUsingCoin() public {
         vm.startPrank(addr2);
         staking.lock(1800e18);

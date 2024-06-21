@@ -71,6 +71,16 @@ export default {
 			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
 			chainId: 11155420,
 		},
+		baseMainnet: {
+			url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`,
+			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
+			chainId: 8453,
+		},
+		baseSepolia: {
+			url: `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`,
+			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
+			chainId: 84532,
+		},
 	},
 	etherscan: {
 		apiKey: {
@@ -81,6 +91,8 @@ export default {
 			polygonAmoy: process.env.POLYGONSCAN_API_KEY,
 			optimismMainnet: process.env.OPTIMISMSCAN_API_KEY,
 			optimismTestnet: process.env.OPTIMISMSCAN_API_KEY,
+			baseMainnet: process.env.BASESCAN_API_KEY,
+			baseSepolia: process.env.BASESCAN_API_KEY
 		},
 	},
 };
