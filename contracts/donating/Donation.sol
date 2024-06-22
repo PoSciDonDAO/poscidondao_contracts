@@ -22,7 +22,7 @@ contract Donation is AccessControl, ReentrancyGuard {
 
     event DonationCompleted(
         address indexed user,
-        address asset,
+        address indexed asset,
         uint256 donation
     );
 
@@ -33,7 +33,7 @@ contract Donation is AccessControl, ReentrancyGuard {
     ) {
         donationFraction = 95;
         donationThresholdUsdc = 1e6;
-        donationThresholdEth = 1e15;
+        donationThresholdEth = 2.5e14;
 
         donationWallet = donationWallet_;
         treasuryWallet = treasuryWallet_;

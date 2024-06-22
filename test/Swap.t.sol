@@ -32,8 +32,7 @@ contract SwapTest is Test {
         swap = new Swap(
             treasuryWallet,
             address(sci),
-            address(usdc),
-            address(weth)
+            address(usdc)
         );
         deal(address(sci), treasuryWallet, 100000000e18);
         sci.approve(address(swap), 10000000e18);
@@ -66,32 +65,12 @@ contract SwapTest is Test {
         vm.stopPrank();
     }
 
-    function testSwapWethSuccess() public {
-        uint256 amount = 1e18; // 1 WETH
-        uint256 expectedSciAmount = (amount * swap.rateWeth());
-        vm.startPrank(addr1);
-        swap.swapWeth(amount);
-
-        assertEq(
-            weth.balanceOf(treasuryWallet),
-            1e18,
-            "Treasury WETH balance should increase"
-        );
-        assertEq(
-            sci.balanceOf(addr1),
-            expectedSciAmount,
-            "User SCI balance should increase"
-        );
-
-        vm.stopPrank();
-    }
-
-    function testSwapMaticSuccess() public {
+    function testSwapEthSuccess() public {
         uint256 amount = 1e18; 
-        uint256 expectedSciAmount = (amount * 10000) / swap.rateMatic();
+        uint256 expectedSciAmount = (amount * 10000) / swap.rateEth();
 
         vm.startPrank(addr1);
-        swap.swapMatic{value: amount}();
+        swap.swapEth{value: amount}();
 
         assertEq(
             address(treasuryWallet).balance,
