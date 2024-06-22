@@ -3,12 +3,12 @@ const { ethers } = require("ethers");
 
 async function main() {
 	// Load environment variables
-	const INFURA_KEY = process.env.INFURA_KEY ?? "";
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x8ACFE27d85B2ead0bB457a39E60269b2eD364A3c";
-	const newGovResAddress = "0x2E1dD2068f17737E2052b4cb55CaAB7d41F7B41c";
+	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
+	const newGovResAddress = "0xC0B58E3212C0526170589f0B28Ec2A5008f70105";
 
 	if (!newGovResAddress) {
 		console.error(

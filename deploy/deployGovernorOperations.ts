@@ -20,8 +20,8 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const govResAddress = "0x2E1dD2068f17737E2052b4cb55CaAB7d41F7B41c";
-	const stakingAddress = "0x8ACFE27d85B2ead0bB457a39E60269b2eD364A3c";
+	const govResAddress = "0xC0B58E3212C0526170589f0B28Ec2A5008f70105";
+	const stakingAddress = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
 	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const sciToken = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";

@@ -3,15 +3,15 @@ const { ethers } = require("ethers");
 
 async function main() {
 	// Load environment variables
-	const INFURA_KEY = process.env.INFURA_KEY ?? "";
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x8ACFE27d85B2ead0bB457a39E60269b2eD364A3c";
-	const contractAddressSci = "0x210268375372626a9ED4D1e14298B3ab4135ac02";
+	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
+	const contractAddressSci = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
 	const contractAddressGovRes = "0x2E1dD2068f17737E2052b4cb55CaAB7d41F7B41c";
-	const contractAddressPo = "0x91a81E15401b9Cb546288e2583Bb72605d0e48D9";
-	const newGovOpsAddress = "0xcd48E3b0a602CcbA811b02fec95F76ddEa3625C9";
+	const contractAddressPo = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
+	const newGovOpsAddress = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

@@ -78,9 +78,8 @@ contract Donation is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sends ETH donations to the donation & treasury wallet
-     * @param user the user that donates the Ether
      */
-    function donateEth(address user) external payable nonReentrant {
+    function donateEth() external payable nonReentrant {
         //check if the donation Threshold has been reached
         if (msg.value < donationThresholdEth) revert InsufficientDonation();
 
@@ -93,16 +92,14 @@ contract Donation is AccessControl, ReentrancyGuard {
         require(sentDonation && sentTreasury);
 
         //emit event
-        emit DonationCompleted(user, address(0), msg.value);
+        emit DonationCompleted(msg.sender, address(0), msg.value);
     }
 
     /**
      * @dev sends donated USDC to the donation & treasury wallet
-     * @param user the user that donates the USDC
      * @param usdcAmount the amount of donated USDC
      */
     function donateUsdc(
-        address user,
         uint256 usdcAmount
     ) external nonReentrant {
         //check if the donation Threshold has been reached
@@ -112,10 +109,10 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
         //pull usdc from wallet to donation wallet
-        IERC20(usdc).safeTransferFrom(user, donationWallet, amountDonation);
-        IERC20(usdc).safeTransferFrom(user, treasuryWallet, amountTreasury);
+        IERC20(usdc).safeTransferFrom(msg.sender, donationWallet, amountDonation);
+        IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amountTreasury);
 
         //emit event
-        emit DonationCompleted(user, address(usdc), usdcAmount);
+        emit DonationCompleted(msg.sender, address(usdc), usdcAmount);
     }
 }
