@@ -21,7 +21,7 @@ contract DonationTest is Test {
     address donationWallet = vm.addr(7);
     address treasuryWallet = vm.addr(8);
 
-    event DonationCompleted(address indexed user, address indexed asset, uint256 donation);
+    event Donated(address indexed user, address indexed asset, uint256 donation);
 
     function setUp() public {
 
@@ -68,7 +68,7 @@ contract DonationTest is Test {
     function test_DonateUsdcEvent() public {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
-            emit DonationCompleted(addr2, address(usdc), 1000e6);
+            emit Donated(addr2, address(usdc), 1000e6);
             don.donateUsdc(1000e6);
         vm.stopPrank();
     }
@@ -108,7 +108,7 @@ contract DonationTest is Test {
     function test_DonateEthEvent() public {
         vm.startPrank(addr2);
             vm.expectEmit(true, true, true, true);
-            emit DonationCompleted(addr2, address(0), 1e18);
+            emit Donated(addr2, address(0), 1e18);
             don.donateEth{value: 1e18}();
         vm.stopPrank();
     }

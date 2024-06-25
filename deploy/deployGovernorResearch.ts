@@ -22,14 +22,14 @@ async function main() {
 
 	const stakingAddress = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
 	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-	const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+	const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const sciToken = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
 
 	const constructorArguments = [
 		stakingAddress,
 		treasuryWallet,
-		donationWallet,
+		researchFundingWallet,
 		usdc,
 		sciToken,
 	];

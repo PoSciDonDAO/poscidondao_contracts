@@ -12,9 +12,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
-    error CannotExecuteOtherProposalType();
+    error CannotCompleteProposalsOfTransactionType();
+    error CannotExecuteProposalsOfOtherType();
     error ContractTerminated(uint256 blockNumber);
-    error ExecutableProposalsCannotBeCompleted();
     error IncorrectCoinValue();
     error IncorrectPaymentOption();
     error IncorrectPhase(ProposalStatus);
@@ -59,7 +59,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     address public govOpsAddress;
     address public stakingAddress;
     address public treasuryWallet;
-    address public donationWallet;
+    address public researchFundingWallet;
     address public usdc;
     address public sci;
 
@@ -131,7 +131,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     /*** EVENTS ***/
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
-    event Executed(uint256 indexed id, bool indexed donated, uint256 amount);
+    event Executed(uint256 indexed id, uint256 amount);
     event Proposed(
         uint256 indexed id,
         address indexed user,
@@ -149,13 +149,14 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     constructor(
         address stakingAddress_,
         address treasuryWallet_,
-        address donationWallet_,
+        address researchFundingWallet_,
         address usdc_,
         address sci_
+        //add list of members for initial DD Crew
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
-        donationWallet = donationWallet_;
+        researchFundingWallet = researchFundingWallet_;
         usdc = usdc_;
         sci = sci_;
 
@@ -166,10 +167,10 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         voteLockTime = 0;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-        _grantRole(DEFAULT_ADMIN_ROLE, donationWallet_);
 
         _grantRole(DUE_DILIGENCE_ROLE, treasuryWallet_);
-        _grantRole(DUE_DILIGENCE_ROLE, donationWallet_);
+        _grantRole(DUE_DILIGENCE_ROLE, researchFundingWallet_);
+        
         _setRoleAdmin(DUE_DILIGENCE_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
@@ -245,10 +246,10 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     /**
      * @dev sets the donation wallet address
      */
-    function setDonationWallet(
-        address newDonationWallet
+    function setResearchFundingWallet(
+        address newresearchFundingWallet
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        donationWallet = newDonationWallet;
+        researchFundingWallet = newresearchFundingWallet;
     }
 
     /**
@@ -319,7 +320,12 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             Payment payment,
             uint256 amount,
             uint256 sciAmount
-        ) = _determinePaymentDetails(amountUsdc, amountCoin, amountSci, proposalType);
+        ) = _determinePaymentDetails(
+                amountUsdc,
+                amountCoin,
+                amountSci,
+                proposalType
+            );
 
         ProjectInfo memory projectInfo = ProjectInfo(
             info,
@@ -414,11 +420,9 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     /**
      * @dev executes the proposal using USDC
      * @param id the index of the proposal of interest
-     * @param donated set to true if funds are derived from the donation wallet
      */
     function execute(
-        uint256 id,
-        bool donated
+        uint256 id
     ) external payable notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         // Check if proposal exists and has finalized voting
         if (id >= _index) revert ProposalInexistent();
@@ -426,7 +430,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             revert IncorrectPhase(proposals[id].status);
 
         if (proposals[id].details.proposalType == ProposalType.Other)
-            revert CannotExecuteOtherProposalType();
+            revert CannotExecuteProposalsOfOtherType();
 
         // Extract proposal details
         address targetWallet = proposals[id].details.targetWallet;
@@ -434,22 +438,30 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         uint256 amountSci = proposals[id].details.amountSci;
         Payment payment = proposals[id].details.payment;
 
-        // Determine the source wallet based on the 'donated' flag
-        address sourceWallet = donated ? donationWallet : treasuryWallet;
-
         // Transfer funds based on payment type
         if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-            _transferToken(IERC20(usdc), sourceWallet, targetWallet, amount);
+            _transferToken(
+                IERC20(usdc),
+                researchFundingWallet,
+                targetWallet,
+                amount
+            );
         }
         if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-            _transferToken(IERC20(sci), sourceWallet, targetWallet, amountSci);
+            _transferToken(
+                IERC20(sci),
+                researchFundingWallet,
+                targetWallet,
+                amountSci
+            );
         }
         if (payment == Payment.Coin) {
-            _transferCoin(sourceWallet, targetWallet, amount);
+            _transferCoin(researchFundingWallet, targetWallet, amount);
         }
 
         proposals[id].status = ProposalStatus.Executed;
-        emit Executed(id, donated, amount);
+
+        emit Executed(id, amount);
     }
 
     /**
@@ -464,8 +476,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
-        if (!(proposals[id].details.proposalType == ProposalType.Other)) {
-            revert ExecutableProposalsCannotBeCompleted();
+        if ((proposals[id].details.proposalType == ProposalType.Transaction)) {
+            revert CannotCompleteProposalsOfTransactionType();
         }
 
         proposals[id].status = ProposalStatus.Completed;
@@ -654,9 +666,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         pure
         returns (Payment payment, uint256 amount, uint256 sciAmount)
     {
-        if (
-            proposalType == ProposalType.Other
-        ) return (Payment.None, 0, 0);
+        if (proposalType == ProposalType.Other) return (Payment.None, 0, 0);
         uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
             (amountCoin > 0 ? 1 : 0) +
             (amountSci > 0 ? 1 : 0);

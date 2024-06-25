@@ -8,7 +8,7 @@ async function main() {
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
-	const newGovResAddress = "0xC0B58E3212C0526170589f0B28Ec2A5008f70105";
+	const newGovResAddress = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
 
 	if (!newGovResAddress) {
 		console.error(

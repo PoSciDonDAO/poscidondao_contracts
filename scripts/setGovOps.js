@@ -9,9 +9,9 @@ async function main() {
 	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
 	const contractAddressSci = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-	const contractAddressGovRes = "0x2E1dD2068f17737E2052b4cb55CaAB7d41F7B41c";
+	const contractAddressGovRes = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
 	const contractAddressPo = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
-	const newGovOpsAddress = "0xe5cc88F15029b825565B5d7Fc88742F156C47e04";
+	const newGovOpsAddress = "0x71308C317B645b2e77812482806b786E8766399a";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

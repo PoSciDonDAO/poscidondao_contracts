@@ -22,7 +22,7 @@ contract GovernorResearchTest is Test {
     address addr3 = vm.addr(3);
     address addr4 = vm.addr(4);
     address addr5 = vm.addr(5);
-    address donationWallet = vm.addr(6);
+    address researchFundingWallet = vm.addr(6);
     address treasuryWallet = vm.addr(7);
     address researchWallet = vm.addr(8);
     bytes32 govIdCircuitId =
@@ -45,7 +45,7 @@ contract GovernorResearchTest is Test {
         govRes = new GovernorResearch(
             address(staking),
             treasuryWallet,
-            donationWallet,
+            researchFundingWallet,
             address(usdc),
             address(sci)
         );
@@ -69,11 +69,11 @@ contract GovernorResearchTest is Test {
         staking.setGovOps(address(govOps));
         vm.stopPrank();
 
-        deal(address(sci), donationWallet, 10000000000e18);
-        deal(address(usdc), donationWallet, 10000000e6);
-        deal(donationWallet, 5000 ether);
+        deal(address(sci), researchFundingWallet, 10000000000e18);
+        deal(address(usdc), researchFundingWallet, 10000000e6);
+        deal(researchFundingWallet, 5000 ether);
 
-        vm.startPrank(donationWallet);
+        vm.startPrank(researchFundingWallet);
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
@@ -343,7 +343,7 @@ contract GovernorResearchTest is Test {
         vm.warp(4.1 weeks);
         govRes.finalize(id);
 
-        govRes.execute(id, false);
+        govRes.execute(id);
         (
             ,
             ,
@@ -365,7 +365,7 @@ contract GovernorResearchTest is Test {
         govRes.vote(id, true);
         vm.warp(4.1 weeks);
         govRes.finalize(id);
-        govRes.execute(id, false);
+        govRes.execute(id);
 
         (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
@@ -399,8 +399,8 @@ contract GovernorResearchTest is Test {
         vm.warp(4.1 weeks);
         govRes.finalize(id);
         vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        govRes.execute{value: 1 ether}(id, false);
+        vm.startPrank(researchFundingWallet);
+        govRes.execute{value: 1 ether}(id);
 
         (, , , GovernorResearch.ProjectInfo memory details, , ) = govRes
             .getProposalInfo(id);
@@ -418,11 +418,10 @@ contract GovernorResearchTest is Test {
         vm.warp(4.1 weeks);
         govRes.finalize(id);
         vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        //for ether transactions, donation or treasury wallet is needed.
+        vm.startPrank(researchFundingWallet);
         bytes4 selector = bytes4(keccak256("IncorrectCoinValue()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
-        govRes.execute{value: 501 ether}(id, false);
+        govRes.execute{value: 501 ether}(id);
         vm.stopPrank();
     }
 
@@ -441,14 +440,14 @@ contract GovernorResearchTest is Test {
         );
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
-        govRes.execute{value: 500 ether}(id, false);
+        govRes.execute{value: 500 ether}(id);
         vm.expectRevert(
             abi.encodeWithSelector(
                 selector,
                 GovernorResearch.ProposalStatus.Active
             )
         );
-        govRes.execute{value: 500 ether}(id, false);
+        govRes.execute{value: 500 ether}(id);
         vm.stopPrank();
     }
 

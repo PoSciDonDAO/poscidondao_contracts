@@ -20,10 +20,10 @@ contract Donation is AccessControl, ReentrancyGuard {
     address public treasuryWallet;
     address public usdc;
 
-    event DonationCompleted(
+    event Donated(
         address indexed user,
         address indexed asset,
-        uint256 donation
+        uint256 amount
     );
 
     constructor(
@@ -92,16 +92,14 @@ contract Donation is AccessControl, ReentrancyGuard {
         require(sentDonation && sentTreasury);
 
         //emit event
-        emit DonationCompleted(msg.sender, address(0), msg.value);
+        emit Donated(msg.sender, address(0), msg.value);
     }
 
     /**
      * @dev sends donated USDC to the donation & treasury wallet
      * @param usdcAmount the amount of donated USDC
      */
-    function donateUsdc(
-        uint256 usdcAmount
-    ) external nonReentrant {
+    function donateUsdc(uint256 usdcAmount) external nonReentrant {
         //check if the donation Threshold has been reached
         if (usdcAmount < donationThresholdUsdc) revert InsufficientDonation();
 
@@ -109,10 +107,18 @@ contract Donation is AccessControl, ReentrancyGuard {
         uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
         //pull usdc from wallet to donation wallet
-        IERC20(usdc).safeTransferFrom(msg.sender, donationWallet, amountDonation);
-        IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amountTreasury);
+        IERC20(usdc).safeTransferFrom(
+            msg.sender,
+            donationWallet,
+            amountDonation
+        );
+        IERC20(usdc).safeTransferFrom(
+            msg.sender,
+            treasuryWallet,
+            amountTreasury
+        );
 
         //emit event
-        emit DonationCompleted(msg.sender, address(usdc), usdcAmount);
+        emit Donated(msg.sender, address(usdc), usdcAmount);
     }
 }

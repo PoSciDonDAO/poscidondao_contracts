@@ -72,7 +72,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         usdc = usdc_;
 
         rateUsdc = 2100;
-        rateEth = 3000;
+        rateEth = 14762;
         sciSwapCap = ( TOTAL_SUPPLY_SCI / 10000) * 50;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
@@ -139,7 +139,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (totSciSwapped == sciSwapCap) revert SoldOut();
         (bool sent, ) = treasuryWallet.call{value: msg.value}("");
         require(sent);
-        uint256 sciAmount = (msg.value * 10000 / rateEth);
+        uint256 sciAmount = (msg.value * rateEth);
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
         totSciSwapped += sciAmount;
         emit Swapped(msg.sender, address(0), msg.value, sciAmount);
