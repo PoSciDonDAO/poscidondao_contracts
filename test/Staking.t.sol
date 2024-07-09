@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/tokens/Participation.sol";
+import "contracts/tokens/Po.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
@@ -12,7 +12,7 @@ import "contracts/governance/GovernorResearch.sol";
 contract StakingTest is Test {
     GovernorOperations public govOps;
     GovernorResearch public govRes;
-    Participation public po;
+    Po public po;
     Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
@@ -24,29 +24,19 @@ contract StakingTest is Test {
     address public addr5 = vm.addr(5);
     address public donationWallet = vm.addr(6);
     address public treasuryWallet = vm.addr(7);
-    address hubAddress = 0x2AA822e264F8cc31A2b9C22f39e5551241e94DfB;
 
-    event Locked(address indexed user, uint256 amount);
-    event Freed(address indexed user, uint256 amount);
+    event Locked(address indexed user, address indexed asset, uint256 amount);
+    event Freed(address indexed user, address indexed asset, uint256 amount);
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
 
         vm.startPrank(treasuryWallet);
-        sci = new Sci(treasuryWallet);
+        sci = new Sci(treasuryWallet, 4538400);
 
-        po = new Participation("", treasuryWallet);
+        po = new Po("", treasuryWallet);
 
         staking = new Staking(treasuryWallet, address(sci));
-
-        govOps = new GovernorOperations(
-            address(staking),
-            treasuryWallet,
-            address(usdc),
-            address(sci),
-            address(po),
-            hubAddress
-        );
 
         govRes = new GovernorResearch(
             address(staking),
@@ -56,12 +46,22 @@ contract StakingTest is Test {
             address(sci)
         );
 
+        govOps = new GovernorOperations(
+            address(govRes),
+            address(staking),
+            treasuryWallet,
+            address(usdc),
+            address(sci),
+            address(po),
+            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
+        );
+
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
         govOps.setPoToken(address(po));
-        govOps.govParams("proposalLifeTime", 4 weeks);
-        govOps.govParams("quorum", 1000e18);
-        govOps.govParams("voteLockEnd", 2 weeks);
+        govOps.setGovParams("proposalLifeTime", 4 weeks);
+        govOps.setGovParams("quorum", 1000e18);
+        govOps.setGovParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 
@@ -70,11 +70,12 @@ contract StakingTest is Test {
         deal(address(usdc), addr2, 10000e18);
         deal(address(usdc), addr3, 10000e18);
 
-        deal(address(sci), addr1, 100000000e18);
-        deal(address(sci), addr2, 100000000e18);
-        deal(address(sci), addr3, 100000000e18);
-        deal(address(sci), addr4, 100000000e18);
-        deal(address(sci), addr5, 100000000e18);
+        deal(address(sci), addr1, 1000000e18);
+        deal(address(sci), addr2, 1000000e18);
+        deal(address(sci), addr3, 1000000e18);
+        deal(address(sci), addr4, 1000000e18);
+        deal(address(sci), addr5, 1000000e18);
+        deal(address(sci), treasuryWallet, 10000000e18);
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
@@ -97,15 +98,19 @@ contract StakingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(addr5);
-        sci.approve(address(staking), 10000e18);
-        staking.lock(500e18);
+        sci.approve(address(govOps), 100000000000000e18);
+        sci.approve(address(govRes), 100000000000000e18);
+        sci.approve(address(staking), 100000000000000e18);
+        staking.lock(1000e18);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
         staking.addDelegate(addr2);
         staking.addDelegate(addr3);
+        sci.approve(address(staking), 100000000000000e18);
         vm.stopPrank();
     }
+
     function test_ReturnUserRights() public {
         assertEq(staking.getLatestUserRights(addr1), 500e18);
         assertEq(staking.getUserRights(addr1, 1, block.number), 500e18);
@@ -142,7 +147,7 @@ contract StakingTest is Test {
         vm.startPrank(addr2);
         vm.expectEmit(true, true, true, true);
 
-        emit Locked(addr2, 100e18);
+        emit Locked(addr2, address(sci), 100e18);
 
         staking.lock(100e18);
         vm.stopPrank();
@@ -378,5 +383,25 @@ contract StakingTest is Test {
         assertEq(proposeLockEnd, 0);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
+    }
+
+    function test_TerminateDAO() public {
+        vm.startPrank(treasuryWallet);
+        staking.burnForTermination(100000e18);
+        staking.burnForTermination(4627500e18);
+
+        assertEq(
+            (18910000 / 10000) * staking.terminationThreshold() * 1e18,
+            4727500e18
+        );
+        vm.stopPrank();
+
+        vm.startPrank(treasuryWallet);
+        staking.terminate();
+        vm.stopPrank();
+
+        assertEq(staking.terminated(), true);
+        assertEq(govOps.terminated(), true);
+        assertEq(govRes.terminated(), true);
     }
 }

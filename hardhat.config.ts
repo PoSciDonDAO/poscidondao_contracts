@@ -30,33 +30,6 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 export default {
 	solidity: {
 		compilers: [
-			// {
-			// 	version: "0.6.0",
-			// 	settings: {
-			// 		optimizer: {
-			// 			enabled: true,
-			// 			runs: 1000,
-			// 		},
-			// 	},
-			// },
-			// {
-			// 	version: "0.6.2",
-			// 	settings: {
-			// 		optimizer: {
-			// 			enabled: true,
-			// 			runs: 1000,
-			// 		},
-			// 	},
-			// },
-			// {
-			// 	version: "0.6.6",
-			// 	settings: {
-			// 		optimizer: {
-			// 			enabled: true,
-			// 			runs: 1000,
-			// 		},
-			// 	},
-			// },
 			{
 				version: "0.8.19",
 				settings: {
@@ -74,7 +47,7 @@ export default {
 			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
 		},
 		sepolia: {
-			url: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_SEPOLIA_API_KEY}`, // The Ethereum Web3 RPC URL (optional).
+			url: `https://eth-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_SEPOLIA_API_KEY}`,
 			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
 		},
 		polygon: {
@@ -83,6 +56,10 @@ export default {
 		},
 		polygonMumbai: {
 			url: `https://polygon-mumbai.g.alchemy.com/v2/${process.env.ALCHEMY_POLYGON_TESTNET_API_KEY}`,
+			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
+		},
+		polygonAmoy: {
+			url: `https://polygon-amoy.g.alchemy.com/v2/${process.env.ALCHEMY_POLYGON_TESTNET_API_KEY}`,
 			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
 		},
 		optimismMainnet: {
@@ -94,6 +71,16 @@ export default {
 			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
 			chainId: 11155420,
 		},
+		baseMainnet: {
+			url: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`,
+			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
+			chainId: 8453,
+		},
+		baseSepolia: {
+			url: `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`,
+			accounts: [`0x${process.env.DEPLOYER_PRIVATE_KEY}`],
+			chainId: 84532,
+		},
 	},
 	etherscan: {
 		apiKey: {
@@ -101,8 +88,11 @@ export default {
 			sepolia: process.env.ETHERSCAN_API_KEY,
 			polygon: process.env.POLYGONSCAN_API_KEY,
 			polygonMumbai: process.env.POLYGONSCAN_API_KEY,
+			polygonAmoy: process.env.POLYGONSCAN_API_KEY,
 			optimismMainnet: process.env.OPTIMISMSCAN_API_KEY,
 			optimismTestnet: process.env.OPTIMISMSCAN_API_KEY,
+			baseMainnet: process.env.BASESCAN_API_KEY,
+			baseSepolia: process.env.BASESCAN_API_KEY
 		},
 	},
 };

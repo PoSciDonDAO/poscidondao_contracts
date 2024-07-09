@@ -7,13 +7,13 @@ async function main() {
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
 	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressStaking = "0x0B0464BBC11835EcF8F67Fcb2d98130304dcA162";
-	const NULL_ADDRESS = "0x0000000000000000000000000000000000000000";
+	const contractAddressGovRes = "0x8798C06cb431557EbB048Ed8F984b06Ae7fee729";
 
-	const delegates = [
+	const newDueDiligenceMembers = [
 		// NULL_ADDRESS,
 		// "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe",
-		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a"
+		"0x59041d70deAEfe849A48E77e0b273DdD072eA9e4",
+		// "0x8a7ad9a192cbb31679d0d468c25546f2949c8bb1",
 	];
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);
@@ -22,20 +22,22 @@ async function main() {
 	// Define the smart contract interface (ABI) for the function you want to call
 	const abi = [
 		// Replace this with the actual ABI for your setGovOps function
-		"function removeDelegate(address formerDelegate)",
+		"function grantDueDiligenceRole(address member)",
 	];
 
 	// Connect to your contract
-	const contractStaking = new ethers.Contract(
-		contractAddressStaking,
+	const contractGovRes = new ethers.Contract(
+		contractAddressGovRes,
 		abi,
 		wallet
 	);
 
-	// Call the setGovOps function
+	// Call the function, 1000 SCI tokens need to be staked
 	try {
-		for (let i = 0; i < delegates.length; i++) {
-			const tx1 = await contractStaking.removeDelegate(delegates[i]);
+		for (let i = 0; i < newDueDiligenceMembers.length; i++) {
+			const tx1 = await contractGovRes.grantDueDiligenceRole(
+				newDueDiligenceMembers[i]
+			);
 			console.log("Transaction hash:", tx1.hash);
 			const receipt1 = await tx1.wait();
 			console.log(
@@ -44,7 +46,7 @@ async function main() {
 			);
 		}
 	} catch (error) {
-		console.error("Error calling setGovOps:", error);
+		console.error("Error calling Grant Due Diligence Role:", error);
 	}
 }
 

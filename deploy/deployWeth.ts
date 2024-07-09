@@ -39,7 +39,7 @@ async function main() {
   console.log(
     `Estimated deployment cost: ${ethers.utils.formatEther(
       estimatedCost
-    )} MATIC`
+    )} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
@@ -50,7 +50,7 @@ async function main() {
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],
-    contract: "contracts/test/MockWeth.sol:MockWeth"
+    // contract: "contracts/test/MockWeth.sol:MockWeth"
   });
   console.log(`${contract.address} has been verified`);
 }

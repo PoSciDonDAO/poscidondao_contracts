@@ -4,15 +4,21 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {IStaking} from "contracts/interface/IStaking.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
+
+interface IGov {
+    function setTerminated() external;
+}
 
 contract Staking is IStaking, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
     error AlreadyDelegated();
+    error CannotBeTerminated();
     error CannotClaim();
     error CannotDelegateToAnotherDelegator();
     error CannotDelegateToContract();
@@ -28,7 +34,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     error Unauthorized(address user);
 
     ///*** TOKEN ***//
-    IERC20 private _sci;
+    IERC20 private sci;
+    ERC20Burnable private sciBurn;
 
     ///*** STRUCTS ***///
     struct User {
@@ -55,11 +62,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     uint256 private totStaked;
     uint256 private totDelegated;
     uint256 public delegateThreshold;
+    uint256 public terminationThreshold;
+    uint256 public totBurnedForTermination;
+    uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
     mapping(address => User) public users;
     mapping(address => bool) private delegates;
 
     ///*** MODIFIERS ***///
-    modifier gov() {
+    modifier onlyGov() {
         if (!(msg.sender == govOpsContract || msg.sender == govResContract))
             revert Unauthorized(msg.sender);
         _;
@@ -71,6 +81,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event BurnedForTermination(address owner, uint256 amount);
     event DelegateAdded(address indexed delegate);
     event DelegateRemoved(address indexed delegate);
     event Delegated(
@@ -79,14 +90,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address indexed newDelegate,
         uint256 delegatedAmount
     );
-    event Freed(
-        address indexed user,
-        uint256 amountFreed
-    );
-    event Locked(
-        address indexed user,
-        uint256 amountLocked
-    );
+    event Freed(address indexed user, address indexed asset, uint256 amount);
+    event Locked(address indexed user, address indexed asset, uint256 amount);
     event Snapshotted(
         address indexed owner,
         uint256 votingRights,
@@ -103,7 +108,9 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     constructor(address treasuryWallet_, address sci_) {
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-        _sci = IERC20(sci_);
+        sci = IERC20(sci_);
+        sciBurn = ERC20Burnable(sci_);
+        terminationThreshold = 2500; // 25% of total supply with 10000 precision
         delegateThreshold = 100e18;
         delegates[address(0)] = true;
     }
@@ -112,10 +119,12 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the sci token address.
-     * @param sci the address of the tradable ($SCI) token
+     * @param sciTokenAddress the address of the tradable ($SCI) token
      */
-    function setSciToken(address sci) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _sci = IERC20(sci);
+    function setSciToken(
+        address sciTokenAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        sci = IERC20(sciTokenAddress);
     }
 
     /**
@@ -123,6 +132,16 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @param newThreshold the new threshold to become a delegate
      */
     function setDelegateThreshold(
+        uint256 newThreshold
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        terminationThreshold = newThreshold;
+    }
+
+    /**
+     * @dev sets the amount of burned sci tokens needed terminate the DAO
+     * @param newThreshold the new threshold to terminate the DAO, precision = 10000
+     */
+    function setTerminationThreshold(
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delegateThreshold = newThreshold;
@@ -247,7 +266,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function lock(uint256 amount) external nonReentrant notTerminated {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
-        IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
 
         //add to total staked amount
         totStaked += amount;
@@ -269,7 +288,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Locked(msg.sender, amount);
+        emit Locked(msg.sender, address(sci), amount);
     }
 
     /**
@@ -292,7 +311,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
 
         //return SCI tokens
-        IERC20(_sci).safeTransfer(msg.sender, amount);
+        IERC20(sci).safeTransfer(msg.sender, amount);
 
         //deduct amount from total staked
         totStaked -= amount;
@@ -328,7 +347,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Freed(msg.sender, amount);
+        emit Freed(msg.sender, address(sci), amount);
     }
 
     /**
@@ -339,7 +358,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function voted(
         address user,
         uint256 voteLockEnd
-    ) external gov returns (bool) {
+    ) external onlyGov returns (bool) {
         if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
         }
@@ -355,7 +374,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     function proposed(
         address user,
         uint256 proposeLockEnd
-    ) external gov returns (bool) {
+    ) external onlyGov returns (bool) {
         if (users[user].proposeLockEnd < proposeLockEnd) {
             users[user].proposeLockEnd = proposeLockEnd;
         }
@@ -364,38 +383,35 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev initiates termination by operations or research funding governance contracts
+     * @dev burns a given amount of SCI tokens for termination
+     * @notice DD role members need to unstake their tokens and burn them here
+     * @param amount the amount of tokens that will be locked
      */
-    function terminateByGovernance(
-        address terminator
-    ) external gov nonReentrant notTerminated {
-        if (msg.sender == govOpsContract) {
-            terminatedOperations = true;
+    function burnForTermination(
+        uint256 amount
+    ) external nonReentrant notTerminated {
+        sciBurn.burnFrom(msg.sender, amount);
 
-            emit TerminatedByGovernance(
-                govOpsContract,
-                terminator,
-                block.number
-            );
-        } else if (msg.sender == govResContract) {
-            terminatedResearchFunding = true;
+        totBurnedForTermination += amount;
 
-            emit TerminatedByGovernance(
-                govResContract,
-                terminator,
-                block.number
-            );
-        }
+        emit BurnedForTermination(msg.sender, amount);
     }
 
     /**
-     * @dev terminates the staking smart contract
+     * @dev terminates the staking and governance smart contracts
      */
-    function terminate(address terminator) external {
-        if (terminatedOperations && terminatedResearchFunding) {
-            terminated = true;
-            emit Terminated(terminator, block.number);
-        }
+    function terminate() external nonReentrant notTerminated {
+        if (
+            totBurnedForTermination <
+            (TOTAL_SUPPLY_SCI / 10000) * terminationThreshold
+        ) revert CannotBeTerminated();
+
+        IGov(govOpsContract).setTerminated();
+        IGov(govResContract).setTerminated();
+
+        terminated = true;
+
+        emit Terminated(msg.sender, block.number);
     }
 
     /**
@@ -411,7 +427,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev returns the SCI token contract address
      */
     function getSciAddress() external view returns (address) {
-        return address(_sci);
+        return address(sci);
     }
 
     /**
@@ -445,16 +461,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     /**
      * @dev returns the propose lock end time
      */
-    function getProposeLockEndTime(
-        address user
-    ) external view returns (uint256) {
+    function getProposeLockEnd(address user) external view returns (uint256) {
         return users[user].proposeLockEnd;
     }
 
     /**
      * @dev returns the vote lock end time
      */
-    function getVoteLockEndTime(address user) external view returns (uint256) {
+    function getVoteLockEnd(address user) external view returns (uint256) {
         return users[user].voteLockEnd;
     }
 

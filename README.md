@@ -52,15 +52,15 @@ PoSciDonDAO is a Decentralized Autonomous Organization (DAO) dedicated to stream
 
 - **GovernorOperations.sol**: Manages operational aspects of the DAO, including administrative, tokenomics, marketing and financial proposals.
 - **GovernorResearch.sol**: Focuses on scientific research proposals, particularly in personalized medicine.
-- **Staking.sol**: Handles the staking of tokens necessary for participation in governance activities.
-- **Participation.sol**: An ERC1155 token contract representing active engagement in DAO governance.
+- **Staking.sol**: Handles the staking of SCI tokens necessary for participation in governance activities.
+- **Po.sol**: An ERC1155 token contract representing active engagement / participation in DAO governance.
 - **Sci.sol**: An ERC20 token contract serving as the primary utility token within the ecosystem.
 
 ## Features
 
 - **Governance Proposals**: Create, vote, and manage proposals for both operational and research aspects of the DAO.
 - **Token Staking**: Participate in governance by staking Sci tokens.
-- **Token Management**: Utilize Participation and Sci tokens for various governance and operational activities.
+- **Token Management**: Utilize Po and Sci tokens for various governance and operational activities.
 
 ## Prerequisites
 

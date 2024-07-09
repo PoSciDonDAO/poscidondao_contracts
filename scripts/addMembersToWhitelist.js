@@ -3,40 +3,30 @@ const { ethers } = require("ethers");
 
 async function main() {
 	// Load environment variables
-	const INFURA_KEY = process.env.INFURA_KEY ?? "";
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
 
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
-	const contractAddressGovOps = "0x9EaFED1c7855839Ed8A7767545F221eDb98b8A16";
-
+	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
+	const contractAddress = "0xf5369906e03C0bA84956b7c214188cc38A11E9D3";
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);
 	const wallet = new ethers.Wallet(`0x${privateKey}`, provider);
-
-	// Define the smart contract interface (ABI) for the function you want to call
+    const members = ["0x690BF2dB31D39EE0a88fcaC89117b66a588E865a"];
 	const abi = [
 		// Replace this with the actual ABI for your setGovOps function
-		"function setGovParams(bytes32 _param,uint256 _data)",
+		"function addMembersToWhitelist(address[] members)",
 	];
 
 	// Connect to your contract
-	const contractGovOps = new ethers.Contract(
-		contractAddressGovOps,
-		abi,
-		wallet
-	);
+	const contract = new ethers.Contract(contractAddress, abi, wallet);
 
-	// Call the setGovOps function
 	try {
-		const tx1 = await contractGovOps.setGovParams(
-			"0x70726f706f73616c4c69666554696d6500000000000000000000000000000000",
-			"86400"
-		);
+		const tx1 = await contract.addMembersToWhitelist(members);
 		console.log("Transaction hash:", tx1.hash);
 		const receipt1 = await tx1.wait();
 		console.log("Transaction confirmed in block:", receipt1.blockNumber);
 	} catch (error) {
-		console.error("Error calling setGovOps:", error);
+		console.error("Error calling addMembersToWhitelist:", error);
 	}
 }
 

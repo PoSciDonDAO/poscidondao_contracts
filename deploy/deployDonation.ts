@@ -21,8 +21,8 @@ async function main() {
   }
 
   const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
-  const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
-  const usdc = "0x578928B093423E9622c7F7e7d741eF9397701930";
+  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 
   const constructorArguments = [donationWallet, treasuryWallet, usdc];
 
@@ -39,13 +39,13 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} MATIC`
+    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
   console.log("Verifying contract in 2 minutes...");
-  await sleep(120000 * 1);
+  await sleep(60000 * 1);
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],

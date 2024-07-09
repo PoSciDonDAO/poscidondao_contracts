@@ -10,31 +10,29 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1
  * but not transferable, adhering to the soulbound token concept where tokens are permanently associated
  * with a wallet. Inherits ERC1155 for multi-token standard support and ERC1155Burnable for burn functionality.
  */
-contract Participation is ERC1155Burnable, AccessControl {
+contract Po is ERC1155Burnable, AccessControl {
     error Frozen();
     error Unauthorized(address user);
 
     // State variables
     address public treasuryWallet; /// @notice Wallet address for treasury operations.
-    address public govOps; /// @notice Governance operations address for administrative actions.
+    address public govOpsAddress; /// @notice Governance operations address for administrative actions.
     string public name = "Participation Token"; /// @notice Human-readable name of the token.
     string public symbol = "PO"; /// @notice Abbreviated symbol of the token.
     bool internal frozenUri = false; /// @notice Indicates if the URI has been frozen.
     bool internal frozenGovOps = false; /// @notice Indicates if the GovOps contract address has been frozen.
     string private _uri; /// @notice Base URI for token metadata.
-    uint256 private constant PARTICIPATION_TOKEN_ID = 0; /// @notice ID for participation token.
+    uint256 private constant PARTICIPATION_TOKEN_ID = 0; /// @notice ID for Participation (PO) token.
     uint256 private constant MINT_AMOUNT = 1; /// @notice Standard mint amount.
+    uint256 private _totalSupply;
 
     /**
      * @dev Modifier to restrict actions to the Governance Operations address.
      */
-    modifier gov() {
-        if (msg.sender != govOps) revert Unauthorized(msg.sender);
+    modifier onlyGov() {
+        if (msg.sender != govOpsAddress) revert Unauthorized(msg.sender);
         _;
     }
-
-    // Events
-    event MintedTokenInfo(address receiver, uint256 tokenId, uint256 amount);
 
     /**
      * @dev Constructor for setting the base URI and treasury wallet address upon deployment.
@@ -52,13 +50,20 @@ contract Participation is ERC1155Burnable, AccessControl {
 
     /**
      * @dev Sets the governance operations address.
-     * @param newGovOps Address of the new governance operations.
+     * @param newGovOpsAddress Address of the new governance operations.
      */
     function setGovOps(
-        address newGovOps
+        address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(frozenGovOps) revert Frozen();
-        govOps = newGovOps;
+        if (frozenGovOps) revert Frozen();
+        govOpsAddress = newGovOpsAddress;
+    }
+
+    /**
+     * @dev See {IERC20-totalSupply}.
+     */
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
     }
 
     /**
@@ -79,9 +84,22 @@ contract Participation is ERC1155Burnable, AccessControl {
      * @dev Mints a specified amount of participation tokens to a user.
      * @param user Address of the user to mint tokens to.
      */
-    function mint(address user) external gov {
+    function mint(address user) external onlyGov {
         _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
-        emit MintedTokenInfo(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT);
+        _totalSupply += MINT_AMOUNT;
+    }
+
+    /**
+     * @dev Mints a specified amount of participation tokens to a user.
+     * @param account Address of the user to mint tokens to.
+     */
+    function burn(address account, uint256 id, uint256 value) public override {
+        require(
+            account == _msgSender() || isApprovedForAll(account, _msgSender()),
+            "ERC1155: caller is not token owner or approved"
+        );
+        _burn(account, id, value);
+        _totalSupply -= value;
     }
 
     /**
@@ -103,7 +121,7 @@ contract Participation is ERC1155Burnable, AccessControl {
      */
     function supportsInterface(
         bytes4 interfaceId
-    ) public view virtual override(ERC1155, AccessControl) returns (bool) {
+    ) public view override(ERC1155, AccessControl) returns (bool) {
         return
             interfaceId == type(IERC1155).interfaceId ||
             interfaceId == type(IERC1155MetadataURI).interfaceId ||
@@ -120,7 +138,7 @@ contract Participation is ERC1155Burnable, AccessControl {
         uint256,
         uint256,
         bytes memory
-    ) public virtual override {
+    ) public pure override {
         revert("ERC1155Soulbound: token transfer disabled");
     }
 
@@ -133,7 +151,7 @@ contract Participation is ERC1155Burnable, AccessControl {
         uint256[] memory,
         uint256[] memory,
         bytes memory
-    ) public virtual override {
+    ) public pure override {
         revert("ERC1155Soulbound: token transfer disabled");
     }
 
