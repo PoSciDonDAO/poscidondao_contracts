@@ -29,6 +29,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 contract Swap is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    error NotWhitelisted();
     error SaleExpired();
     error SoldOut();
 
@@ -44,6 +45,10 @@ contract Swap is AccessControl, ReentrancyGuard {
     uint256 public end;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
 
+    bool public whitelistActive = true;
+
+    mapping(address => bool) public whitelist;
+
     event Swapped(
         address indexed user,
         address indexed asset,
@@ -52,7 +57,14 @@ contract Swap is AccessControl, ReentrancyGuard {
     );
 
     modifier notExpired() {
-        if(block.timestamp > deploymentTime + end) revert SaleExpired();
+        if (block.timestamp > deploymentTime + end) revert SaleExpired();
+        _;
+    }
+
+    modifier whitelisted() {
+        if (whitelistActive) {
+            if (!whitelist[msg.sender]) revert NotWhitelisted();
+        }
         _;
     }
 
@@ -62,22 +74,46 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @param sci_ Address of the SCI token being swapped.
      * @param usdc_ Address of the USDC token acceptable for swaps.
      */
-    constructor(
-        address treasuryWallet_,
-        address sci_,
-        address usdc_
-    ) {
+    constructor(address treasuryWallet_, address sci_, address usdc_) {
         treasuryWallet = treasuryWallet_;
         sci = sci_;
         usdc = usdc_;
 
         rateUsdc = 2100;
         rateEth = 14762;
-        sciSwapCap = ( TOTAL_SUPPLY_SCI / 10000) * 50;
+        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         deploymentTime = block.timestamp;
         end = block.timestamp + 3 days;
+    }
+
+    /**
+     * @notice adds a member to the whitelist
+     * @param members the address of the member that signed up for the whitelist
+     */
+    function addMembersToWhitelist(
+        address[] memory members
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        for (uint256 i = 0; i < members.length; i++) {
+            whitelist[members[i]] = true;
+        }
+    }
+
+    /**
+     * @notice adds a member to the whitelist
+     * @param members the address of the member that signed up for the whitelist
+     */
+    function removeMembersFromWhitelist(
+        address[] memory members
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        for (uint256 i = 0; i < members.length; i++) {
+            whitelist[members[i]] = false;
+        }
+    }
+
+    function setWhitelistInactive() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        whitelistActive = false;
     }
 
     /**
@@ -122,10 +158,14 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Handles the swap of USDC for SCI tokens.
      * @param amount The amount of USDC to swap.
      */
-    function swapUsdc(uint256 amount) external nonReentrant notExpired {
-        if (totSciSwapped == sciSwapCap) revert SoldOut();
+    function swapUsdc(
+        uint256 amount
+    ) external nonReentrant notExpired whitelisted {
+        uint256 sciAmount = ((amount * 10000) / rateUsdc) * 1e12;
+        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+            revert SoldOut();
         IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amount);
-        uint256 sciAmount = (amount * 10000 / rateUsdc) * 1e12;
+
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
         totSciSwapped += sciAmount;
         emit Swapped(msg.sender, address(usdc), amount, sciAmount);
@@ -135,11 +175,13 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Handles the swap of ETH for SCI tokens.
      * @dev This function is payable and accepts ETH directly.
      */
-    function swapEth() external payable nonReentrant notExpired {
-        if (totSciSwapped == sciSwapCap) revert SoldOut();
+    function swapEth() external payable nonReentrant notExpired whitelisted {
+        uint256 sciAmount = (msg.value * rateEth);
+        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+            revert SoldOut();
         (bool sent, ) = treasuryWallet.call{value: msg.value}("");
         require(sent);
-        uint256 sciAmount = (msg.value * rateEth);
+
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
         totSciSwapped += sciAmount;
         emit Swapped(msg.sender, address(0), msg.value, sciAmount);
