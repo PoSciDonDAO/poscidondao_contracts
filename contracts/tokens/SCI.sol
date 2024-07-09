@@ -25,7 +25,7 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
     address public govOpsAddress;
 
     ///*** MODIFIER ***///
-    modifier onlyGov() {
+    modifier onlyGovOps() {
         if (!(msg.sender == govOpsAddress)) revert Unauthorized(msg.sender);
         _;
     }
@@ -42,7 +42,7 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
     }
 
     /**
-     * @dev sets the GovernorOperations contract address
+     * @dev sets the GovernorOperations (GovOps) contract address
      */
     function setGovOps(
         address newGovOpsAddress
@@ -52,11 +52,11 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
 
     /**
      * @dev Mints `amount` tokens to the specified `account`.
-     * Can only be called by the GovernorOperations smart contract.
+     * Can only be called by the GovernorOperations (GovOps) smart contract.
      *
      * @param amount The number of tokens to be minted.
      */
-    function mint(uint256 amount) external onlyGov {
+    function mint(uint256 amount) external onlyGovOps {
         _mint(treasuryWallet, amount);
     }
 }
