@@ -26,7 +26,7 @@ contract SwapTest is Test {
         vm.startPrank(treasuryWallet);
 
         usdc = new MockUsdc(10000000e6);
-        sci = new Sci(treasuryWallet);
+        sci = new Sci(treasuryWallet, 4538400);
         swap = new Swap(treasuryWallet, address(sci), address(usdc));
         deal(address(sci), treasuryWallet, 100000000e18);
         sci.approve(address(swap), 10000000e18);

@@ -35,10 +35,10 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
      * with the token distribution amount, and grants default admin role.
      * @param treasuryWallet_ address of the treasury wallet.
      */
-    constructor(address treasuryWallet_) ERC20("PoSciDonDAO Token", "SCI") {
+    constructor(address treasuryWallet_, uint256 initialMintAmount_) ERC20("PoSciDonDAO Token", "SCI") {
         treasuryWallet = treasuryWallet_;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
-        _mint(treasuryWallet_, 4538400 * (10 ** decimals()));
+        _mint(treasuryWallet_, initialMintAmount_ * (10 ** decimals()));
     }
 
     /**

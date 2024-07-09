@@ -34,7 +34,7 @@ contract GovernorResearchTest is Test {
         usdc = new MockUsdc(10000000e18);
 
         vm.startPrank(treasuryWallet);
-        sci = new Sci(treasuryWallet);
+        sci = new Sci(treasuryWallet, 4538400);
 
         staking = new Staking(treasuryWallet, address(sci));
 

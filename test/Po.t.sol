@@ -32,7 +32,7 @@ contract PoTest is Test {
         usdc = new MockUsdc(10000000e6);
 
         vm.startPrank(treasuryWallet);
-        sci = new Sci(treasuryWallet);
+        sci = new Sci(treasuryWallet, 4538400);
 
         po = new Po("", treasuryWallet);
 
