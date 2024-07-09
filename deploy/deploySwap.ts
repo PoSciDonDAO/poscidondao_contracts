@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log(`Running deploy script for the Participation contract`);
+  console.log(`Running deploy script for the Swap contract`);
   // load wallet private key from env file
   const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -20,12 +20,12 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const URI = "IPFS";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const sci = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
+  const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+  const constructorArguments = [treasuryWallet, sci, usdc];
 
-  const constructorArguments = [URI, treasuryWallet];
-
-  const Contract = await ethers.getContractFactory("Participation");
+  const Contract = await ethers.getContractFactory("Swap");
   // Estimate contract deployment fee
   const estimatedGas = await ethers.provider.estimateGas(
     Contract.getDeployTransaction(...constructorArguments)
@@ -40,18 +40,19 @@ async function main() {
   console.log(
     `Estimated deployment cost: ${ethers.utils.formatEther(
       estimatedCost
-    )} MATIC`
+    )} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
+  console.log(`${contract.contractName} was deployed to ${contract.address}`);
   console.log("Verifying contract in 2 minutes...");
-  await sleep(120000 * 1);
-  await run("verify:verify", {
-    address: contract.address,
-    constructorArguments: [...constructorArguments],
-  });
-  console.log(`${contract.address} has been verified`);
+  // await sleep(120000 * 1);
+  // await run("verify:verify", {
+  //   address: contract.address,
+  //   constructorArguments: [...constructorArguments],
+  // });
+  // console.log(`${contract.address} has been verified`);
 }
 
 main()

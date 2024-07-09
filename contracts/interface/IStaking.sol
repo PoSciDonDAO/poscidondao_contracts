@@ -1,12 +1,12 @@
-//SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
 interface IStaking {
-    function freeSci(uint256 amount) external;
+    function free(uint256 amount) external;
 
     function getLatestUserRights(address user) external view returns (uint256);
 
-    function getProposeLockEndTime(address user) external view returns (uint256);
+    function getProposeLockEnd(address user) external view returns (uint256);
 
     function getStakedSci(address user) external view returns (uint256);
 
@@ -18,14 +18,12 @@ interface IStaking {
         uint256 blockNum
     ) external view returns (uint256);
     
-    function lockSci(uint256 amount) external;
+    function lock(uint256 amount) external;
 
     function proposed(
         address user,
         uint256 proposeLockEnd
     ) external returns (bool);
-
-    function terminate(address admin) external;
 
     function voted(address user, uint256 voteLockEnd) external returns (bool);
 }

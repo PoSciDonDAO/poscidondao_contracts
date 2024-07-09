@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log(`Running deploy script for the Sci contract`);
+  console.log(`Running deploy script for the PO token contract`);
   // load wallet private key from env file
   const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -20,13 +20,12 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
+  const URI = "IPFS";
+  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
-  const constructorArguments = [
-    treasuryWallet
-  ];
+  const constructorArguments = [URI, treasuryWallet];
 
-  const Contract = await ethers.getContractFactory("Sci");
+  const Contract = await ethers.getContractFactory("Po");
   // Estimate contract deployment fee
   const estimatedGas = await ethers.provider.estimateGas(
     Contract.getDeployTransaction(...constructorArguments)
@@ -39,7 +38,9 @@ async function main() {
   const estimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
-    `Estimated deployment cost: ${ethers.utils.formatEther(estimatedCost)} ETH`
+    `Estimated deployment cost: ${ethers.utils.formatEther(
+      estimatedCost
+    )} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);
@@ -52,7 +53,6 @@ async function main() {
   });
   console.log(`${contract.address} has been verified`);
 }
-
 
 main()
   .then(() => process.exit(0))

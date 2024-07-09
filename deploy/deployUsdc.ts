@@ -39,7 +39,7 @@ async function main() {
   console.log(
     `Estimated deployment cost: ${ethers.utils.formatEther(
       estimatedCost
-    )} MATIC`
+    )} ETH`
   );
 
   const contract = await Contract.deploy(...constructorArguments);

@@ -1,27 +1,66 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import "./../interface/ISci.sol";
-import "../../lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "../../contracts/interface/ISci.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+// ███████╗ ██████╗██╗
+// ██╔════╝██╔════╝██║
+// ███████╗██║     ██║
+// ╚════██║██║     ██║
+// ███████║╚██████╗██║
+// ╚══════╝ ╚═════╝╚═╝
 
-contract Sci is ISci, ERC20, AccessControl {
-    constructor(address _treasuryWallet) ERC20("PoSciDonDAO Token", "SCI") {
-        _grantRole(DEFAULT_ADMIN_ROLE, _treasuryWallet);
+/**
+ * @title SCI
+ * @dev Implementation of SCI, PoSciDonDAO's ERC20 Token.
+ * This contract handles token minting, burning, and role-based permissions.
+ */
+contract Sci is ISci, ERC20Burnable, AccessControl {
+    error Unauthorized(address user);
+
+    ///*** STORAGE ***///
+    address public treasuryWallet;
+    address public govOpsAddress;
+
+    ///*** MODIFIER ***///
+    modifier onlyGovOps() {
+        if (!(msg.sender == govOpsAddress)) revert Unauthorized(msg.sender);
+        _;
     }
 
-    function mint(
-        address account,
-        uint256 amount
+    /**
+     * @dev Sets the values for {name} and {symbol}, initializes {treasuryWallet}
+     * with the token distribution amount, and grants default admin role.
+     * @param treasuryWallet_ address of the treasury wallet.
+     */
+    constructor(
+        address treasuryWallet_,
+        uint256 initialMintAmount_
+    ) ERC20("PoSciDonDAO Token", "SCI") {
+        treasuryWallet = treasuryWallet_;
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        _mint(treasuryWallet_, initialMintAmount_ * (10 ** decimals()));
+    }
+
+    /**
+     * @dev sets the GovernorOperations (GovOps) contract address
+     * @param newGovOpsAddress The new address of the GovernorOperations (GovOps) contract.
+     */
+    function setGovOps(
+        address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _mint(account, amount);
+        govOpsAddress = newGovOpsAddress;
     }
 
-    function burn(
-        address account,
-        uint256 amount
-    ) external {
-        _burn(account, amount);
+    /**
+     * @dev Mints `amount` tokens to the specified `account`.
+     * Can only be called by the GovernorOperations (GovOps) smart contract.
+     *
+     * @param amount The number of tokens to be minted.
+     */
+    function mint(uint256 amount) external onlyGovOps {
+        _mint(treasuryWallet, amount);
     }
 }
