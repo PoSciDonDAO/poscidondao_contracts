@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.19;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../../contracts/interface/ISci.sol";
@@ -18,11 +18,15 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  * This contract handles token minting, burning, and role-based permissions.
  */
 contract Sci is ISci, ERC20Burnable, AccessControl {
+    error CannotBeZeroAddress();
     error Unauthorized(address user);
 
     ///*** STORAGE ***///
-    address public treasuryWallet;
+    address public immutable treasuryWallet;
     address public govOpsAddress;
+
+    ///*** EVENT ***///
+    event SetNewGovOps(address indexed user, address indexed newAddress);
 
     ///*** MODIFIER ***///
     modifier onlyGovOps() {
@@ -39,6 +43,9 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
         address treasuryWallet_,
         uint256 initialMintAmount_
     ) ERC20("PoSciDonDAO Token", "SCI") {
+        if (treasuryWallet_ == address(0)) {
+            revert CannotBeZeroAddress();
+        }
         treasuryWallet = treasuryWallet_;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _mint(treasuryWallet_, initialMintAmount_ * (10 ** decimals()));
@@ -51,7 +58,11 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
     function setGovOps(
         address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovOpsAddress == address(0)) {
+            revert CannotBeZeroAddress();
+        }
         govOpsAddress = newGovOpsAddress;
+        emit SetNewGovOps(msg.sender, newGovOpsAddress);
     }
 
     /**
