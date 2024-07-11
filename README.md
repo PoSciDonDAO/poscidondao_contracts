@@ -177,5 +177,3 @@ After the successful deployment, your contract's address will be displayed in th
 
 Ensure to perform extensive testing and verification of your smart contracts to confirm their security and efficiency before deploying to a production environment.
 ```
-
-This addition provides clear instructions for setting up the environment variables necessary for deploying on the Polygon network, ensuring that users can easily configure their project for deployment.
