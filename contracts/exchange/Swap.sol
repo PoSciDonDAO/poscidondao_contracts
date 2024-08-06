@@ -49,6 +49,10 @@ contract Swap is AccessControl, ReentrancyGuard {
 
     mapping(address => bool) public whitelist;
 
+    event SetNewTreasuryWallet(
+        address indexed user,
+        address indexed newAddress
+    );
     event Swapped(
         address indexed user,
         address indexed asset,
@@ -82,10 +86,24 @@ contract Swap is AccessControl, ReentrancyGuard {
         rateUsdc = 2100;
         rateEth = 14762;
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
-        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         deploymentTime = block.timestamp;
         end = block.timestamp + 3 days;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+    }
+
+    /**
+     * @notice sets the treasury wallet address
+     */
+    function setTreasuryWallet(
+        address newTreasuryWallet
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        address oldTreasuryWallet = treasuryWallet;
+        treasuryWallet = newTreasuryWallet;
+        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
+        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
     }
 
     /**
@@ -112,6 +130,9 @@ contract Swap is AccessControl, ReentrancyGuard {
         }
     }
 
+    /**
+     * @notice sets the whitelist inactive
+     */
     function setWhitelistInactive() external onlyRole(DEFAULT_ADMIN_ROLE) {
         whitelistActive = false;
     }

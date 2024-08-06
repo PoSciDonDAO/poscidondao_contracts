@@ -20,6 +20,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
+    error CannotBeZeroAddress();
     error CannotImpeachUserWithoutDDRole();
     error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
@@ -86,7 +87,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public usdc;
     address public sci;
     address private signer;
-    // address public recoveredAddress;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public opThreshold;
@@ -158,14 +158,35 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address indexed user,
         ProjectInfo details
     );
+    event SetNewGovResAddress(address indexed user, address indexed newAddress);
+    event SetNewOpMemberThreshold(
+        address indexed user,
+        uint256 newOpMemberThreshold
+    );
+    event SetNewPoToken(address indexed user, address poToken);
+    event SetNewSciToken(address indexed user, address sciToken);
+    event SetNewStakingAddress(
+        address indexed user,
+        address indexed newAddress
+    );
+
+    event SetNewSignerAddress(address indexed user, address indexed newAddress);
+    event SetNewTreasuryWallet(
+        address indexed user,
+        address indexed newAddress
+    );
+    event SetNewUsdcAddress(
+        address indexed user,
+        address indexed newUsdcAddress
+    );
+    event Scheduled(uint256 indexed id);
+    event Terminated(address admin, uint256 blockNumber);
     event Voted(
         uint256 indexed id,
         address indexed user,
         bool indexed support,
         uint256 amount
     );
-    event Scheduled(uint256 indexed id);
-    event Terminated(address admin, uint256 blockNumber);
 
     constructor(
         address govResAddress_,
@@ -176,6 +197,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address po_,
         address signer_
     ) {
+        if (
+            govResAddress_ == address(0) ||
+            stakingAddress_ == address(0) ||
+            treasuryWallet_ == address(0) ||
+            usdc_ == address(0) ||
+            sci_ == address(0) ||
+            po_ == address(0) ||
+            signer_ == address(0)
+        ) {
+            revert CannotBeZeroAddress();
+        }
         govRes = IGovernorResearch(govResAddress_);
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
@@ -207,18 +239,24 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev sets the threshold for members to propose
      */
     function setStakedSciThreshold(
-        uint256 thresholdOpMember
+        uint256 newThresholdOpMember
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        opThreshold = thresholdOpMember;
+        opThreshold = newThresholdOpMember;
+        emit SetNewOpMemberThreshold(msg.sender, newThresholdOpMember);
     }
 
     /**
-     * @dev sets the treasury wallet address
+     * @dev Updates the treasury wallet address and transfers admin role.
+     * @param newTreasuryWallet The address to be set as the new treasury wallet.
      */
     function setTreasuryWallet(
         address newTreasuryWallet
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        address oldTreasuryWallet = treasuryWallet;
         treasuryWallet = newTreasuryWallet;
+        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
+        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
     }
 
     /**
@@ -228,6 +266,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newStakingAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         stakingAddress = newStakingAddress;
+        emit SetNewStakingAddress(msg.sender, newStakingAddress);
     }
 
     /**
@@ -237,6 +276,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newGovResAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         govRes = IGovernorResearch(newGovResAddress);
+        emit SetNewGovResAddress(msg.sender, newGovResAddress);
     }
 
     /**
@@ -246,6 +286,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newSigner
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         signer = newSigner;
+        emit SetNewSignerAddress(msg.sender, newSigner);
     }
 
     /**
@@ -255,6 +296,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address po_
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         po = IPo(po_);
+        emit SetNewPoToken(msg.sender, po_);
+    }
+
+    /**
+     * @dev sets the SCI token address and interface
+     */
+    function setSciToken(
+        address sci_
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        sci = sci_;
+        sciInterface = ISci(sci_);
+        emit SetNewSciToken(msg.sender, sci_);
+    }
+
+    /**
+     * @dev sets the SCI token address and interface
+     */
+    function setUsdcAddress(
+        address usdc_
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        usdc = usdc_;
+        emit SetNewUsdcAddress(msg.sender, usdc_);
     }
 
     /**
@@ -478,7 +541,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             govRes.grantDueDiligenceRole(targetWallet);
 
             proposals[id].status = ProposalStatus.Executed;
-            
+
             emit Executed(id, proposals[id].details.proposalType);
         } else if (
             proposals[id].details.proposalType == ProposalType.Impeachment
@@ -486,7 +549,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             govRes.revokeDueDiligenceRole(targetWallet);
 
             proposals[id].status = ProposalStatus.Executed;
-            
+
             emit Executed(id, proposals[id].details.proposalType);
         } else {
             revert ProposalIsNotExecutable();

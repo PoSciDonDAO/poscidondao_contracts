@@ -45,8 +45,7 @@ async function main() {
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
-  console.log(`${contract.contractName} was deployed to ${contract.address}`);
-  console.log("Verifying contract in 2 minutes...");
+  // console.log("Verifying contract in 2 minutes...");
   // await sleep(120000 * 1);
   // await run("verify:verify", {
   //   address: contract.address,
