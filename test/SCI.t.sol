@@ -24,11 +24,6 @@ contract SciTest is Test {
     address govRes = vm.addr(8);
     address opWallet = vm.addr(9);
     address signer = vm.addr(10);
-    address newTreasuryWallet = vm.addr(11); // New wallet for testing
-    event SetNewTreasuryWallet(
-        address indexed user,
-        address indexed newAddress
-    );
 
     function setUp() public {
         vm.startPrank(treasuryWallet);
@@ -98,9 +93,7 @@ contract SciTest is Test {
         govOps.finalize(id);
         (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
             .getProposalInfo(id);
-        assertTrue(
-            details.proposalType == GovernorOperations.ProposalType.Minting
-        );
+        assertTrue(details.proposalType == GovernorOperations.ProposalType.Minting);
         assertEq(details.amountSci, 5000000e18);
         vm.stopPrank();
         vm.startPrank(treasuryWallet);
@@ -114,78 +107,6 @@ contract SciTest is Test {
         vm.startPrank(treasuryWallet);
         sci.burn(1000000e18);
         assertEq(sci.totalSupply(), sci.balanceOf(treasuryWallet));
-        vm.stopPrank();
-    }
-
-    function test_SetTreasuryWallet() public {
-        vm.startPrank(treasuryWallet);
-
-        // Check initial treasury wallet
-        assertEq(
-            sci.treasuryWallet(),
-            treasuryWallet,
-            "Initial treasury wallet should match setup address."
-        );
-
-        // Set new treasury wallet
-        sci.setTreasuryWallet(newTreasuryWallet);
-
-        // Check that the new treasury wallet is set
-        assertEq(
-            sci.treasuryWallet(),
-            newTreasuryWallet,
-            "New treasury wallet should be set."
-        );
-
-        // Check that the new treasury wallet has the admin role
-        assertTrue(
-            sci.hasRole(sci.DEFAULT_ADMIN_ROLE(), newTreasuryWallet),
-            "New treasury wallet should have admin role."
-        );
-
-        // Check that the old treasury wallet no longer has the admin role
-        assertFalse(
-            sci.hasRole(sci.DEFAULT_ADMIN_ROLE(), treasuryWallet),
-            "Old treasury wallet should not have admin role."
-        );
-
-        vm.stopPrank();
-    }
-
-    function test_SetTreasuryWalletUnauthorized() public {
-        vm.startPrank(addr1);
-
-        // Capture the expected revert reason
-        bytes memory expectedRevertReason = abi.encodePacked(
-            "AccessControl: account ",
-            Strings.toHexString(addr1),
-            " is missing role ",
-            Strings.toHexString(uint256(sci.DEFAULT_ADMIN_ROLE()), 32)
-        );
-
-        // Expect the transaction to revert with the specific access control error
-        vm.expectRevert(expectedRevertReason);
-        sci.setTreasuryWallet(newTreasuryWallet);
-
-        // Check that the treasury wallet is unchanged
-        assertEq(
-            sci.treasuryWallet(),
-            treasuryWallet,
-            "Treasury wallet should not be changed by unauthorized user."
-        );
-
-        vm.stopPrank();
-    }
-
-    function test_SetTreasuryWalletEventEmission() public {
-        vm.startPrank(treasuryWallet);
-
-        // Expect the event emission for setting new treasury wallet
-        vm.expectEmit(true, true, true, true);
-        emit SetNewTreasuryWallet(treasuryWallet, newTreasuryWallet);
-
-        sci.setTreasuryWallet(newTreasuryWallet);
-
         vm.stopPrank();
     }
 }

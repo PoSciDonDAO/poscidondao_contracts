@@ -22,15 +22,11 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
     error Unauthorized(address user);
 
     ///*** STORAGE ***///
-    address public treasuryWallet;
+    address public immutable treasuryWallet;
     address public govOpsAddress;
 
     ///*** EVENT ***///
     event SetNewGovOps(address indexed user, address indexed newAddress);
-    event SetNewTreasuryWallet(
-        address indexed user,
-        address indexed newAddress
-    );
 
     ///*** MODIFIER ***///
     modifier onlyGovOps() {
@@ -53,20 +49,6 @@ contract Sci is ISci, ERC20Burnable, AccessControl {
         treasuryWallet = treasuryWallet_;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         _mint(treasuryWallet_, initialMintAmount_ * (10 ** decimals()));
-    }
-
-    /**
-     * @dev Updates the treasury wallet address and transfers admin role.
-     * @param newTreasuryWallet The address to be set as the new treasury wallet.
-     */
-    function setTreasuryWallet(
-        address newTreasuryWallet
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldTreasuryWallet = treasuryWallet;
-        treasuryWallet = newTreasuryWallet;
-        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
-        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
     }
 
     /**

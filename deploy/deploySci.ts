@@ -21,10 +21,9 @@ async function main() {
   }
 
   const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
+  const initialMintAmount = 18910000;
 
-  const constructorArguments = [
-    treasuryWallet
-  ];
+  const constructorArguments = [treasuryWallet, initialMintAmount];
 
   const Contract = await ethers.getContractFactory("Sci");
   // Estimate contract deployment fee
