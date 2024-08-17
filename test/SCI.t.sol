@@ -28,7 +28,7 @@ contract SciTest is Test {
     function setUp() public {
         vm.startPrank(treasuryWallet);
         usdc = new MockUsdc(10000000e18);
-        sci = new Sci(treasuryWallet, 4538400);
+        sci = new Sci(treasuryWallet, 18910000);
         po = new Po("", treasuryWallet);
         staking = new Staking(treasuryWallet, address(sci));
 
@@ -43,7 +43,6 @@ contract SciTest is Test {
         );
         po.setGovOps(address(govOps));
         staking.setGovOps(address(govOps));
-        sci.setGovOps(address(govOps));
         sci.approve(address(govOps), 100000000000000e18);
         sci.approve(address(staking), 1000000000000e18);
         vm.stopPrank();
@@ -57,50 +56,13 @@ contract SciTest is Test {
     }
 
     function test_InitialMinting() public {
-        uint256 expectedBalance = 4538400 * 10 ** sci.decimals();
+        uint256 expectedBalance = 18910000 * 10 ** sci.decimals();
         uint256 actualBalance = sci.balanceOf(treasuryWallet);
         assertEq(
             actualBalance,
             expectedBalance,
             "Initial minting to the treasury wallet is incorrect"
         );
-    }
-
-    function test_RevertMintingTokensManually() public {
-        vm.startPrank(treasuryWallet);
-        bytes4 selector = bytes4(keccak256("Unauthorized(address)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, treasuryWallet));
-        sci.mint(5000e18);
-        vm.stopPrank();
-    }
-
-    function test_MintTokensAfterMintingProposal() public {
-        vm.startPrank(addr1);
-        staking.lock(20000000e18);
-        assertEq(sci.totalSupply(), sci.balanceOf(treasuryWallet));
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose(
-            "Info",
-            address(0),
-            0,
-            0,
-            5000000e18,
-            GovernorOperations.ProposalType.Minting,
-            false
-        );
-        govOps.voteStandard(id, true, 20000000e18);
-        vm.warp(4.1 weeks);
-        govOps.finalize(id);
-        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
-            .getProposalInfo(id);
-        assertTrue(details.proposalType == GovernorOperations.ProposalType.Minting);
-        assertEq(details.amountSci, 5000000e18);
-        vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        uint256 balanceBeforeMinting = sci.balanceOf(treasuryWallet);
-        govOps.execute(id);
-        assertEq(sci.totalSupply(), balanceBeforeMinting + 5e24);
-        vm.stopPrank();
     }
 
     function test_BurnTokens() public {

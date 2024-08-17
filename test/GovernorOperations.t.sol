@@ -64,7 +64,6 @@ contract GovernorOperationsTest is Test {
             address(po),
             signer
         );
-        sci.setGovOps(address(govOps));
         po.setGovOps(address(govOps));
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
@@ -583,34 +582,6 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(treasuryWallet);
         govOps.execute(id);
         assertEq(govRes.hasRole(DUE_DILIGENCE_ROLE, addr3), true);
-        vm.stopPrank();
-    }
-
-    function test_ExecuteProposalForMinting() public {
-        vm.startPrank(addr2);
-        staking.lock(2000e18);
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose(
-            "Info",
-            address(0),
-            0,
-            0,
-            20000e18,
-            GovernorOperations.ProposalType.Minting,
-            false
-        );
-        govOps.voteStandard(id, true, 2000e18);
-        (, , , GovernorOperations.ProjectInfo memory details, , , ) = govOps
-            .getProposalInfo(id);
-        assertTrue(
-            details.proposalType == GovernorOperations.ProposalType.Minting
-        );
-        vm.stopPrank();
-        vm.warp(4.1 weeks);
-        govOps.finalize(id);
-        vm.stopPrank();
-        vm.startPrank(treasuryWallet);
-        govOps.execute(id);
         vm.stopPrank();
     }
 

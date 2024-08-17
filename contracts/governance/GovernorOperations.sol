@@ -4,7 +4,6 @@ pragma solidity ^0.8.19;
 import "./../interface/IPo.sol";
 import "./../interface/IStaking.sol";
 import "./../interface/IGovernorResearch.sol";
-import "./../interface/ISci.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -32,7 +31,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error InexistentOrInvalidSBT();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
-    error InvalidInputForMintingExecutable();
     error InvalidInputForTransactionExecutable();
     error InvalidInputForElectionExecutable();
     error InvalidInputForNonExecutable();
@@ -73,7 +71,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** INTERFACES ***///
     IPo private po;
     IGovernorResearch private govRes;
-    ISci private sciInterface;
 
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
@@ -125,7 +122,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     enum ProposalType {
         Other,
         Transaction,
-        Minting,
         Election,
         Impeachment
     }
@@ -213,7 +209,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         treasuryWallet = treasuryWallet_;
         usdc = usdc_;
         sci = sci_;
-        sciInterface = ISci(sci_);
         po = IPo(po_);
         signer = signer_;
         opThreshold = 100e18;
@@ -306,7 +301,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address sci_
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         sci = sci_;
-        sciInterface = ISci(sci_);
         emit SetNewSciToken(msg.sender, sci_);
     }
 
@@ -525,12 +519,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (payment == Payment.Coin) {
                 _transferCoin(treasuryWallet, targetWallet, amount);
             }
-
-            proposals[id].status = ProposalStatus.Executed;
-
-            emit Executed(id, proposals[id].details.proposalType);
-        } else if (proposals[id].details.proposalType == ProposalType.Minting) {
-            sciInterface.mint(amountSci);
 
             proposals[id].status = ProposalStatus.Executed;
 
@@ -903,14 +891,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
             ) {
                 revert InvalidInputForTransactionExecutable();
-            }
-        } else if (proposalType == ProposalType.Minting) {
-            if (
-                !(amountSci > 0) ||
-                (amountCoin > 0 && amountUsdc > 0) ||
-                !(targetWallet == address(0))
-            ) {
-                revert InvalidInputForMintingExecutable();
             }
         } else if (proposalType == ProposalType.Impeachment) {
             bool hasDDRole = govRes.checkDueDiligenceRole(targetWallet);

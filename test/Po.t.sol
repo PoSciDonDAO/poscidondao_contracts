@@ -136,4 +136,78 @@ contract PoTest is Test {
         vm.stopPrank();
         assertEq(po.totalSupply(), 2);
     }
+
+    function test_TreasuryWalletCanMintTokens() public {
+        vm.startPrank(treasuryWallet);
+        po.mintByAdmin(5);
+        uint256 balance = po.balanceOf(treasuryWallet, 0);
+        assertEq(balance, 5);
+        assertEq(po.totalSupply(), 5);
+        vm.stopPrank();
+    }
+
+    function test_NonTreasuryWalletCannotMintTokens() public {
+        vm.startPrank(addr1);
+        vm.expectRevert(
+            "AccessControl: account 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        po.mintByAdmin(5);
+        vm.stopPrank();
+    }
+
+    function test_TreasuryWalletCanTransferTokens() public {
+        vm.startPrank(treasuryWallet);
+        po.mintByAdmin(5);
+        po.safeTransferFrom(treasuryWallet, addr2, 0, 3, "");
+        uint256 balance1 = po.balanceOf(treasuryWallet, 0);
+        uint256 balance2 = po.balanceOf(addr2, 0);
+        assertEq(balance1, 2);
+        assertEq(balance2, 3);
+        vm.stopPrank();
+    }
+
+    function test_NonTreasuryWalletCannotTransferTokens() public {
+        vm.startPrank(treasuryWallet);
+        po.mintByAdmin(5);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        vm.expectRevert(
+            "AccessControl: account 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        po.safeTransferFrom(addr1, addr2, 0, 3, "");
+        vm.stopPrank();
+    }
+
+    function test_TreasuryWalletCanBatchTransferTokens() public {
+        vm.startPrank(treasuryWallet);
+        po.mintByAdmin(10);
+        uint256[] memory ids = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        ids[0] = 0;
+        amounts[0] = 6;
+        po.safeBatchTransferFrom(treasuryWallet, addr2, ids, amounts, "");
+        uint256 balance1 = po.balanceOf(treasuryWallet, 0);
+        uint256 balance2 = po.balanceOf(addr2, 0);
+        assertEq(balance1, 4);
+        assertEq(balance2, 6);
+        vm.stopPrank();
+    }
+
+    function test_NonTreasuryWalletCannotBatchTransferTokens() public {
+        vm.startPrank(treasuryWallet);
+        po.mintByAdmin(10);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        uint256[] memory ids = new uint256[](1);
+        uint256[] memory amounts = new uint256[](1);
+        ids[0] = 0;
+        amounts[0] = 6;
+        vm.expectRevert(
+            "AccessControl: account 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        po.safeBatchTransferFrom(addr1, addr2, ids, amounts, "");
+        vm.stopPrank();
+    }
 }
