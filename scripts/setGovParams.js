@@ -3,10 +3,10 @@ const { ethers } = require("ethers");
 
 async function main() {
 	// Load environment variables
-	const INFURA_KEY = process.env.INFURA_KEY ?? "";
-
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressGovOps = "0x9EaFED1c7855839Ed8A7767545F221eDb98b8A16";
 
 	// Connect to the Ethereum network

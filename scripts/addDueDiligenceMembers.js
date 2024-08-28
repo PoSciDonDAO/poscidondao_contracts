@@ -5,8 +5,10 @@ async function main() {
 	// Load environment variables
 	const INFURA_KEY = process.env.INFURA_KEY ?? "";
 
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressGovRes = "0x8798C06cb431557EbB048Ed8F984b06Ae7fee729";
 
 	const newDueDiligenceMembers = [

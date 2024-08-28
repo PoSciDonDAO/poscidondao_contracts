@@ -3,10 +3,10 @@ const { ethers } = require("ethers");
 
 async function main() {
 	// Load environment variables
-	const INFURA_KEY = process.env.INFURA_KEY ?? "";
-
+	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://polygon-amoy.infura.io/v3/${INFURA_KEY}`;
 	const contractAddressStaking = "0x0B0464BBC11835EcF8F67Fcb2d98130304dcA162";
 	const NULL_ADDRESS = "0x0000000000000000000000000000000000000000";
 
