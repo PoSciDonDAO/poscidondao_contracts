@@ -223,11 +223,13 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
 
         bool isUnique = true;
+        // bytes32 messageHash = keccak256(abi.encodePacked(addr1, isUnique));
         bytes32 messageHash = keccak256(abi.encodePacked(addr1, isUnique));
         console2.logBytes32(messageHash);
 
         vm.startPrank(signer);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, ethSignedMessageHash);
 
         // Construct the signature from the components
         bytes memory signature = abi.encodePacked(r, s, v);

@@ -9,6 +9,8 @@ import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ER
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
 
 /**
  * @title GovernorOperations
@@ -17,6 +19,8 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
  */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using ECDSA for bytes32;
+    using SignatureChecker for bytes32;
 
     ///*** ERRORS ***///
     error CannotBeZeroAddress();
@@ -763,27 +767,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Calculates the Ethereum specific prefixed hash of a given message hash.
-     * @param _messageHash The original hash of the message data.
-     * @return The Ethereum-specific signed version of the input hash.
-     */
-    function _getEthSignedMessageHash(
-        bytes32 _messageHash
-    ) internal pure returns (bytes32) {
-        /*
-        Signature is produced by signing a keccak256 hash with the following format:
-        "\x19Ethereum Signed Message\n" + len(msg) + msg
-        */
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19Ethereum Signed Message:\n32",
-                    _messageHash
-                )
-            );
-    }
-
-    /**
      * @dev Verifies if a given signature is valid for the specified user and uniqueness.
      * @param user The address of the user to verify.
      * @param isUnique Boolean flag to check along with the user address.
@@ -796,24 +779,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes memory signature
     ) internal view returns (bool) {
         bytes32 messageHash = _getMessageHash(user, isUnique);
-        bytes32 ethSignedMessageHash = _getEthSignedMessageHash(messageHash);
+        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
+            messageHash
+        );
 
-        return _recoverSigner(ethSignedMessageHash, signature) == signer;
-    }
-
-    /**
-     * @dev Recovers the signer address from a given hash and signature.
-     * @param _ethSignedMessageHash The hash of the message that was signed.
-     * @param _signature The signature from which to recover the signer address.
-     * @return The address of the signer.
-     */
-    function _recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature
-    ) internal pure returns (address) {
-        (bytes32 r, bytes32 s, uint8 v) = _splitSignature(_signature);
-
-        return ecrecover(_ethSignedMessageHash, v, r, s);
+        return
+            SignatureChecker.isValidSignatureNow(
+                signer,
+                ethSignedMessageHash,
+                signature
+            );
     }
 
     /**
