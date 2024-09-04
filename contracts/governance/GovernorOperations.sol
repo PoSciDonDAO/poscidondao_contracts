@@ -792,24 +792,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Splits a signature into its r, s, and v components.
-     * @param sig The full ECDSA signature.
-     * @return r The 32-byte R component of the signature.
-     * @return s The 32-byte S component of the signature.
-     * @return v The recovery byte, V.
-     */
-    function _splitSignature(
-        bytes memory sig
-    ) internal pure returns (bytes32 r, bytes32 s, uint8 v) {
-        require(sig.length == 65, "invalid signature length");
-        assembly {
-            r := mload(add(sig, 32))
-            s := mload(add(sig, 64))
-            v := byte(0, mload(add(sig, 96)))
-        }
-    }
-
-    /**
      * @dev Records a vote on a proposal, updating the vote totals and voter status.
      *      This function is called after all preconditions checked by `_commonVotingChecks` are met.
      *
