@@ -215,7 +215,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         sci = sci_;
         po = IPo(po_);
         signer = signer_;
-        opThreshold = 100e18;
+        opThreshold = 5000e18;
         proposalLifeTime = 15 minutes; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
