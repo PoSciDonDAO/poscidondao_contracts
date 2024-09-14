@@ -34,7 +34,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InexistentOrInvalidSBT();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
-    error InsufficientVotingRights(uint256 currentRights, uint256 votesGiven);
     error InvalidInputForTransactionExecutable();
     error InvalidInputForElectionExecutable();
     error InvalidInputForNonExecutable();
@@ -217,7 +216,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         signer = signer_;
         opThreshold = 5000e18;
         proposalLifeTime = 15 minutes; //testing
-        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
+        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //9% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
 
@@ -410,43 +409,36 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *      using the rights from the most recent snapshot
      * @param id the _index of the proposal
      * @param support user's choice to support a proposal or not
-     * @param votes the amount of votes
      */
     function voteStandard(
         uint id,
-        bool support,
-        uint votes
+        bool support
     ) external nonReentrant notTerminated {
-        _commonVotingChecks(id, votes);
+        _commonVotingChecks(id);
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
 
         uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
             msg.sender
         );
-        if (votes > votingRights)
-            revert InsufficientVotingRights(votingRights, votes);
 
-        _recordVote(id, support, votes);
+        _recordVote(id, support, votingRights);
     }
 
     function voteQV(
         uint id,
         bool support,
-        uint votes,
         bool isUnique,
         bytes memory signature
     ) external nonReentrant notTerminated {
-        _commonVotingChecks(id, votes);
+        _commonVotingChecks(id);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
         uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
             msg.sender
         );
-        if (votes > votingRights)
-            revert InsufficientVotingRights(votingRights, votes);
 
-        uint256 actualVotes = _sqrt(votes);
+        uint256 actualVotes = _sqrt(votingRights);
         _recordVote(id, support, actualVotes);
     }
 
@@ -715,18 +707,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *      the signature of the voter where necessary.
      *
      * @param id The index of the proposal on which to vote.
-     * @param votes The number of votes the user wishes to cast.
      *
      *
      */
-    function _commonVotingChecks(uint id, uint votes) internal view {
+    function _commonVotingChecks(uint id) internal view {
         if (id >= _index) revert ProposalInexistent();
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
         if (block.timestamp > proposals[id].endTimestamp)
             revert ProposalLifeTimePassed();
         if (voted[id][msg.sender]) revert VoteLock();
-        if (votes == 0) revert InvalidVotesInput();
     }
 
     /**

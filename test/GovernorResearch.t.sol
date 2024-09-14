@@ -133,8 +133,8 @@ contract GovernorResearchTest is Test {
             GovernorOperations.ProposalType.Election,
             false
         );
-        govOps.voteStandard(id, true, 20000000e18);
-        govOps.voteStandard(id1, true, 20000000e18);
+        govOps.voteStandard(id, true);
+        govOps.voteStandard(id1, true);
         vm.warp(0.1 weeks);
         govOps.finalize(id);
         govOps.finalize(id1);

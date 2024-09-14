@@ -21,7 +21,7 @@ async function main() {
   }
 
   const URI = "IPFS";
-  const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
+  const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 
   const constructorArguments = [URI, treasuryWallet];
 

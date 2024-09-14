@@ -98,7 +98,7 @@ contract PoTest is Test {
             GovernorOperations.ProposalType.Transaction,
             false
         );
-        gov.voteStandard(id, true, 2000e18);
+        gov.voteStandard(id, true);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         assertEq(po.totalSupply(), 1);
@@ -118,7 +118,7 @@ contract PoTest is Test {
             GovernorOperations.ProposalType.Transaction,
             false
         );
-        gov.voteStandard(id, true, 2000e18);
+        gov.voteStandard(id, true);
         uint256 balance = po.balanceOf(addr1, 0);
         assertEq(balance, 1);
         po.burn(addr1, 0, 1);
@@ -128,11 +128,11 @@ contract PoTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         staking.lock(2000e18);
-        gov.voteStandard(id, true, 2000e18);
+        gov.voteStandard(id, true);
         vm.stopPrank();
         vm.startPrank(addr3);
         staking.lock(2000e18);
-        gov.voteStandard(id, true, 2000e18);
+        gov.voteStandard(id, true);
         vm.stopPrank();
         assertEq(po.totalSupply(), 2);
     }
