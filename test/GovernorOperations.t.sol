@@ -207,6 +207,36 @@ contract GovernorOperationsTest is Test {
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
     }
+    function test_ChangeVoteFor() public {
+        vm.startPrank(addr1);
+        staking.lock(10000e18);
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            opWallet,
+            5000000e6,
+            0,
+            0,
+            GovernorOperations.ProposalType.Transaction,
+            false
+        );
+        govOps.voteStandard(id, true);
+
+        (, , , , uint256 votesFor, uint256 totalVotes, ) = govOps
+            .getProposalInfo(id);
+
+        assertEq(votesFor, 10000e18);
+        assertEq(totalVotes, 10000e18);
+
+        govOps.voteStandard(id, false);
+                (, , , , uint256 votesFor1, uint256 totalVotes1, ) = govOps
+            .getProposalInfo(id);
+
+        assertEq(totalVotes1 - votesFor1, 10000e18);
+        assertEq(totalVotes1, 10000e18);
+
+        vm.stopPrank();
+    }
 
     function test_VoteMultiple() public {
         vm.startPrank(addr1);
@@ -340,6 +370,7 @@ contract GovernorOperationsTest is Test {
             GovernorOperations.ProposalType.Transaction,
             false
         );
+        vm.warp(26 days);
         govOps.voteStandard(id, true);
         bytes4 selector = bytes4(keccak256("VoteLock()"));
         vm.expectRevert(selector);

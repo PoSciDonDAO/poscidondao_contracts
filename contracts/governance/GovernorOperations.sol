@@ -80,6 +80,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public quorum;
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
+    uint256 public voteChangeTime;
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
@@ -96,6 +97,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(uint256 => Proposal) private proposals;
     mapping(uint256 => mapping(address => bool)) private voted;
     mapping(address => uint256) private votingStreak;
+    mapping(address => mapping(uint256 => uint256)) private lastVotedAt;
+    mapping(uint256 => mapping(address => bool)) public previousSupport;
+    mapping(uint256 => mapping(address => uint256)) public previousVoteAmount;
+
+    
     ///*** ENUMERATORS ***///
 
     /**
@@ -225,6 +231,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
+        voteChangeTime = 1 hours;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
@@ -344,6 +351,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         //the lock time of your tokens and ability to propose after proposing
         if (param == "proposeLockTime") proposeLockTime = data;
+
+        if (param == "voteChangeTime") voteChangeTime = data;
     }
 
     /**
@@ -732,7 +741,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert IncorrectPhase(proposals[id].status);
         if (block.timestamp > proposals[id].endTimestamp)
             revert ProposalLifeTimePassed();
-        if (voted[id][msg.sender]) revert VoteLock();
+        if (
+            voted[id][msg.sender] &&
+            proposals[id].endTimestamp - block.timestamp <= 72 hours
+        ) revert VoteLock();
     }
 
     /**
@@ -806,6 +818,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param actualVotes The effective number of votes to record, which may be adjusted for voting type, such as quadratic.
      */
     function _recordVote(uint id, bool support, uint actualVotes) internal {
+        if (
+            voted[id][msg.sender] == true &&
+            block.timestamp - lastVotedAt[msg.sender][id] <= voteChangeTime
+        ) {
+            if (previousSupport[id][msg.sender]) {
+                proposals[id].votesFor -= previousVoteAmount[id][msg.sender];
+            } else {
+                proposals[id].votesAgainst -= previousVoteAmount[id][msg.sender];
+            }
+            proposals[id].totalVotes -= previousVoteAmount[id][msg.sender];
+        }
+
         if (support) {
             proposals[id].votesFor += actualVotes;
         } else {
@@ -814,6 +838,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         proposals[id].totalVotes += actualVotes;
 
         voted[id][msg.sender] = true;
+        previousSupport[id][msg.sender] = support;
+        previousVoteAmount[id][msg.sender] = actualVotes;
+        lastVotedAt[msg.sender][id] = block.timestamp; 
 
         IStaking(stakingAddress).voted(
             msg.sender,
