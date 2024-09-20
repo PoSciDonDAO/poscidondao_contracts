@@ -71,6 +71,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         ProposalType proposalType; //proposalType option for proposal
     }
 
+    struct UserVoteData {
+        bool voted; // Whether the user has voted
+        uint256 lastVotedAt; // The timestamp of when the user last voted
+        bool previousSupport; // Whether the user supported the last vote
+        uint256 previousVoteAmount; // The amount of votes cast in the last vote
+    }
+
     ///*** INTERFACES ***///
     IPo private po;
     IGovernorResearch private govRes;
@@ -95,13 +102,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 private _index;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
-    mapping(uint256 => mapping(address => bool)) private voted;
     mapping(address => uint256) private votingStreak;
-    mapping(address => mapping(uint256 => uint256)) private lastVotedAt;
-    mapping(uint256 => mapping(address => bool)) public previousSupport;
-    mapping(uint256 => mapping(address => uint256)) public previousVoteAmount;
+    mapping(address => mapping(uint256 => UserVoteData)) public userVoteData;
 
-    
     ///*** ENUMERATORS ***///
 
     /**
@@ -648,7 +651,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getVoted(uint256 id) external view returns (bool) {
         if (id >= _index) revert ProposalInexistent();
-        return voted[id][msg.sender];
+        return userVoteData[msg.sender][id].voted;
     }
 
     /**
@@ -742,7 +745,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (block.timestamp > proposals[id].endTimestamp)
             revert ProposalLifeTimePassed();
         if (
-            voted[id][msg.sender] &&
+            userVoteData[msg.sender][id].voted &&
             proposals[id].endTimestamp - block.timestamp <= 72 hours
         ) revert VoteLock();
     }
@@ -819,15 +822,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _recordVote(uint id, bool support, uint actualVotes) internal {
         if (
-            voted[id][msg.sender] == true &&
-            block.timestamp - lastVotedAt[msg.sender][id] <= voteChangeTime
+            userVoteData[msg.sender][id].voted == true &&
+            block.timestamp - userVoteData[msg.sender][id].lastVotedAt <= voteChangeTime
         ) {
-            if (previousSupport[id][msg.sender]) {
-                proposals[id].votesFor -= previousVoteAmount[id][msg.sender];
+            if (userVoteData[msg.sender][id].previousSupport) {
+                proposals[id].votesFor -= userVoteData[msg.sender][id].previousVoteAmount;
             } else {
-                proposals[id].votesAgainst -= previousVoteAmount[id][msg.sender];
+                proposals[id].votesAgainst -= userVoteData[msg.sender][id].previousVoteAmount;
             }
-            proposals[id].totalVotes -= previousVoteAmount[id][msg.sender];
+            proposals[id].totalVotes -= userVoteData[msg.sender][id].previousVoteAmount;
         }
 
         if (support) {
@@ -837,17 +840,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
         proposals[id].totalVotes += actualVotes;
 
-        voted[id][msg.sender] = true;
-        previousSupport[id][msg.sender] = support;
-        previousVoteAmount[id][msg.sender] = actualVotes;
-        lastVotedAt[msg.sender][id] = block.timestamp; 
+        userVoteData[msg.sender][id].voted = true;
+        userVoteData[msg.sender][id].previousSupport = support;
+        userVoteData[msg.sender][id].previousVoteAmount = actualVotes;
+        userVoteData[msg.sender][id].lastVotedAt = block.timestamp;
 
         IStaking(stakingAddress).voted(
             msg.sender,
             block.timestamp + voteLockTime
         );
 
-        if (id > 0 && voted[id - 1][msg.sender] == true) {
+        if (id > 0 && userVoteData[msg.sender][id-1].voted == true) {
             if (votingStreak[msg.sender] >= maxVotingStreak) {
                 po.mint(msg.sender, maxVotingStreak);
             } else {
