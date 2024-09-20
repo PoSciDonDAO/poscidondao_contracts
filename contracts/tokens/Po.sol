@@ -23,7 +23,6 @@ contract Po is ERC1155Burnable, AccessControl {
     bool internal frozenGovOps = false; /// @notice Indicates if the GovOps contract address has been frozen.
     string private _uri; /// @notice Base URI for token metadata.
     uint256 private constant PARTICIPATION_TOKEN_ID = 0; /// @notice ID for Participation (PO) token.
-    uint256 private constant MINT_AMOUNT = 1; /// @notice Standard mint amount.
     uint256 private _totalSupply;
 
     /**
@@ -83,10 +82,11 @@ contract Po is ERC1155Burnable, AccessControl {
     /**
      * @dev Mints a specified amount of participation tokens to a user.
      * @param user Address of the user to mint tokens to.
+     * @param amount the amount of tokens to be minted
      */
-    function mint(address user) external onlyGov {
-        _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
-        _totalSupply += MINT_AMOUNT;
+    function mint(address user, uint256 amount) external onlyGov {
+        _mint(user, PARTICIPATION_TOKEN_ID, amount, "");
+        _totalSupply += amount;
     }
 
     /**

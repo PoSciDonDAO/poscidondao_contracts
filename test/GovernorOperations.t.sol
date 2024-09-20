@@ -70,8 +70,8 @@ contract GovernorOperationsTest is Test {
         govRes.setGovOps(address(govOps));
         govOps.setGovParams("proposalLifeTime", 4 weeks);
         govOps.setGovParams("quorum", 6000e18);
-        govOps.setGovParams("voteLockTime", 2 weeks);
-        govOps.setGovParams("proposeLockTime", 2 weeks);
+        govOps.setGovParams("voteLockTime", 1 weeks);
+        govOps.setGovParams("proposeLockTime", 1 weeks);
         vm.stopPrank();
 
         vm.startPrank(treasuryWallet);
@@ -129,7 +129,8 @@ contract GovernorOperationsTest is Test {
     function test_SetGovParams() public {
         assertEq(govOps.proposalLifeTime(), 4 weeks);
         assertEq(govOps.quorum(), 6000e18);
-        assertEq(govOps.voteLockTime(), 2 weeks);
+        assertEq(govOps.voteLockTime(), 1 weeks);
+        assertEq(govOps.proposeLockTime(), 1 weeks);
     }
 
     function test_SetParticipationToken() public {
@@ -205,6 +206,51 @@ contract GovernorOperationsTest is Test {
 
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
+    }
+
+    function test_VoteMultiple() public {
+        vm.startPrank(addr1);
+        staking.lock(10000e18);
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            opWallet,
+            5000000e6,
+            0,
+            0,
+            GovernorOperations.ProposalType.Transaction,
+            false
+        );
+        vm.warp(8 days);
+        uint256 id2 = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            opWallet,
+            5000000e6,
+            0,
+            0,
+            GovernorOperations.ProposalType.Transaction,
+            false
+        );
+        vm.warp(15 days);
+        uint256 id3 = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            opWallet,
+            5000000e6,
+            0,
+            0,
+            GovernorOperations.ProposalType.Transaction,
+            false
+        );
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        staking.lock(10000e18);
+        govOps.voteStandard(id, true);
+        govOps.voteStandard(id2, true);
+        govOps.voteStandard(id3, true);
+
+        assertEq(po.balanceOf(addr2, 0), 6);
     }
 
     function test_VoteForProposalWithQuadraticVoting() public {

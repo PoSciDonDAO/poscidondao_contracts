@@ -90,11 +90,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public opThreshold;
+    uint256 public maxVotingStreak;
     uint256 private _index;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
     mapping(uint256 => mapping(address => bool)) private voted;
-
+    mapping(address => uint256) private votingStreak;
     ///*** ENUMERATORS ***///
 
     /**
@@ -158,6 +159,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         ProjectInfo details
     );
     event SetNewGovResAddress(address indexed user, address indexed newAddress);
+    event SetNewMaxVotingStreak(
+        address indexed user,
+        uint256 newMaxVotingStreak
+    );
     event SetNewOpMemberThreshold(
         address indexed user,
         uint256 newOpMemberThreshold
@@ -215,8 +220,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         po = IPo(po_);
         signer = signer_;
         opThreshold = 5000e18;
+        maxVotingStreak = 5;
         proposalLifeTime = 15 minutes; //testing
-        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //9% of circulating supply
+        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
 
@@ -338,6 +344,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         //the lock time of your tokens and ability to propose after proposing
         if (param == "proposeLockTime") proposeLockTime = data;
+    }
+
+    /**
+     * @dev sets the max voting streak for PO tokens
+     */
+    function setMaxVotingStreak(
+        uint256 newMaxVotingStreak
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        maxVotingStreak = newMaxVotingStreak;
+        emit SetNewMaxVotingStreak(msg.sender, newMaxVotingStreak);
     }
 
     /**
@@ -803,7 +819,19 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             msg.sender,
             block.timestamp + voteLockTime
         );
-        po.mint(msg.sender);
+
+        if (id > 0 && voted[id - 1][msg.sender] == true) {
+            if (votingStreak[msg.sender] >= maxVotingStreak) {
+                po.mint(msg.sender, maxVotingStreak);
+            } else {
+                votingStreak[msg.sender] += 1;
+                po.mint(msg.sender, votingStreak[msg.sender]);
+            }
+        } else {
+            votingStreak[msg.sender] = 1;
+            po.mint(msg.sender, 1);
+        }
+
         emit Voted(id, msg.sender, support, actualVotes);
     }
 
