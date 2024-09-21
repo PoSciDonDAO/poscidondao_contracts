@@ -103,7 +103,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint256) private votingStreak;
-    mapping(address => mapping(uint256 => UserVoteData)) public userVoteData;
+    mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ENUMERATORS ***///
 
@@ -345,7 +345,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
-        //the amount of tokens needed to pass a proposal
         //provide a percentage of the total supply
         if (param == "quorum") quorum = data;
 
@@ -355,6 +354,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //the lock time of your tokens and ability to propose after proposing
         if (param == "proposeLockTime") proposeLockTime = data;
 
+        //the time for a user to change their vote after their initial vote
         if (param == "voteChangeTime") voteChangeTime = data;
     }
 
@@ -683,9 +683,39 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256, uint256)
     {
-        return (proposalLifeTime, quorum, voteLockTime, proposeLockTime);
+        return (proposalLifeTime, quorum, voteLockTime, proposeLockTime, voteChangeTime);
+    }
+
+    /**
+     * @notice Retrieves voting data for a specific user on a specific proposal.
+     * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data. 
+     *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
+     * @param user The address of the user whose voting data is being requested.
+     * @param id The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @return voted A boolean indicating whether the user has voted on this proposal. `true` means the user has cast a vote, `false` means they have not.
+     * @return lastVotedAt The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
+     * @return previousSupport A boolean indicating whether the user supported the proposal in their last vote. `true` means they supported it, `false` means they opposed it.
+     * @return previousVoteAmount The number of votes the user cast in their last vote on this proposal. This value reflects the weight of the user's previous vote.
+     */
+    function getUserVoteData(
+        address user,
+        uint256 id
+    )
+        external
+        view
+        returns (
+            bool, uint256, bool, uint256
+        )
+    {
+        if (id > _index) revert ProposalInexistent();
+        return (
+            userVoteData[user][id].voted,
+            userVoteData[user][id].lastVotedAt,            
+            userVoteData[user][id].previousSupport,            
+            userVoteData[user][id].previousVoteAmount
+        );
     }
 
     /**
