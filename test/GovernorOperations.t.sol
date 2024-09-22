@@ -207,6 +207,7 @@ contract GovernorOperationsTest is Test {
         assertEq(voteLockEnd, (block.timestamp + govOps.voteLockTime()));
         vm.stopPrank();
     }
+
     function test_ChangeVoteFor() public {
         vm.startPrank(addr1);
         staking.lock(10000e18);
@@ -229,7 +230,7 @@ contract GovernorOperationsTest is Test {
         assertEq(totalVotes, 10000e18);
 
         govOps.voteStandard(id, false);
-                (, , , , uint256 votesFor1, uint256 totalVotes1, ) = govOps
+        (, , , , uint256 votesFor1, uint256 totalVotes1, ) = govOps
             .getProposalInfo(id);
 
         assertEq(totalVotes1 - votesFor1, 10000e18);
@@ -338,26 +339,35 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    // function test_VerifySignature() public {
-    //     address user = addr2;
-    //     bool isUnique = false;
-    //     // Calculate the message hash
-    //     bytes32 messageHash = keccak256(abi.encodePacked(user, isUnique));
-    //     // Simulate signing using the signer address
-    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(10, messageHash);
-    //     //ecrecover from foundry accepts messageHash,
-    //     //but ecrecover solidity accepts ethSignedMessage (?)
-    //     address recoveredSigner = ecrecover(messageHash, v, r, s);
-    //     vm.startPrank(treasuryWallet);
-    //     assertEq(recoveredSigner, govOps.getSigner());
-    //     vm.stopPrank();
+function test_SuccessfulVoteChangeWithinWindow() public {
+    vm.startPrank(addr2);
+    staking.lock(10000e18);
+    
+    uint256 id = govOps.getProposalIndex();
+    govOps.propose(
+        "Info",
+        opWallet,
+        5000000e6,
+        0,
+        0,
+        GovernorOperations.ProposalType.Transaction,
+        false
+    );
 
-    //     bytes memory signature = abi.encodePacked(r, s, uint8(v));
-    //     bool verified = govOps.verify(user, isUnique, signature);
-    //     assertTrue(verified, "Not verified");
-    // }
+    govOps.voteStandard(id, true);
 
-    function test_RevertVoteWithVoteLockIfAlreadyVoted() public {
+    vm.warp(block.timestamp + govOps.voteChangeTime() - 1);
+
+    govOps.voteStandard(id, false);
+
+    (, , bool previousSupport,) = govOps.getUserVoteData(addr2, id);
+    assertEq(previousSupport, false);
+
+    vm.stopPrank();
+}
+
+
+    function test_RevertVoteIfVoteChangeCutOffPassed() public {
         vm.startPrank(addr2);
         staking.lock(10000e18);
         uint256 id = govOps.getProposalIndex();
@@ -370,11 +380,40 @@ contract GovernorOperationsTest is Test {
             GovernorOperations.ProposalType.Transaction,
             false
         );
-        vm.warp(26 days);
+        vm.warp(block.timestamp + govOps.proposalLifeTime() - govOps.voteChangeCutOff() + 1);
         govOps.voteStandard(id, true);
-        bytes4 selector = bytes4(keccak256("VoteLock()"));
+        bytes4 selector = bytes4(
+            keccak256("VoteChangeNotAllowedAfterCutOff()")
+        );
         vm.expectRevert(selector);
         govOps.voteStandard(id, true);
+        vm.stopPrank();
+    }
+
+    function test_RevertVoteIfVoteChangeWindowExpired() public {
+        vm.startPrank(addr2);
+        staking.lock(10000e18);
+
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose(
+            "Info",
+            opWallet,
+            5000000e6,
+            0,
+            0,
+            GovernorOperations.ProposalType.Transaction,
+            false
+        );
+
+        govOps.voteStandard(id, true);
+
+        vm.warp(block.timestamp + govOps.voteChangeTime() + 1);
+
+        bytes4 selector = bytes4(keccak256("VoteChangeWindowExpired()"));
+        vm.expectRevert(selector);
+
+        govOps.voteStandard(id, false);
+
         vm.stopPrank();
     }
 

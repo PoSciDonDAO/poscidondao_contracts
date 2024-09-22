@@ -27,7 +27,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     error ProposalInexistent();
     error QuorumNotReached();
     error Unauthorized(address user);
-    error VoteLock();
+    error VoteChangeNotAllowedAfterCutOff();
+    error VoteChangeWindowExpired();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -49,11 +50,19 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         ProposalType proposalType; //proposalType option for proposal
     }
 
+    struct UserVoteData {
+        bool voted; // Whether the user has voted
+        uint256 initialVoteTimestamp; // The timestamp of when the user first voted
+        bool previousSupport; // Whether the user supported the last vote
+    }
+
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
     uint256 public quorum;
+    uint256 public proposeLockTime;
     uint256 public voteLockTime;
-    uint256 public terminationThreshold;
+    uint256 public voteChangeTime;
+    uint256 public voteChangeCutOff;
 
     ///*** KEY ADDRESSES ***///
     address public govOpsAddress;
@@ -71,8 +80,8 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     bool public terminated = false;
     uint256 constant VOTE = 1;
     mapping(uint256 => Proposal) private proposals;
-    mapping(uint256 => mapping(address => bool)) private voted;
     mapping(address => uint8) private proposedResearch;
+    mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ENUMERATORS ***///
 
@@ -151,8 +160,7 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         address treasuryWallet_,
         address researchFundingWallet_,
         address usdc_,
-        address sci_
-        //add list of members for initial DD Crew
+        address sci_ //add list of members for initial DD Crew
     ) {
         stakingAddress = stakingAddress_;
         treasuryWallet = treasuryWallet_;
@@ -165,12 +173,15 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         proposalLifeTime = 15 minutes;
         quorum = 1;
         voteLockTime = 0;
+        proposeLockTime = 0;
+        voteChangeTime = 1 hours;
+        voteChangeCutOff = 3 days;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
 
         _grantRole(DUE_DILIGENCE_ROLE, treasuryWallet_);
         _grantRole(DUE_DILIGENCE_ROLE, researchFundingWallet_);
-        
+
         _setRoleAdmin(DUE_DILIGENCE_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
@@ -273,12 +284,20 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
-        //the amount of tokens needed to pass a proposal
         //provide a percentage of the total supply
         if (param == "quorum") quorum = data;
 
         //the lock time of your tokens after voting
         if (param == "voteLockTime") voteLockTime = data;
+
+        //the lock time of your tokens and ability to propose after proposing
+        if (param == "proposeLockTime") proposeLockTime = data;
+
+        //the time for a user to change their vote after their initial vote
+        if (param == "voteChangeTime") voteChangeTime = data;
+
+        //the time before the end of the proposal that users can change their votes
+        if (param == "voteChangeCutOff") voteChangeCutOff = data;
     }
 
     /**
@@ -353,43 +372,13 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
         uint256 id,
         bool support
     ) external notTerminated nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        //check if proposal exists
-        if (id >= _index) revert ProposalInexistent();
-
-        //check if proposal is still active
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
-
-        //check if proposal life time has not passed
-        if (block.timestamp > proposals[id].endTimestamp)
-            revert ProposalLifeTimePassed();
-
-        //check if user already voted for this proposal
-        if (voted[id][msg.sender] == true) revert VoteLock();
+        _votingChecks(id, msg.sender);
 
         IStaking staking = IStaking(stakingAddress);
 
-        //check if DD member/voter still has enough tokens staked
         _validateStakingRequirements(staking, msg.sender);
 
-        //vote for, against or abstain
-        if (support) {
-            proposals[id].votesFor += VOTE;
-        } else {
-            proposals[id].votesAgainst += VOTE;
-        }
-
-        //add to the total votes
-        proposals[id].totalVotes += VOTE;
-
-        //set user as voted for proposal
-        voted[id][msg.sender] = true;
-
-        //set the lock time in the staking contract
-        staking.voted(msg.sender, block.timestamp + voteLockTime);
-
-        //emit Voted events
-        emit Voted(id, msg.sender, support, VOTE);
+        _recordVote(id, support);
     }
 
     /**
@@ -515,15 +504,6 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns if user has voted for a given proposal
-     * @param id the proposal id
-     */
-    function getVoted(uint256 id) external view returns (bool) {
-        if (id >= _index) revert ProposalInexistent();
-        return voted[id][msg.sender];
-    }
-
-    /**
      * @dev returns the proposal index
      */
     function getProposalIndex() external view returns (uint256) {
@@ -535,13 +515,23 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
      * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
      * @return quorum The percentage of votes required for a proposal to be considered valid.
      * @return voteLockTime The duration for which voting on a proposal is open.
+     * @return proposeLockTime The lock time before which a new proposal cannot be made.
+     * @return voteChangeTime The time window during which a vote can be changed after the initial vote.
+     * @return voteChangeCutOff The time before the end of the proposal during which vote changes are no longer allowed.
      */
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256, uint256, uint256)
     {
-        return (proposalLifeTime, quorum, voteLockTime);
+        return (
+            proposalLifeTime,
+            quorum,
+            voteLockTime,
+            proposeLockTime,
+            voteChangeTime,
+            voteChangeCutOff
+        );
     }
 
     /**
@@ -577,6 +567,28 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
             proposals[id].details,
             proposals[id].votesFor,
             proposals[id].totalVotes
+        );
+    }
+
+    /**
+     * @notice Retrieves voting data for a specific user on a specific proposal.
+     * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
+     *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
+     * @param user The address of the user whose voting data is being requested.
+     * @param id The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @return voted A boolean indicating whether the user has voted on this proposal. `true` means the user has cast a vote, `false` means they have not.
+     * @return initialVoteTimestamp The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
+     * @return previousSupport A boolean indicating whether the user supported the proposal in their last vote. `true` means they supported it, `false` means they opposed it.
+     */
+    function getUserVoteData(
+        address user,
+        uint256 id
+    ) external view returns (bool, uint256, bool) {
+        if (id > _index) revert ProposalInexistent();
+        return (
+            userVoteData[user][id].voted,
+            userVoteData[user][id].initialVoteTimestamp,
+            userVoteData[user][id].previousSupport
         );
     }
 
@@ -623,6 +635,78 @@ contract GovernorResearch is IGovernorResearch, AccessControl, ReentrancyGuard {
                 revert InvalidInputOtherProposal();
             }
         }
+    }
+
+    /**
+     * @dev Performs common validation checks for all voting actions.
+     *      This function validates the existence and status of a proposal, ensures that voting
+     *      conditions such as proposal activity and timing constraints are met, and verifies
+     *      the signature of the voter where necessary.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param voter the user that wants to vote on the given proposal id
+     *
+     *
+     */
+    function _votingChecks(uint id, address voter) internal view {
+        if (id >= _index) revert ProposalInexistent();
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
+        if (block.timestamp > proposals[id].endTimestamp)
+            revert ProposalLifeTimePassed();
+        if (
+            userVoteData[voter][id].voted &&
+            block.timestamp >= proposals[id].endTimestamp - voteChangeCutOff
+        ) revert VoteChangeNotAllowedAfterCutOff();
+        if (
+            userVoteData[voter][id].voted &&
+            block.timestamp >
+            userVoteData[voter][id].initialVoteTimestamp + voteChangeTime
+        ) {
+            revert VoteChangeWindowExpired();
+        }
+    }
+
+    /**
+     * @dev Records a vote on a proposal, updating the vote totals and voter status.
+     *      This function is called after all preconditions checked by `_votingChecks` are met.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param support A boolean indicating whether the vote is in support of (true) or against (false) the proposal.
+     */
+    function _recordVote(uint id, bool support) internal {
+        UserVoteData storage voteData = userVoteData[msg.sender][id];
+
+        // Deduct previous votes if the user has already voted
+        if (voteData.voted) {
+            if (voteData.previousSupport) {
+                proposals[id].votesFor -= VOTE;
+            } else {
+                proposals[id].votesAgainst -= VOTE;
+            }
+            proposals[id].totalVotes -= VOTE;
+        }
+
+        if (support) {
+            proposals[id].votesFor += VOTE;
+        } else {
+            proposals[id].votesAgainst += VOTE;
+        }
+        proposals[id].totalVotes += VOTE;
+
+        voteData.voted = true;
+        voteData.previousSupport = support;
+
+        if (voteData.initialVoteTimestamp == 0) {
+            voteData.initialVoteTimestamp = block.timestamp;
+        }
+
+        IStaking(stakingAddress).voted(
+            msg.sender,
+            block.timestamp + voteLockTime
+        );
+
+        emit Voted(id, msg.sender, support, VOTE);
     }
 
     /**

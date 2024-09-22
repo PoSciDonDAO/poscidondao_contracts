@@ -48,7 +48,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
     error QuorumReached();
     error Unauthorized(address user);
-    error VoteLock();
+    error VoteChangeNotAllowedAfterCutOff();
+    error VoteChangeWindowExpired();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -73,7 +74,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     struct UserVoteData {
         bool voted; // Whether the user has voted
-        uint256 lastVotedAt; // The timestamp of when the user last voted
+        uint256 initialVoteTimestamp; // The timestamp of when the user first voted
         bool previousSupport; // Whether the user supported the last vote
         uint256 previousVoteAmount; // The amount of votes cast in the last vote
     }
@@ -88,6 +89,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
     uint256 public voteChangeTime;
+    uint256 public voteChangeCutOff;
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
@@ -230,11 +232,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         signer = signer_;
         opThreshold = 5000e18;
         maxVotingStreak = 5;
-        proposalLifeTime = 15 minutes; //testing
+        proposalLifeTime = 1 weeks; //testing
         quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
         voteChangeTime = 1 hours;
+        voteChangeCutOff = 3 days;
 
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
@@ -356,6 +359,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         //the time for a user to change their vote after their initial vote
         if (param == "voteChangeTime") voteChangeTime = data;
+
+        //the time before the end of the proposal that users can change their votes
+        if (param == "voteChangeCutOff") voteChangeCutOff = data;
     }
 
     /**
@@ -442,7 +448,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint id,
         bool support
     ) external nonReentrant notTerminated {
-        _commonVotingChecks(id);
+        _votingChecks(id, msg.sender);
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
 
@@ -459,7 +465,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool isUnique,
         bytes memory signature
     ) external nonReentrant notTerminated {
-        _commonVotingChecks(id);
+        _votingChecks(id, msg.sender);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
         uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
@@ -646,15 +652,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns if user has voted for a given proposal
-     * @param id the proposal id
-     */
-    function getVoted(uint256 id) external view returns (bool) {
-        if (id >= _index) revert ProposalInexistent();
-        return userVoteData[msg.sender][id].voted;
-    }
-
-    /**
      * @dev returns the operations proposal _index
      */
     function getProposalIndex() external view returns (uint256) {
@@ -677,43 +674,46 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Retrieves the current governance parameters.
      * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
      * @return quorum The percentage of votes required for a proposal to be considered valid.
-     * @return proposeLockTime The lock time before which a new proposal cannot be made.
      * @return voteLockTime The duration for which voting on a proposal is open.
+     * @return proposeLockTime The lock time before which a new proposal cannot be made.
+     * @return voteChangeTime The time window during which a vote can be changed after the initial vote.
+     * @return voteChangeCutOff The time before the end of the proposal during which vote changes are no longer allowed.
      */
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256, uint256, uint256)
     {
-        return (proposalLifeTime, quorum, voteLockTime, proposeLockTime, voteChangeTime);
+        return (
+            proposalLifeTime,
+            quorum,
+            voteLockTime,
+            proposeLockTime,
+            voteChangeTime,
+            voteChangeCutOff
+        );
     }
 
     /**
      * @notice Retrieves voting data for a specific user on a specific proposal.
-     * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data. 
+     * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
      *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param user The address of the user whose voting data is being requested.
      * @param id The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
      * @return voted A boolean indicating whether the user has voted on this proposal. `true` means the user has cast a vote, `false` means they have not.
-     * @return lastVotedAt The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
+     * @return initialVoteTimestamp The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
      * @return previousSupport A boolean indicating whether the user supported the proposal in their last vote. `true` means they supported it, `false` means they opposed it.
      * @return previousVoteAmount The number of votes the user cast in their last vote on this proposal. This value reflects the weight of the user's previous vote.
      */
     function getUserVoteData(
         address user,
         uint256 id
-    )
-        external
-        view
-        returns (
-            bool, uint256, bool, uint256
-        )
-    {
+    ) external view returns (bool, uint256, bool, uint256) {
         if (id > _index) revert ProposalInexistent();
         return (
             userVoteData[user][id].voted,
-            userVoteData[user][id].lastVotedAt,            
-            userVoteData[user][id].previousSupport,            
+            userVoteData[user][id].initialVoteTimestamp,
+            userVoteData[user][id].previousSupport,
             userVoteData[user][id].previousVoteAmount
         );
     }
@@ -758,28 +758,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERNAL FUNCTIONS ***///
-    /**
-     * @dev Performs common validation checks for all voting actions.
-     *      This function validates the existence and status of a proposal, ensures that voting
-     *      conditions such as proposal activity and timing constraints are met, and verifies
-     *      the signature of the voter where necessary.
-     *
-     * @param id The index of the proposal on which to vote.
-     *
-     *
-     */
-    function _commonVotingChecks(uint id) internal view {
-        if (id >= _index) revert ProposalInexistent();
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
-        if (block.timestamp > proposals[id].endTimestamp)
-            revert ProposalLifeTimePassed();
-        if (
-            userVoteData[msg.sender][id].voted &&
-            proposals[id].endTimestamp - block.timestamp <= 72 hours
-        ) revert VoteLock();
-    }
-
     /**
      * @dev Performs validation checks for quadratic voting actions.
      *      This function validates the presence of Holonym's SBT in the user's account
@@ -843,24 +821,55 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Performs common validation checks for all voting actions.
+     *      This function validates the existence and status of a proposal, ensures that voting
+     *      conditions such as proposal activity and timing constraints are met, and verifies
+     *      the signature of the voter where necessary.
+     *
+     * @param id The index of the proposal on which to vote.
+     * @param voter the user that wants to vote on the given proposal id
+     *
+     *
+     */
+    function _votingChecks(uint id, address voter) internal view {
+        // Common proposal-related checks
+        if (id >= _index) revert ProposalInexistent();
+        if (proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(proposals[id].status);
+        if (block.timestamp > proposals[id].endTimestamp)
+            revert ProposalLifeTimePassed();
+        if (
+            userVoteData[voter][id].voted &&
+            block.timestamp >= proposals[id].endTimestamp - voteChangeCutOff
+        ) revert VoteChangeNotAllowedAfterCutOff();
+        if (
+            userVoteData[voter][id].voted &&
+            block.timestamp >
+            userVoteData[voter][id].initialVoteTimestamp + voteChangeTime
+        ) {
+            revert VoteChangeWindowExpired();
+        }
+    }
+
+    /**
      * @dev Records a vote on a proposal, updating the vote totals and voter status.
-     *      This function is called after all preconditions checked by `_commonVotingChecks` are met.
+     *      This function is called after all preconditions checked by `_votingChecks` are met.
      *
      * @param id The index of the proposal on which to vote.
      * @param support A boolean indicating whether the vote is in support of (true) or against (false) the proposal.
      * @param actualVotes The effective number of votes to record, which may be adjusted for voting type, such as quadratic.
      */
     function _recordVote(uint id, bool support, uint actualVotes) internal {
-        if (
-            userVoteData[msg.sender][id].voted == true &&
-            block.timestamp - userVoteData[msg.sender][id].lastVotedAt <= voteChangeTime
-        ) {
-            if (userVoteData[msg.sender][id].previousSupport) {
-                proposals[id].votesFor -= userVoteData[msg.sender][id].previousVoteAmount;
+        UserVoteData storage voteData = userVoteData[msg.sender][id];
+
+        // Deduct previous votes if the user has already voted
+        if (voteData.voted) {
+            if (voteData.previousSupport) {
+                proposals[id].votesFor -= voteData.previousVoteAmount;
             } else {
-                proposals[id].votesAgainst -= userVoteData[msg.sender][id].previousVoteAmount;
+                proposals[id].votesAgainst -= voteData.previousVoteAmount;
             }
-            proposals[id].totalVotes -= userVoteData[msg.sender][id].previousVoteAmount;
+            proposals[id].totalVotes -= voteData.previousVoteAmount;
         }
 
         if (support) {
@@ -870,27 +879,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
         proposals[id].totalVotes += actualVotes;
 
-        userVoteData[msg.sender][id].voted = true;
-        userVoteData[msg.sender][id].previousSupport = support;
-        userVoteData[msg.sender][id].previousVoteAmount = actualVotes;
-        userVoteData[msg.sender][id].lastVotedAt = block.timestamp;
+        voteData.voted = true;
+        voteData.previousSupport = support;
+        voteData.previousVoteAmount = actualVotes;
+
+        if (voteData.initialVoteTimestamp == 0) {
+            voteData.initialVoteTimestamp = block.timestamp;
+        }
 
         IStaking(stakingAddress).voted(
             msg.sender,
             block.timestamp + voteLockTime
         );
 
-        if (id > 0 && userVoteData[msg.sender][id-1].voted == true) {
-            if (votingStreak[msg.sender] >= maxVotingStreak) {
-                po.mint(msg.sender, maxVotingStreak);
-            } else {
-                votingStreak[msg.sender] += 1;
-                po.mint(msg.sender, votingStreak[msg.sender]);
-            }
+        if (id > 0 && userVoteData[msg.sender][id - 1].voted) {
+            votingStreak[msg.sender] = votingStreak[msg.sender] >=
+                maxVotingStreak
+                ? maxVotingStreak
+                : votingStreak[msg.sender] + 1;
         } else {
             votingStreak[msg.sender] = 1;
-            po.mint(msg.sender, 1);
         }
+        po.mint(msg.sender, votingStreak[msg.sender]);
 
         emit Voted(id, msg.sender, support, actualVotes);
     }
