@@ -862,7 +862,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function _recordVote(uint id, bool support, uint actualVotes) internal {
         UserVoteData storage voteData = userVoteData[msg.sender][id];
 
-        // Deduct previous votes if the user has already voted
         if (voteData.voted) {
             if (voteData.previousSupport) {
                 proposals[id].votesFor -= voteData.previousVoteAmount;
@@ -879,6 +878,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
         proposals[id].totalVotes += actualVotes;
 
+        if (!voteData.voted) {
+            if (id > 0 && userVoteData[msg.sender][id - 1].voted) {
+                votingStreak[msg.sender] = votingStreak[msg.sender] >=
+                    maxVotingStreak
+                    ? maxVotingStreak
+                    : votingStreak[msg.sender] + 1;
+            } else {
+                votingStreak[msg.sender] = 1;
+            }
+            po.mint(msg.sender, votingStreak[msg.sender]);
+        }
+
         voteData.voted = true;
         voteData.previousSupport = support;
         voteData.previousVoteAmount = actualVotes;
@@ -891,16 +902,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             msg.sender,
             block.timestamp + voteLockTime
         );
-
-        if (id > 0 && userVoteData[msg.sender][id - 1].voted) {
-            votingStreak[msg.sender] = votingStreak[msg.sender] >=
-                maxVotingStreak
-                ? maxVotingStreak
-                : votingStreak[msg.sender] + 1;
-        } else {
-            votingStreak[msg.sender] = 1;
-        }
-        po.mint(msg.sender, votingStreak[msg.sender]);
 
         emit Voted(id, msg.sender, support, actualVotes);
     }
