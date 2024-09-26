@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import "./../interface/IPo.sol";
-import "./../interface/IStaking.sol";
-import "./../interface/IGovernorResearch.sol";
+import "./../interfaces/IPo.sol";
+import "./../interfaces/IStaking.sol";
+import "./../interfaces/IGovernorResearch.sol";
+import "./../interfaces/IGovernorExecution.sol";
+import "./../interfaces/IGovernorGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
@@ -15,61 +16,45 @@ import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureC
 /**
  * @title GovernorOperations
  * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
- * It integrates with external contracts for staking validation and participation rewards.
+ * It integrates with external contracts for staking validation and participation regovernors.
  */
-contract GovernorOperations is AccessControl, ReentrancyGuard {
-    using SafeERC20 for IERC20;
+contract GovernorOperations is ReentrancyGuard {
     using ECDSA for bytes32;
     using SignatureChecker for bytes32;
 
-    ///*** ERRORS ***///
+    // *** ERRORS *** //
     error CannotBeZeroAddress();
-    error CannotImpeachUserWithoutDDRole();
-    error CannotVoteOnQVProposals();
     error ContractTerminated(uint256 blockNumber);
-    error ExecutableProposalsCannotBeCompleted();
-    error IncorrectCoinValue();
-    error IncorrectExecution();
-    error IncorrectPaymentOption();
-    error IncorrectPhase(ProposalStatus);
-    error InexistentOrInvalidSBT();
-    error InsufficientBalance(uint256 balance, uint256 requiredBalance);
-    error InvalidInputForTransactionExecutable();
-    error InvalidInputForElectionExecutable();
-    error InvalidInputForNonExecutable();
-    error InvalidInfo();
-    error InvalidVotesInput();
-    error TokensStillLocked(uint256 voteLockStamp, uint256 currentStamp);
-    error ProposalIsNotExecutable();
-    error ProposalLifeTimePassed();
-    error ProposeLock();
-    error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
-    error ProposalInexistent();
-    error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
-    error QuorumReached();
     error Unauthorized(address user);
+    error ProposalInexistent();
+    error IncorrectPhase(ProposalStatus);
+    error InvalidInput();
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
+    error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error ProposalLifeTimePassed();
+    error ProposeLock();
+    error ProposalOngoing(
+        uint256 id,
+        uint256 currentTimestamp,
+        uint256 proposalEndTimestamp
+    );
+    error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
+    error CannotExecuteProposal();
+    error CannotVoteOnQVProposals();
+    error ExecutableProposalsCannotBeCompleted();
 
     ///*** STRUCTS ***///
     struct Proposal {
         uint256 startBlockNum;
         uint256 endTimestamp;
         ProposalStatus status;
-        ProjectInfo details;
+        address action;
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 totalVotes;
+        bool executable;
         bool quadraticVoting;
-    }
-
-    struct ProjectInfo {
-        string info; //IPFS link
-        address targetWallet; //wallet address to send funds to
-        Payment payment;
-        uint256 amount; //amount of usdc or coin
-        uint256 amountSci; //amount of sci token
-        ProposalType proposalType; //proposalType option for proposal
     }
 
     struct UserVoteData {
@@ -82,6 +67,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** INTERFACES ***///
     IPo private po;
     IGovernorResearch private govRes;
+    IGovernorExecution private govExec;
+    IGovernorGuard private govGuard;
 
     ///*** GOVERNANCE PARAMETERS ***///
     uint256 public proposalLifeTime;
@@ -93,9 +80,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
-    address public treasuryWallet;
-    address public usdc;
-    address public sci;
+    address public admin;
     address private signer;
 
     ///*** STORAGE & MAPPINGS ***///
@@ -103,6 +88,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 public maxVotingStreak;
     uint256 private _index;
     bool public terminated = false;
+
+    mapping(address => bool) private governors;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint256) private votingStreak;
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
@@ -120,27 +107,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         Cancelled
     }
 
-    /**
-     * @notice Enumerates the different payment options for a proposal.
-     */
-    enum Payment {
-        Usdc,
-        Sci,
-        Coin,
-        SciUsdc,
-        None
-    }
-
-    /**
-     * @notice Enumerates the different proposalType options for a proposal.
-     */
-    enum ProposalType {
-        Other,
-        Transaction,
-        Election,
-        Impeachment
-    }
-
     ///*** MODIFIERS ***///
 
     /**
@@ -148,6 +114,22 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     modifier notTerminated() {
         if (terminated) revert ContractTerminated(block.number);
+        _;
+    }
+
+    /**
+     * @notice Ensures operations can only proceed if the contract has not been terminated.
+     */
+    modifier onlyGovernor() {
+        if (!governors[msg.sender]) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    /**
+     * @notice Ensures operations can only proceed if the contract has not been terminated.
+     */
+    modifier onlyAdmin() {
+        if (!(msg.sender == admin)) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -162,13 +144,20 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /*** EVENTS ***/
     event Cancelled(uint256 indexed id);
     event Completed(uint256 indexed id);
-    event EmergencyCancelled(uint256 indexed id, string reason);
-    event Executed(uint256 indexed id, ProposalType indexed proposalType);
+    event EmergencyCancel(uint256 indexed id, string reason);
+    event Executed(
+        uint256 indexed id,
+        address indexed govExec,
+        address indexed action
+    );
     event Proposed(
         uint256 indexed id,
-        address indexed user,
-        ProjectInfo details
+        address indexed govExec,
+        address indexed action
     );
+    event GovernorAdded(address indexed newGovernor);
+
+    event GovernorRemoved(address indexed formerGovernor);
     event SetNewGovResAddress(address indexed user, address indexed newAddress);
     event SetNewMaxVotingStreak(
         address indexed user,
@@ -179,21 +168,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 newOpMemberThreshold
     );
     event SetNewPoToken(address indexed user, address poToken);
-    event SetNewSciToken(address indexed user, address sciToken);
     event SetNewStakingAddress(
         address indexed user,
         address indexed newAddress
     );
 
     event SetNewSignerAddress(address indexed user, address indexed newAddress);
-    event SetNewTreasuryWallet(
-        address indexed user,
-        address indexed newAddress
-    );
-    event SetNewUsdcAddress(
-        address indexed user,
-        address indexed newUsdcAddress
-    );
+    event SetNewAdmin(address indexed user, address indexed newAddress);
     event Scheduled(uint256 indexed id);
     event Terminated(address admin, uint256 blockNumber);
     event Voted(
@@ -204,45 +185,62 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     );
 
     constructor(
+        address govGuardAddress_,
+        address govExecAddress_,
         address govResAddress_,
         address stakingAddress_,
-        address treasuryWallet_,
-        address usdc_,
+        address admin_,
         address sci_,
         address po_,
         address signer_
     ) {
         if (
+            govGuardAddress_ == address(0) ||
+            govExecAddress_ == address(0) ||
             govResAddress_ == address(0) ||
             stakingAddress_ == address(0) ||
-            treasuryWallet_ == address(0) ||
-            usdc_ == address(0) ||
+            admin_ == address(0) ||
             sci_ == address(0) ||
             po_ == address(0) ||
             signer_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
+        govGuard = IGovernorGuard(govGuardAddress_);
+        govExec = IGovernorExecution(govExecAddress_);
         govRes = IGovernorResearch(govResAddress_);
         stakingAddress = stakingAddress_;
-        treasuryWallet = treasuryWallet_;
-        usdc = usdc_;
-        sci = sci_;
+        admin = admin_;
         po = IPo(po_);
         signer = signer_;
+
+        governors[admin_] = true;
+        governors[govGuardAddress_] = true;
+        governors[govExecAddress_] = true;
+
         opThreshold = 5000e18;
         maxVotingStreak = 5;
         proposalLifeTime = 1 weeks; //testing
-        quorum = (IERC20(sci).totalSupply() / 10000) * 300; //3% of circulating supply
+        quorum = (IERC20(sci_).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 0; //testing
         proposeLockTime = 0; //testing
         voteChangeTime = 1 hours;
         voteChangeCutOff = 3 days;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
+
+    function addGovernor(address user) external onlyAdmin {
+        governors[user] = true;
+
+        emit GovernorAdded(user);
+    }
+
+    function removeGovernor(address user) external onlyAdmin {
+        governors[user] = false;
+
+        emit GovernorRemoved(user);
+    }
 
     /**
      * @dev terminates the governance smart contract
@@ -257,23 +255,19 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setStakedSciThreshold(
         uint256 newThresholdOpMember
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyAdmin {
         opThreshold = newThresholdOpMember;
         emit SetNewOpMemberThreshold(msg.sender, newThresholdOpMember);
     }
 
     /**
      * @dev Updates the treasury wallet address and transfers admin role.
-     * @param newTreasuryWallet The address to be set as the new treasury wallet.
+     * @param newAdmin The address to be set as the new treasury wallet.
      */
-    function setTreasuryWallet(
-        address newTreasuryWallet
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldTreasuryWallet = treasuryWallet;
-        treasuryWallet = newTreasuryWallet;
-        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
-        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
+    function setAdmin(address newAdmin) external onlyAdmin {
+        address oldAdmin = admin;
+        admin = newAdmin;
+        emit SetNewAdmin(oldAdmin, newAdmin);
     }
 
     /**
@@ -281,7 +275,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setStakingAddress(
         address newStakingAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyAdmin {
         stakingAddress = newStakingAddress;
         emit SetNewStakingAddress(msg.sender, newStakingAddress);
     }
@@ -291,7 +285,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setGovResAddress(
         address newGovResAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyAdmin {
         govRes = IGovernorResearch(newGovResAddress);
         emit SetNewGovResAddress(msg.sender, newGovResAddress);
     }
@@ -301,7 +295,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setSigner(
         address newSigner
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyAdmin {
         signer = newSigner;
         emit SetNewSignerAddress(msg.sender, newSigner);
     }
@@ -311,29 +305,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setPoToken(
         address po_
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyAdmin {
         po = IPo(po_);
         emit SetNewPoToken(msg.sender, po_);
-    }
-
-    /**
-     * @dev sets the SCI token address and interface
-     */
-    function setSciToken(
-        address sci_
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        sci = sci_;
-        emit SetNewSciToken(msg.sender, sci_);
-    }
-
-    /**
-     * @dev sets the SCI token address and interface
-     */
-    function setUsdcAddress(
-        address usdc_
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        usdc = usdc_;
-        emit SetNewUsdcAddress(msg.sender, usdc_);
     }
 
     /**
@@ -344,7 +318,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovParams(
         bytes32 param,
         uint256 data
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyGovernor {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
@@ -369,7 +343,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setMaxVotingStreak(
         uint256 newMaxVotingStreak
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external notTerminated onlyAdmin {
         maxVotingStreak = newMaxVotingStreak;
         emit SetNewMaxVotingStreak(msg.sender, newMaxVotingStreak);
     }
@@ -377,63 +351,30 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev Proposes a change in DAO operations. At least one option needs to be proposed.
      * @param info IPFS hash of project proposal.
-     * @param targetWallet Address of the party receiving funds if proposal passes.
-     * @param amountUsdc Amount of USDC.
-     * @param amountCoin Amount of Coin.
-     * @param amountSci Amount of SCI tokens.
-     * @param proposalType the type of proposalType this proposal needs
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
      * @return uint256 Index of the newly created proposal.
      */
     function propose(
         string memory info,
-        address targetWallet,
-        uint256 amountUsdc,
-        uint256 amountCoin,
-        uint256 amountSci,
-        ProposalType proposalType,
+        address action,
+        bool executable,
         bool quadraticVoting
     ) external nonReentrant notTerminated returns (uint256) {
-        _validateInput(
-            info,
-            targetWallet,
-            amountUsdc,
-            amountCoin,
-            amountSci,
-            proposalType
-        );
+        if (bytes(info).length == 0 || action == address(0))
+            revert InvalidInput();
 
         IStaking staking = IStaking(stakingAddress);
 
         _validateStakingRequirements(staking, msg.sender);
 
-        (
-            Payment payment,
-            uint256 amount,
-            uint256 sciAmount
-        ) = _determinePaymentDetails(
-                amountUsdc,
-                amountCoin,
-                amountSci,
-                proposalType
-            );
-
-        ProjectInfo memory projectInfo = ProjectInfo(
-            info,
-            targetWallet,
-            payment,
-            amount,
-            sciAmount,
-            proposalType
-        );
-
         uint256 currentIndex = _storeProposal(
-            projectInfo,
+            action,
             quadraticVoting,
+            executable,
             staking
         );
 
-        emit Proposed(currentIndex, msg.sender, projectInfo);
+        emit Proposed(currentIndex, address(govExec), action);
 
         return currentIndex;
     }
@@ -472,15 +413,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             msg.sender
         );
 
-        uint256 actualVotes = _sqrt(votingRights);
+        uint256 actualVotes = Math.sqrt(votingRights);
         _recordVote(id, support, actualVotes);
     }
 
     /**
-     * @dev finalizes the voting phase for an operations proposal
+     * @dev schedules the the execution or completion of a proposal
      * @param id the _index of the proposal of interest
      */
-    function finalize(uint256 id) external nonReentrant notTerminated {
+    function schedule(uint256 id) external nonReentrant notTerminated {
         if (id >= _index) revert ProposalInexistent();
 
         if (block.timestamp < proposals[id].endTimestamp)
@@ -497,16 +438,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             (!proposals[id].quadraticVoting &&
                 proposals[id].totalVotes < quorum) ||
             (proposals[id].quadraticVoting &&
-                proposals[id].totalVotes < _sqrt(quorum))
+                proposals[id].totalVotes < Math.sqrt(quorum))
         ) {
             revert QuorumNotReached(
                 id,
                 proposals[id].totalVotes,
-                proposals[id].quadraticVoting ? _sqrt(quorum) : quorum
+                proposals[id].quadraticVoting ? Math.sqrt(quorum) : quorum
             );
         }
 
         proposals[id].status = ProposalStatus.Scheduled;
+
+        govExec.schedule(proposals[id].action);
 
         emit Scheduled(id);
     }
@@ -515,63 +458,20 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev executes the proposal using a token or coin - Operation's crew's choice
      * @param id the _index of the proposal of interest
      */
-    function execute(
-        uint256 id
-    ) external payable nonReentrant notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    function execute(uint256 id) external payable nonReentrant notTerminated {
         //check if proposal exists
         if (id >= _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
-        address targetWallet = proposals[id].details.targetWallet;
-        uint256 amount = proposals[id].details.amount;
-        uint256 amountSci = proposals[id].details.amountSci;
-        Payment payment = proposals[id].details.payment;
+        if (!proposals[id].executable) revert CannotExecuteProposal();
 
-        if (proposals[id].details.proposalType == ProposalType.Transaction) {
-            if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-                _transferToken(
-                    IERC20(usdc),
-                    treasuryWallet,
-                    targetWallet,
-                    amount
-                );
-            }
-            if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-                _transferToken(
-                    IERC20(sci),
-                    treasuryWallet,
-                    targetWallet,
-                    amountSci
-                );
-            }
-            if (payment == Payment.Coin) {
-                _transferCoin(treasuryWallet, targetWallet, amount);
-            }
+        proposals[id].status = ProposalStatus.Executed;
 
-            proposals[id].status = ProposalStatus.Executed;
+        govExec.execution(proposals[id].action);
 
-            emit Executed(id, proposals[id].details.proposalType);
-        } else if (
-            proposals[id].details.proposalType == ProposalType.Election
-        ) {
-            govRes.grantDueDiligenceRole(targetWallet);
-
-            proposals[id].status = ProposalStatus.Executed;
-
-            emit Executed(id, proposals[id].details.proposalType);
-        } else if (
-            proposals[id].details.proposalType == ProposalType.Impeachment
-        ) {
-            govRes.revokeDueDiligenceRole(targetWallet);
-
-            proposals[id].status = ProposalStatus.Executed;
-
-            emit Executed(id, proposals[id].details.proposalType);
-        } else {
-            revert ProposalIsNotExecutable();
-        }
+        emit Executed(id, address(govExec), proposals[id].action);
     }
 
     /**
@@ -580,13 +480,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function complete(
         uint256 id
-    ) external nonReentrant notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external nonReentrant notTerminated onlyAdmin {
         if (id > _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(proposals[id].status);
 
-        if (!(proposals[id].details.proposalType == ProposalType.Other)) {
+        if (!proposals[id].executable) {
             revert ExecutableProposalsCannotBeCompleted();
         }
 
@@ -616,6 +516,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             proposals[id].status = ProposalStatus.Cancelled;
 
+            govExec.cancel(proposals[id].action);
+
             emit Cancelled(id);
         }
     }
@@ -626,10 +528,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param id The index of the proposal of interest
      * @param reason A brief reason for the emergency cancellation
      */
-    function emergencyCancellation(
+    function emergencyCancel(
         uint256 id,
         string memory reason
-    ) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external nonReentrant onlyAdmin {
         // Ensure the proposal exists
         if (id >= _index) revert ProposalInexistent();
 
@@ -640,8 +542,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         // Cancel the proposal
         proposals[id].status = ProposalStatus.Cancelled;
 
+        govGuard.cancel(id);
+
         // Emit the detailed EmergencyCancelled event
-        emit EmergencyCancelled(id, reason);
+        emit EmergencyCancel(id, reason);
     }
 
     /**
@@ -664,7 +568,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function getSigner()
         external
         view
-        onlyRole(DEFAULT_ADMIN_ROLE)
+        onlyAdmin
         returns (address)
     {
         return signer;
@@ -739,9 +643,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             uint256,
             uint256,
             ProposalStatus,
-            ProjectInfo memory,
+            address,
             uint256,
             uint256,
+            bool,
             bool
         )
     {
@@ -750,9 +655,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             proposals[id].startBlockNum,
             proposals[id].endTimestamp,
             proposals[id].status,
-            proposals[id].details,
+            proposals[id].action,
             proposals[id].votesFor,
             proposals[id].totalVotes,
+            proposals[id].executable,
             proposals[id].quadraticVoting
         );
     }
@@ -907,73 +813,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Validates input parameters for an operation proposal.
-     * @param info Description or details of the operation proposal.
-     * @param targetWallet Wallet address to receive funds if the proposal is approved.
-     * @param amountUsdc Amount of USDC involved in the proposal.
-     * @param amountCoin Amount of Coin involved in the proposal.
-     * @param amountSci Amount of SCI tokens involved in the proposal.
-     * @param proposalType Boolean indicating whether the proposal is executable.
-     *
-     * @notice Reverts with InvalidInfo if the info is empty.
-     * Reverts with InvalidInputForExecutable or InvalidInputForNonExecutable
-     * based on the executable flag and the validity of payment amounts and receiving wallet.
-     */
-    function _validateInput(
-        string memory info,
-        address targetWallet,
-        uint256 amountUsdc,
-        uint256 amountCoin,
-        uint256 amountSci,
-        ProposalType proposalType
-    ) internal {
-        if (bytes(info).length == 0) revert InvalidInfo();
-
-        if (proposalType == ProposalType.Transaction) {
-            if (
-                targetWallet == address(0) ||
-                !((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
-                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                    (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
-            ) {
-                revert InvalidInputForTransactionExecutable();
-            }
-        } else if (proposalType == ProposalType.Impeachment) {
-            bool hasDDRole = govRes.checkDueDiligenceRole(targetWallet);
-            if (!hasDDRole) {
-                revert CannotImpeachUserWithoutDDRole();
-            }
-        } else if (
-            proposalType == ProposalType.Election ||
-            proposalType == ProposalType.Impeachment
-        ) {
-            if (
-                targetWallet == address(0) ||
-                ((amountUsdc > 0 && amountCoin == 0 && amountSci >= 0) ||
-                    (amountCoin > 0 && amountUsdc == 0 && amountSci == 0) ||
-                    (amountSci > 0 && amountCoin == 0 && amountUsdc >= 0))
-            ) {
-                revert InvalidInputForElectionExecutable();
-            }
-        } else {
-            if (
-                targetWallet != address(0) ||
-                amountUsdc != 0 ||
-                amountCoin != 0 ||
-                amountSci != 0
-            ) {
-                revert InvalidInputForNonExecutable();
-            }
-        }
-    }
-
-    /**
      * @dev Checks if the proposer satisfies the staking requirements for proposal submission.
      * @param staking The staking contract interface to check staked amounts.
      * @param proposer Address of the user making the proposal.
      *
      * @notice Reverts with InsufficientBalance if the staked amount is below the required threshold.
-     * Reverts with ProposalLock if the proposer's tokens are locked due to a recent proposal.
+     * Reverts with ProposeLock if the proposer's tokens are locked due to a recent proposal.
      */
     function _validateStakingRequirements(
         IStaking staking,
@@ -990,52 +835,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Determines and returns the payment type and amounts for an operation proposal.
-     * @param amountUsdc Amount of USDC involved in the proposal.
-     * @param amountCoin Amount of Coin involved in the proposal.
-     * @param amountSci Amount of SCI tokens involved in the proposal.
-     * @param proposalType Enum indicating in which way the proposal must be executed.
-     * @return payment The determined payment method from the Payment enum.
-     * @return amount The amount of USDC or Coin to be used.
-     * @return sciAmount The amount of SCI tokens to be used.
-     *
-     * @notice Reverts with IncorrectPaymentOption if the payment method is not valid.
-     * The method is determined based on the non-zero amounts of USDC, Coin, and SCI tokens.
-     */
-    function _determinePaymentDetails(
-        uint256 amountUsdc,
-        uint256 amountCoin,
-        uint256 amountSci,
-        ProposalType proposalType
-    )
-        internal
-        pure
-        returns (Payment payment, uint256 amount, uint256 sciAmount)
-    {
-        if (
-            proposalType == ProposalType.Other ||
-            proposalType == ProposalType.Election ||
-            proposalType == ProposalType.Impeachment
-        ) return (Payment.None, 0, 0);
-
-        uint8 paymentOptions = (amountUsdc > 0 ? 1 : 0) +
-            (amountCoin > 0 ? 1 : 0) +
-            (amountSci > 0 ? 1 : 0);
-
-        if (paymentOptions == 1) {
-            if (amountUsdc > 0) return (Payment.Usdc, amountUsdc, 0);
-            if (amountCoin > 0) return (Payment.Coin, amountCoin, 0);
-            if (amountSci > 0) return (Payment.Sci, 0, amountSci);
-        } else if (paymentOptions == 2 && amountUsdc > 0 && amountSci > 0) {
-            return (Payment.SciUsdc, amountUsdc, amountSci);
-        }
-
-        revert IncorrectPaymentOption();
-    }
-
-    /**
      * @dev Stores a new operation proposal in the contract's state and updates staking.
-     * @param projectInfo Struct containing detailed information about the project.
+     * @param action contract address executing an action.
      * @param quadraticVoting Boolean indicating if quadratic voting is enabled for this proposal.
      * @param staking The staking contract interface used for updating the proposer's status.
      * @return uint256 The _index where the new proposal is stored.
@@ -1044,18 +845,20 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * It also updates the staking contract to reflect the new proposal.
      */
     function _storeProposal(
-        ProjectInfo memory projectInfo,
+        address action,
         bool quadraticVoting,
+        bool executable,
         IStaking staking
     ) internal returns (uint256) {
         Proposal memory proposal = Proposal(
             block.number,
             block.timestamp + proposalLifeTime,
             ProposalStatus.Active,
-            projectInfo,
+            action,
             0,
             0,
             0,
+            executable,
             quadraticVoting
         );
 
@@ -1065,62 +868,5 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         staking.proposed(msg.sender, block.timestamp + proposeLockTime);
 
         return currentIndex;
-    }
-
-    /**
-     * @dev calculates the square root of given x 
-            adjusted for values with 18 decimals
-     */
-    function _sqrt(uint256 x) internal pure returns (uint256 y) {
-        if (x == 0) return 0; // Return 0 for 0 input
-
-        // Normalize x by dividing by 1e18
-        uint256 normalizedX = x / 1e18;
-
-        uint256 z = (normalizedX + 1) / 2;
-        y = normalizedX;
-        while (z < y) {
-            y = z;
-            z = (normalizedX / z + z) / 2;
-        }
-
-        // Convert the result back to wei scale by multiplying with 1e18
-        return y * 1e18;
-    }
-
-    /**
-     * @dev Transfers ERC20 tokens from one address to another.
-     *      Uses the safeTransferFrom function from the SafeERC20 library
-     *      to securely transfer tokens.
-     * @param token The ERC20 token to be transferred.
-     * @param from The address from which the tokens will be transferred.
-     * @param to The address to which the tokens will be transferred.
-     * @param amount The amount of tokens to transfer.
-     */
-    function _transferToken(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal {
-        if (amount > 0) {
-            token.safeTransferFrom(from, to, amount);
-        }
-    }
-
-    /**
-     * @dev Transfers ETH coin from one address to another.
-     *      Requires that the function caller is the same as the 'from' address.
-     *      Reverts if the transferred amount does not match the provided value
-     *      or if the sender is unauthorized.
-     * @param from The address from which the coins will be transferred. Must match the message sender.
-     * @param to The address to which the coins will be transferred.
-     * @param amount The amount of coins to transfer.
-     */
-    function _transferCoin(address from, address to, uint256 amount) internal {
-        if (msg.sender != from) revert Unauthorized(msg.sender);
-        if (msg.value == 0 || msg.value != amount) revert IncorrectCoinValue();
-        (bool sent, ) = to.call{value: msg.value}("");
-        require(sent, "Failed to transfer");
     }
 }

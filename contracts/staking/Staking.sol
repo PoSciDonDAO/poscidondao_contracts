@@ -5,7 +5,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {IStaking} from "contracts/interface/IStaking.sol";
+import {IStaking} from "contracts/interfaces/IStaking.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 

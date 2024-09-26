@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import "./../interface/IStaking.sol";
-import "./../interface/IGovernorResearch.sol";
+import "./../interfaces/IStaking.sol";
+import "./../interfaces/IGovernorResearch.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
