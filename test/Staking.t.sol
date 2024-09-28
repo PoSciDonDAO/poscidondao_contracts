@@ -17,55 +17,53 @@ contract StakingTest is Test {
     MockUsdc public usdc;
     Staking public staking;
 
-    address public addr1 = vm.addr(1);
-    address public addr2 = vm.addr(2);
-    address public addr3 = vm.addr(3);
-    address public addr4 = vm.addr(4);
-    address public addr5 = vm.addr(5);
-    address public donationWallet = vm.addr(6);
-    address public treasuryWallet = vm.addr(7);
-
+    address addr1 = vm.addr(1);
+    address addr2 = vm.addr(2);
+    address addr3 = vm.addr(3);
+    address addr4 = vm.addr(4);
+    address addr5 = vm.addr(5);
+    address researchFundingWallet = vm.addr(6);
+    address admin = vm.addr(7);
+    address signer = vm.addr(9);
     event Locked(address indexed user, address indexed asset, uint256 amount);
     event Freed(address indexed user, address indexed asset, uint256 amount);
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
 
-        vm.startPrank(treasuryWallet);
-        sci = new Sci(treasuryWallet, 4538400);
+        vm.startPrank(admin);
+        sci = new Sci(admin, 4538400);
 
-        po = new Po("", treasuryWallet);
+        po = new Po("", admin);
 
-        staking = new Staking(treasuryWallet, address(sci));
+        staking = new Staking(admin, address(sci));
 
         govRes = new GovernorResearch(
             address(staking),
-            treasuryWallet,
-            donationWallet,
+            admin,
+            researchFundingWallet,
             address(usdc),
             address(sci)
         );
 
         govOps = new GovernorOperations(
-            address(govRes),
             address(staking),
-            treasuryWallet,
-            address(usdc),
+            admin,
             address(sci),
             address(po),
-            0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
+            signer
         );
 
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
         govOps.setPoToken(address(po));
-        govOps.setGovParams("proposalLifeTime", 4 weeks);
-        govOps.setGovParams("quorum", 1000e18);
-        govOps.setGovParams("voteLockEnd", 2 weeks);
+        // govOps.setGovParams("proposalLifeTime", 4 weeks);
+        // govOps.setGovParams("quorum", 1000e18);
+        // govOps.setGovParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 
-        deal(address(usdc), treasuryWallet, 10000e18);
+        deal(address(usdc), admin, 10000e18);
         deal(address(usdc), addr1, 10000e18);
         deal(address(usdc), addr2, 10000e18);
         deal(address(usdc), addr3, 10000e18);
@@ -75,7 +73,7 @@ contract StakingTest is Test {
         deal(address(sci), addr3, 1000000e18);
         deal(address(sci), addr4, 1000000e18);
         deal(address(sci), addr5, 1000000e18);
-        deal(address(sci), treasuryWallet, 10000000e18);
+        deal(address(sci), admin, 10000000e18);
 
         vm.startPrank(addr1);
         sci.approve(address(staking), 10000e18);
@@ -104,7 +102,7 @@ contract StakingTest is Test {
         staking.lock(1000e18);
         vm.stopPrank();
 
-        vm.startPrank(treasuryWallet);
+        vm.startPrank(admin);
         staking.addDelegate(addr2);
         staking.addDelegate(addr3);
         sci.approve(address(staking), 100000000000000e18);
@@ -303,7 +301,7 @@ contract StakingTest is Test {
         staking.delegate(addr5);
         vm.stopPrank();
 
-        vm.startPrank(treasuryWallet);
+        vm.startPrank(admin);
         staking.addDelegate(addr4);
         vm.stopPrank();
 
@@ -311,7 +309,7 @@ contract StakingTest is Test {
         staking.delegate(addr4);
         vm.stopPrank();
 
-        vm.startPrank(treasuryWallet);
+        vm.startPrank(admin);
         staking.removeDelegate(addr4);
         vm.stopPrank();
 
@@ -386,7 +384,7 @@ contract StakingTest is Test {
     }
 
     function test_TerminateDAO() public {
-        vm.startPrank(treasuryWallet);
+        vm.startPrank(admin);
         staking.burnForTermination(100000e18);
         staking.burnForTermination(4627500e18);
 
@@ -396,7 +394,7 @@ contract StakingTest is Test {
         );
         vm.stopPrank();
 
-        vm.startPrank(treasuryWallet);
+        vm.startPrank(admin);
         staking.terminate();
         vm.stopPrank();
 

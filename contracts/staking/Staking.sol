@@ -58,7 +58,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     bool public terminated = false;
     bool public terminatedOperations = false;
     bool public terminatedResearchFunding = false;
-    address public treasuryWallet;
+    address public admin;
     address public govOpsContract;
     address public govResContract;
     uint256 private totStaked;
@@ -94,7 +94,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     );
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event Locked(address indexed user, address indexed asset, uint256 amount);
-    event SetNewTreasuryWallet(
+    event SetNewAdmin(
         address indexed user,
         address indexed newAddress
     );
@@ -112,33 +112,33 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
     event ProposeLockEndTimeUpdated(address user, uint256 proposeLockEndTime);
 
-    constructor(address treasuryWallet_, address sci_) {
-        if (treasuryWallet_ == address(0) || sci_ == address(0)) {
+    constructor(address admin_, address sci_) {
+        if (admin_ == address(0) || sci_ == address(0)) {
             revert CannotBeZeroAddress();
         }
-        treasuryWallet = treasuryWallet_;
+        admin = admin_;
         sci = IERC20(sci_);
         sciBurn = ERC20Burnable(sci_);
         terminationThreshold = 2500; // 25% of total supply with 10000 precision
         delegateThreshold = 100e18;
         delegates[address(0)] = true;
-        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
      * @dev Updates the treasury wallet address and transfers admin role.
-     * @param newTreasuryWallet The address to be set as the new treasury wallet.
+     * @param newAdmin The address to be set as the new treasury wallet.
      */
-    function setTreasuryWallet(
-        address newTreasuryWallet
+    function setAdmin(
+        address newAdmin
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldTreasuryWallet = treasuryWallet;
-        treasuryWallet = newTreasuryWallet;
-        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
-        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
+        address oldAdmin = admin;
+        admin = newAdmin;
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        emit SetNewAdmin(oldAdmin, newAdmin);
     }
 
     /**

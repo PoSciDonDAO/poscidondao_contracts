@@ -20,9 +20,6 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const govGuardAddress = "";
-	const govExecAddress = "";
-	const govResAddress = "0x44803ea99922D3DbCBde18F1a706603e0EF2EcE5";
 	const stakingAddress = "0xD800cBb54DBE5e126d21f859c4E2a6c8DE9986fB";
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const sciToken = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
@@ -30,9 +27,6 @@ async function main() {
 	const signerAddress = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
 	const constructorArguments = [
-		govGuardAddress,
-		govExecAddress,
-		govResAddress,
 		stakingAddress,
 		admin,
 		sciToken,

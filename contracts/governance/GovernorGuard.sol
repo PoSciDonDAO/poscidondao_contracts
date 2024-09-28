@@ -3,23 +3,23 @@ pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface IGovernorLike {
-    function drop(uint256 id) external;
+interface IGovernorCancel {
+    function cancel(uint256 id) external;
+    function cancelRejected(uint256 id) external;
 }
 
 contract GovernorGuard is AccessControl {
     address public admin;
-    IGovernorLike public governor;
+    IGovernorCancel public gov;
 
     event SetNewAdmin(address indexed user, address indexed newAdmin);
-    event SetNewGovernor(address indexed user, address indexed newGovernor);
 
-    // *** ERRORS *** //
     error ProposalAlreadyDropped(uint256 id);
 
-    constructor(address admin_, address governor_) {
+    constructor(address admin_, address govAddress_) {
+
         admin = admin_;
-        governor = IGovernorLike(governor_);
+        gov = IGovernorCancel(govAddress_);
 
         // Grant the initial admin role to the deployer
         _setupRole(DEFAULT_ADMIN_ROLE, admin_);
@@ -42,8 +42,20 @@ contract GovernorGuard is AccessControl {
      * @param id The ID of the proposal to drop.
      * @notice Only the admin can call this function.
      */
-    function cancel(uint256 id) external {
-        try governor.drop(id) {
+    function cancel(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        try gov.cancel(id) {
+        } catch {
+            revert ProposalAlreadyDropped(id);
+        }
+    }
+
+    /**
+     * @dev Drops a proposal by calling the drop function on the Governor contract.
+     * @param id The ID of the proposal to drop.
+     * @notice Only the admin can call this function.
+     */
+    function cancelRejected(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        try gov.cancelRejected(id) {
         } catch {
             revert ProposalAlreadyDropped(id);
         }

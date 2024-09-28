@@ -20,11 +20,4 @@ interface IGovernorExecution {
      * @param action The address of the action to execute.
      */
     function execution(address action) external;
-
-    /**
-     * @dev Returns the scheduled time for a specific action.
-     * @param action The address of the action to check.
-     * @return Returns the time the action is scheduled for.
-     */
-    function scheduledTime(address action) external view returns (uint256);
 }

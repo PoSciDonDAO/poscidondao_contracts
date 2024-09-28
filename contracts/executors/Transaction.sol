@@ -8,44 +8,43 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 
 contract Transaction is ReentrancyGuard, AccessControl {
     using SafeERC20 for IERC20;
-    
+
     IERC20 public usdc;
     IERC20 public sci;
     address targetWallet;
     uint256 amountUsdc;
     uint256 amountSci;
-    Payment payment;
+    address fundingWallet;
 
-    enum Payment {
-        Usdc,
-        Sci,
-        SciUsdc
-    }
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     constructor(
         address targetWallet_,
         uint256 amountUsdc_,
         uint256 amountSci_,
-        Payment payment_
+        address govExecAddress_,
+        address fundingWallet_,
+        address usdc_,
+        address sci_
     ) {
         targetWallet = targetWallet_;
         amountUsdc = amountUsdc_;
         amountSci = amountSci_;
-        payment = payment_;
-        usdc = IERC20(0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246);
-        sci = IERC20(0x8cC93105f240B4aBAF472e7cB2DeC836159AA311);
+        fundingWallet = fundingWallet_;
+        usdc = IERC20(usdc_);
+        sci = IERC20(sci_);
+        _grantRole(GOVERNOR_ROLE, govExecAddress_);
     }
 
     /**
      * @dev Execute the proposal using ERC20 tokens (USDC or SCI)
      */
-    function execute() external nonReentrant {
-        // Handle USDC and SCI transfers
-        if (payment == Payment.Usdc || payment == Payment.SciUsdc) {
-            _transferToken(usdc, msg.sender, targetWallet, amountUsdc);
+    function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
+        if (amountUsdc > 0) {
+            _transferToken(usdc, fundingWallet, targetWallet, amountUsdc);
         }
-        if (payment == Payment.Sci || payment == Payment.SciUsdc) {
-            _transferToken(sci, msg.sender, targetWallet, amountSci);
+        if (amountSci > 0) {
+            _transferToken(sci, fundingWallet, targetWallet, amountSci);
         }
     }
 
