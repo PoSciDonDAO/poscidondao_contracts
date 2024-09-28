@@ -691,15 +691,6 @@ contract GovernorOperationsTest is Test {
                 GovernorOperations.ProposalStatus.Active
             )
         );
-        // vm.stopPrank();
-        // vm.startPrank(admin);
-        // govOps.execute(id);
-        // vm.expectRevert(
-        //     abi.encodeWithSelector(
-        //         selector,
-        //         GovernorOperations.ProposalStatus.Active
-        //     )
-        // );
         govOps.execute(id);
         vm.stopPrank();
     }

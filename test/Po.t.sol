@@ -50,9 +50,6 @@ contract PoTest is Test {
         govOps.setPoToken(address(po));
         staking.setSciToken(address(sci));
         staking.setGovOps(address(govOps));
-        govOps.setGovParams("proposalLifeTime", 8 weeks);
-        govOps.setGovParams("quorum", 1000e18);
-        govOps.setGovParams("voteLockTime", 2 weeks);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 

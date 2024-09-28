@@ -25,6 +25,7 @@ contract SciTest is Test {
     function setUp() public {
         vm.startPrank(admin);
         sci = new Sci(admin, 18910000);
+        vm.stopPrank();
     }
 
     function test_InitialMinting() public {

@@ -32,7 +32,6 @@ contract PoToSciExchangeTest is Test {
         0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
     bytes32 phoneCircuitId =
         0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
-    
 
     function setUp() public {
         usdc = new MockUsdc(10000000e6);
@@ -56,9 +55,6 @@ contract PoToSciExchangeTest is Test {
         govOps.setPoToken(address(po));
         staking.setSciToken(address(sci));
         staking.setGovOps(address(govOps));
-        govOps.setGovParams("proposalLifeTime", 8 weeks);
-        govOps.setGovParams("quorum", 1000e18);
-        govOps.setGovParams("voteLockTime", 2 weeks);
         po.setGovOps(address(govOps));
         vm.stopPrank();
 
@@ -97,6 +93,8 @@ contract PoToSciExchangeTest is Test {
         vm.startPrank(addr1);
         staking.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(0), false);
+
         vm.stopPrank();
         vm.startPrank(addr2);
 
@@ -121,7 +119,7 @@ contract PoToSciExchangeTest is Test {
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), false);
         vm.stopPrank();
-        
+
         vm.startPrank(addr2);
         staking.lock(5000e18);
         govOps.voteStandard(id, true);
