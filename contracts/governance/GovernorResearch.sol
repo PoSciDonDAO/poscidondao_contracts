@@ -60,6 +60,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     address public researchFundingWallet;
     address public usdc;
     address public sci;
+    address public govOps;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
@@ -71,6 +72,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
+    bytes32 public constant GOVOPS_ROLE = keccak256("GOVOPS_ROLE");
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
     bytes32 public constant DUE_DILIGENCE_ROLE =
@@ -107,6 +109,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address indexed govExec,
         address indexed action
     );
+    event GovernorAdded(address newGovernorAddress);
+    event GovernorRemoved(address formerGovernorAddress);
+
     event Proposed(
         uint256 indexed id,
         address indexed user,
@@ -190,6 +195,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the GovernorExecution address
      */
+    function setGovOps(
+        address newGovOps
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(GOVOPS_ROLE, newGovOps);
+        emit SetNewGovExecAddress(msg.sender, newGovOps);
+    }
+
+    /**
+     * @dev sets the GovernorExecution address
+     */
     function setGovExec(
         address newGovExecAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -254,6 +269,22 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Sets the GovernorExecution addresses in batch.
+     * @param newGovernorAddress An array of new Governor Execution addresses.
+     */
+    function addGovernorsGovOps(
+        address newGovernorAddress
+    ) public notTerminated onlyRole(GOVOPS_ROLE) {
+        if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
+
+        // Set the governor execution address
+        _grantRole(GOVERNOR_ROLE, newGovernorAddress);
+
+        // Emit event for each new governor
+        emit GovernorAdded(newGovernorAddress);
+    }
+
+    /**
      * @dev Updates the admin address and transfers admin role.
      * @param newAdmin The address to be set as the new admin.
      */
@@ -287,40 +318,40 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Sets the GovernorExecution addresses in batch.
-     * @param newGovExecAddresses An array of new Governor Execution addresses.
+     * @param newGovernorAddresses An array of new Governor Execution addresses.
      */
-    function addGovernors(
-        address[] memory newGovExecAddresses
+    function addGovernorsAdmin(
+        address[] memory newGovernorAddresses
     ) public notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < newGovExecAddresses.length; i++) {
-            address newGovExecAddress = newGovExecAddresses[i];
-            if (newGovExecAddress == address(0)) revert CannotBeZeroAddress();
+        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
+            address newGovernorAddress = newGovernorAddresses[i];
+            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
 
             // Set the governor execution address
-            _grantRole(GOVERNOR_ROLE, newGovExecAddress);
+            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
 
             // Emit event for each new governor
-            emit SetNewGovExecAddress(msg.sender, newGovExecAddress);
+            emit GovernorAdded(newGovernorAddress);
         }
     }
 
     /**
      * @dev Removes the GovernorExecution addresses in batch.
-     * @param formerGovExecAddresses An array of Governor Execution addresses to remove.
+     * @param formerGovernorAddresses An array of Governor Execution addresses to remove.
      */
-    function removeGovernors(
-        address[] memory formerGovExecAddresses
+    function removeGovernorsAdmin(
+        address[] memory formerGovernorAddresses
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < formerGovExecAddresses.length; i++) {
-            address removeGovExecAddress = formerGovExecAddresses[i];
-            if (removeGovExecAddress == address(0))
+        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
+            address formerGovernorAddress = formerGovernorAddresses[i];
+            if (formerGovernorAddress == address(0))
                 revert CannotBeZeroAddress();
 
             // Remove the governor execution address
-            _revokeRole(GOVERNOR_ROLE, removeGovExecAddress);
+            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
 
             // Emit event for each removed governor
-            emit SetNewGovGuardAddress(msg.sender, removeGovExecAddress);
+            emit GovernorRemoved(formerGovernorAddress);
         }
     }
 
@@ -453,8 +484,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         if (!proposals[id].executable) revert CannotExecute();
 
+        address[] memory governor = new address[](1);
+        governor[0] = address(proposals[id].action);
+        
+        _addGovernorsInternal(governor);
+        
         govExec.execution(proposals[id].action);
 
+        _removeGovernorsInternal(governor);
         proposals[id].status = ProposalStatus.Executed;
 
         emit Executed(id, address(govExec), proposals[id].action);
@@ -597,6 +634,41 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Grants the GOVERNOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
+     * @param newGovernorAddresses An array of addresses to be granted the GOVERNOR_ROLE.
+     */
+    function _addGovernorsInternal(
+        address[] memory newGovernorAddresses
+    ) internal notTerminated {
+        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
+            address newGovernorAddress = newGovernorAddresses[i];
+            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
+
+            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
+
+            emit GovernorAdded(newGovernorAddress);
+        }
+    }
+
+    /**
+     * @dev Revokes the GOVERNOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
+     * @param formerGovernorAddresses An array of addresses to be removed from the GOVERNOR_ROLE.
+     */
+    function _removeGovernorsInternal(
+        address[] memory formerGovernorAddresses
+    ) internal notTerminated {
+        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
+            address formerGovernorAddress = formerGovernorAddresses[i];
+            if (formerGovernorAddress == address(0))
+                revert CannotBeZeroAddress();
+
+            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
+
+            emit GovernorRemoved(formerGovernorAddress);
+        }
+    }
 
     /**
      * @dev Performs common validation checks for all voting actions.

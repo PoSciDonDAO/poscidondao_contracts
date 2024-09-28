@@ -12,6 +12,10 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
 
+interface IGovernorRoleToGovRes {
+    function addGovernorsGovOps(address action) external;
+}
+
 /**
  * @title GovernorOperations
  * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
@@ -83,6 +87,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public stakingAddress;
     address public admin;
     address private signer;
+    address public govRes;
 
     ///*** STORAGE & MAPPINGS ***///
 
@@ -142,7 +147,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address indexed user,
         address indexed newAddress
     );
-    
+
     event SetNewGovGuardAddress(
         address indexed user,
         address indexed newAddress
@@ -175,14 +180,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address admin_,
         address sci_,
         address po_,
-        address signer_
+        address signer_,
+        address govRes_
     ) {
         if (
             stakingAddress_ == address(0) ||
             admin_ == address(0) ||
             sci_ == address(0) ||
             po_ == address(0) ||
-            signer_ == address(0)
+            signer_ == address(0) || 
+            govRes_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -190,6 +197,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         admin = admin_;
         po = IPo(po_);
         signer = signer_;
+        govRes = govRes_;
 
         opThreshold = 5000e18;
         maxVotingStreak = 5;
@@ -241,16 +249,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Sets the GovernorExecution addresses in batch.
      * @param newGovernorAddresses An array of new Governor Execution addresses.
      */
-    function addGovernors(
+    function addGovernorsAdmin(
         address[] memory newGovernorAddresses
     ) public notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
             address newGovernorAddress = newGovernorAddresses[i];
             if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
-            
+
             // Set the governor execution address
             _grantRole(GOVERNOR_ROLE, newGovernorAddress);
-            
+
             // Emit event for each new governor
             emit GovernorAdded(newGovernorAddress);
         }
@@ -260,16 +268,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Removes the GovernorExecution addresses in batch.
      * @param formerGovernorAddresses An array of Governor Execution addresses to remove.
      */
-    function removeGovernors(
+    function removeGovernorsAdmin(
         address[] memory formerGovernorAddresses
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
             address formerGovernorAddress = formerGovernorAddresses[i];
-            if (formerGovernorAddress == address(0)) revert CannotBeZeroAddress();
-            
+            if (formerGovernorAddress == address(0))
+                revert CannotBeZeroAddress();
+
             // Remove the governor execution address
             _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
-            
+
             // Emit event for each removed governor
             emit GovernorRemoved(formerGovernorAddress);
         }
@@ -518,8 +527,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev executes the proposal using a token or coin - Operation's crew's choice
      * @param id the _index of the proposal of interest
      */
+    /**
+     * @dev Executes a scheduled proposal by temporarily assigning the GOVERNOR_ROLE to the target action,
+     * executing the action, and then removing the role. Reverts if conditions for execution are not met.
+     * @param id The ID of the proposal to be executed.
+     */
     function execute(uint256 id) external payable nonReentrant notTerminated {
-        //check if proposal exists
         if (id >= _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)
@@ -527,7 +540,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (!proposals[id].executable) revert CannotExecute();
 
+        address[] memory governor = new address[](1);
+        governor[0] = address(proposals[id].action);
+        
+        _addGovernorsInternal(governor);
+        IGovernorRoleToGovRes(govRes).addGovernorsGovOps(proposals[id].action);
+        
         govExec.execution(proposals[id].action);
+
+        _removeGovernorsInternal(governor);
 
         proposals[id].status = ProposalStatus.Executed;
 
@@ -682,6 +703,42 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Grants the GOVERNOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
+     * @param newGovernorAddresses An array of addresses to be granted the GOVERNOR_ROLE.
+     */
+    function _addGovernorsInternal(
+        address[] memory newGovernorAddresses
+    ) internal notTerminated {
+        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
+            address newGovernorAddress = newGovernorAddresses[i];
+            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
+
+            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
+
+            emit GovernorAdded(newGovernorAddress);
+        }
+    }
+
+    /**
+     * @dev Revokes the GOVERNOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
+     * @param formerGovernorAddresses An array of addresses to be removed from the GOVERNOR_ROLE.
+     */
+    function _removeGovernorsInternal(
+        address[] memory formerGovernorAddresses
+    ) internal notTerminated {
+        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
+            address formerGovernorAddress = formerGovernorAddresses[i];
+            if (formerGovernorAddress == address(0))
+                revert CannotBeZeroAddress();
+
+            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
+
+            emit GovernorRemoved(formerGovernorAddress);
+        }
+    }
+
     /**
      * @dev Performs validation checks for quadratic voting actions.
      *      This function validates the presence of Holonym's SBT in the user's account

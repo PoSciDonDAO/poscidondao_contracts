@@ -51,7 +51,8 @@ contract StakingTest is Test {
             admin,
             address(sci),
             address(po),
-            signer
+            signer,
+            addr2
         );
 
         staking.setGovOps(address(govOps));
