@@ -5,11 +5,12 @@ import "./../interfaces/IStaking.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "../../contracts/governance/GovernorExecutorRoleManager.sol";
+import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
+contract GovernorResearch is AccessControl, ReentrancyGuard {
+
     ///*** ERRORS ***///
-
+    error CannotBeZeroAddress();
     error CannotComplete();
     error CannotExecute();
     error ContractTerminated(uint256 blockNumber);
@@ -60,8 +61,6 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     address public stakingAddress;
     address public admin;
     address public researchFundingWallet;
-    address public usdc;
-    address public sci;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
@@ -74,6 +73,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
@@ -160,24 +160,19 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     constructor(
         address stakingAddress_,
         address admin_,
-        address researchFundingWallet_,
-        address usdc_,
-        address sci_
+        address researchFundingWallet_
     ) {
         if (
             stakingAddress_ == address(0) ||
             admin_ == address(0) ||
-            researchFundingWallet_ == address(0) ||
-            usdc_ == address(0) ||
-            sci_ == address(0)
+            researchFundingWallet_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
         stakingAddress = stakingAddress_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
-        usdc = usdc_;
-        sci = sci_;
+
 
         ddThreshold = 1000e18;
 
@@ -406,7 +401,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     }
 
     /**
-     * @dev executes the proposal using USDC
+     * @dev executes the proposal
      * @param id the index of the proposal of interest
      */
     function execute(

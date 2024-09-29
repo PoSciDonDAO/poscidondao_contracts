@@ -45,15 +45,12 @@ contract StakingTest is Test {
         govRes = new GovernorResearch(
             address(staking),
             admin,
-            researchFundingWallet,
-            address(usdc),
-            address(sci)
+            researchFundingWallet
         );
 
         govOps = new GovernorOperations(
             address(staking),
             admin,
-            address(sci),
             address(po),
             signer
         );
@@ -61,7 +58,7 @@ contract StakingTest is Test {
         address[] memory governors = new address[](2);
         governors[0] = address(govOps);
         governors[1] = address(govRes);
-        executor = new GovernorExecutor(admin, 2 days, governors);
+        executor = new GovernorExecutor(admin, 2 days, address(govOps), address(govRes));
 
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));

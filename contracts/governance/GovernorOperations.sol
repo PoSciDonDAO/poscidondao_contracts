@@ -10,23 +10,19 @@ import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IER
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
-import "../../contracts/governance/GovernorExecutorRoleManager.sol";
-
-// interface IGovernorRoleExternal {
-//     function giveActionGovernorRole(address action) external;
-//     function removeActionGovernorRole(address action) external;
-// }
+import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 /**
  * @title GovernorOperations
  * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
  * It integrates with external contracts for staking validation, participation and proposal execution.
  */
-contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
+contract GovernorOperations is AccessControl, ReentrancyGuard {
     using ECDSA for bytes32;
     using SignatureChecker for bytes32;
 
     // *** ERRORS *** //
+    error CannotBeZeroAddress();
     error CannotExecute();
     error CannotVoteOnQVProposals();
     error ExecutableProposalsCannotBeCompleted();
@@ -90,7 +86,6 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     address private signer;
 
     ///*** STORAGE & MAPPINGS ***///
-
     uint256 private _index;
     bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
@@ -100,6 +95,7 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     ///*** ENUMERATORS ***///
 
@@ -124,7 +120,6 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         _;
     }
 
-
     /**
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
@@ -134,7 +129,6 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         }
         _;
     }
-
 
     /*** EVENTS ***/
     event Cancelled(uint256 indexed id, bool indexed rejected);
@@ -189,14 +183,12 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     constructor(
         address stakingAddress_,
         address admin_,
-        address sci_,
         address po_,
         address signer_
     ) {
         if (
             stakingAddress_ == address(0) ||
             admin_ == address(0) ||
-            sci_ == address(0) ||
             po_ == address(0) ||
             signer_ == address(0)
         ) {
@@ -210,9 +202,9 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         opThreshold = 5000e18;
         maxVotingStreak = 5;
         proposalLifeTime = 4 weeks;
-        quorum = (IERC20(sci_).totalSupply() / 10000) * 300; //3% of circulating supply
+        quorum = 567300e18; // 3% of circulating supply of 18.91 million SCI
         voteLockTime = 1 weeks;
-        proposeLockTime = 1 weeks; 
+        proposeLockTime = 1 weeks;
         voteChangeTime = 1 hours;
         voteChangeCutOff = 3 days;
 

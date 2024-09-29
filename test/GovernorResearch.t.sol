@@ -26,7 +26,7 @@ contract GovernorResearchTest is Test {
     GovernorOperations govOps;
     GovernorResearch govRes;
     GovernorExecutor executor;
-    GovernorGuard guardRes;
+    GovernorGuard guard;
     Transaction transaction;
     Election electionOps;
     GovernorParameters govParams;
@@ -58,28 +58,25 @@ contract GovernorResearchTest is Test {
         govRes = new GovernorResearch(
             address(staking),
             admin,
-            researchFundingWallet,
-            address(usdc),
-            address(sci)
+            researchFundingWallet
         );
 
         govOps = new GovernorOperations(
             address(staking),
             admin,
-            address(sci),
             address(po),
             signer
         );
 
-        guardRes = new GovernorGuard(admin, address(govRes));
+        guard = new GovernorGuard(admin, address(govOps), address(govRes));
 
         address[] memory governors = new address[](2);
         governors[0] = address(govOps);
         governors[1] = address(govRes);
-        executor = new GovernorExecutor(admin, 2 days, governors);
+        executor = new GovernorExecutor(admin, 2 days, address(govOps), address(govRes));
         govOps.setGovExec(address(executor));
         govRes.setGovExec(address(executor));
-        govRes.setGovGuard(address(guardRes));
+        govRes.setGovGuard(address(guard));
         govParams = new GovernorParameters(
             address(govOps),
             address(executor),
@@ -461,7 +458,7 @@ contract GovernorResearchTest is Test {
         vm.warp(block.timestamp + 4.1 weeks);
         govRes.schedule(id);
         vm.startPrank(admin);
-        guardRes.cancel(id);
+        guard.cancelRes(id);
         vm.stopPrank();
         GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
         assertTrue(
@@ -479,7 +476,7 @@ contract GovernorResearchTest is Test {
         vm.warp(block.timestamp + 4.1 weeks);
         govRes.schedule(id);
         vm.startPrank(admin);
-        guardRes.cancel(id);
+        guard.cancelRes(id);
         vm.stopPrank();
         GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
         assertTrue(

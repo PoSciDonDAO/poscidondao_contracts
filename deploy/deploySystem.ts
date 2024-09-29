@@ -29,10 +29,19 @@ async function main() {
 	}
 
 	// Step 1: Define common addresses
+	const getRpcUrl = () => {
+		return `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`;
+	};
+
+	const rpcUrl = getRpcUrl();
+	const donationAddress: string =
+		"0x5247514Ee8139f849057721d932701A83679F107";
+	const usdcAddress: string = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const admin: string = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const sciToken: string = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 	const researchFundingWallet: string =
 		"0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
 	// Store deployed contract addresses
 	const addresses: DeployedContracts = {};
@@ -41,8 +50,8 @@ async function main() {
 	const deployAndVerify = async (
 		contractName: string,
 		constructorArgs: any[],
-		contractKey: string,
-		delayTime: number = 120000
+		contractKey: string
+		// delayTime: number = 30000
 	): Promise<void> => {
 		const Contract: ContractFactory = await ethers.getContractFactory(
 			contractName
@@ -51,146 +60,92 @@ async function main() {
 		console.log(`${contractName} deployed at:`, contract.address);
 		addresses[contractKey] = contract.address;
 
-		console.log(
-			`Verifying ${contractName} in ${delayTime / 1000} seconds...`
-		);
-		await contract.deployTransaction.wait(5); // Wait for the transaction to be mined
-		await new Promise((resolve) => setTimeout(resolve, delayTime)); // Wait for verification delay
+		// console.log(
+		// 	`Verifying ${contractName} in ${delayTime / 1000} seconds...`
+		// );
+		// await contract.deployTransaction.wait(5); // Wait for the transaction to be mined
+		// await new Promise((resolve) => setTimeout(resolve, delayTime)); // Wait for verification delay
 
-		await run("verify:verify", {
-			address: contract.address,
-			constructorArguments: constructorArgs,
-		});
-		console.log(`${contractName} has been verified`);
+		// await run("verify:verify", {
+		// 	address: contract.address,
+		// 	constructorArguments: constructorArgs,
+		// });
+		// console.log(`${contractName} has been verified`);
 	};
 
 	// 3. Deploy PO (Participation) token
-	await deployAndVerify(
-		"PO",
-		["https://baseURI.example/", admin], // baseURI and treasuryWallet(admin)
-		"poToken"
-	);
+	await deployAndVerify("Po", ["https://baseURI.example/", admin], "poToken");
 
 	// 4. Deploy PoToSciExchange
 	await deployAndVerify(
 		"PoToSciExchange",
-		[admin, sciToken, addresses.poToken], // rewardWallet(admin), sci, and poToken addresses
+		[admin, sciToken, addresses.poToken],
 		"poToSciExchange"
 	);
 
 	// 5. Deploy Staking
-	await deployAndVerify(
-		"Staking",
-		[admin, sciToken], // treasuryWallet(admin) and sci address
-		"staking"
-	);
+	await deployAndVerify("Staking", [admin, sciToken], "staking");
 
 	// 6. Deploy GovernorOperations
 	await deployAndVerify(
 		"GovernorOperations",
-		[addresses.staking, admin, sciToken, addresses.poToken, admin], // stakingAddress, admin, sci, poToken, signer
+		[addresses.staking, admin, addresses.poToken, signer],
 		"governorOperations"
 	);
 
 	// 7. Deploy GovernorResearch
 	await deployAndVerify(
 		"GovernorResearch",
-		[addresses.staking, admin, researchFundingWallet, sciToken, sciToken], // stakingAddress, admin, researchFundingWallet, usdc, sci
+		[addresses.staking, admin, researchFundingWallet],
 		"governorResearch"
 	);
 
 	// 8. Deploy GovernorExecutor for both GovernorResearch and GovernorOperations
 	await deployAndVerify(
 		"GovernorExecutor",
-		[admin, 600, addresses.governorOperations], // admin, delay (600 seconds), governorOperations
-		"governorOperationsExecutor"
-	);
-
-	await deployAndVerify(
-		"GovernorExecutor",
-		[admin, 600, addresses.governorResearch], // admin, delay (600 seconds), governorResearch
-		"governorResearchExecutor"
+		[admin, 600, addresses.governorOperations, addresses.governorResearch],
+		"executor"
 	);
 
 	// 9. Deploy GovernorGuard for both GovernorResearch and GovernorOperations
 	await deployAndVerify(
 		"GovernorGuard",
-		[admin, addresses.governorOperations], // admin and GovernorOperations address
-		"governorOperationsGuard"
-	);
-
-	await deployAndVerify(
-		"GovernorGuard",
-		[admin, addresses.governorResearch], // admin and GovernorResearch address
-		"governorResearchGuard"
-	);
-
-	// 10. Deploy Executors (Transaction, Election, Impeachment, GovernorParams)
-	// Transaction Executors for both Governors
-	await deployAndVerify(
-		"Transaction",
-		[
-			researchFundingWallet,
-			ethers.utils.parseUnits("1000", 18),
-			ethers.utils.parseUnits("500", 18),
-			addresses.governorOperationsExecutor,
-		],
-		"transactionOperations"
-	);
-
-	await deployAndVerify(
-		"Transaction",
-		[
-			researchFundingWallet,
-			ethers.utils.parseUnits("2000", 18),
-			ethers.utils.parseUnits("1000", 18),
-			addresses.governorResearchExecutor,
-		],
-		"transactionResearch"
-	);
-
-	// Election and Impeachment Executors for GovernorOperations
-	const targetWallets: string[] = [admin, researchFundingWallet];
-
-	await deployAndVerify(
-		"Election",
-		[targetWallets, addresses.governorOperations], // targetWallets, GovernorOperations address
-		"election"
-	);
-
-	await deployAndVerify(
-		"Impeachment",
-		[targetWallets, addresses.governorOperations], // targetWallets, GovernorOperations address
-		"impeachment"
-	);
-
-	// GovernorParams Executors for both Governors
-	await deployAndVerify(
-		"GovernorParams",
-		[
-			addresses.governorOperations,
-			ethers.utils.formatBytes32String("proposalLifeTime"),
-			604800,
-		], // GovernorOperations, param, data
-		"governorParamsOperations"
-	);
-
-	await deployAndVerify(
-		"GovernorParams",
-		[
-			addresses.governorResearch,
-			ethers.utils.formatBytes32String("proposalLifeTime"),
-			604800,
-		], // GovernorResearch, param, data
-		"governorParamsResearch"
+		[admin, addresses.governorOperations, addresses.governorResearch],
+		"guard"
 	);
 
 	console.log("All contracts deployed and verified successfully");
 	console.log("Deployed Contract Addresses:", addresses);
+
+	const serverUtilsObject = {
+		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532, // base testnet: 84532, base mainnet: 8453
+		providerUrl: `${rpcUrl}`,
+		usdcAddress: usdcAddress, // Constant address for USDC
+		donationAddress: donationAddress,
+		poTokenAddress: addresses.poToken,
+		sciTokenAddress: sciToken,
+		poToSciExchangeAddress: addresses.poToSciExchange,
+		stakingAddress: addresses.staking,
+		governorOperationsAddress: addresses.governorOperations,
+		governorResearchAddress: addresses.governorResearch,
+		explorerLink:
+			hardhatArguments.network === "baseMainnet"
+				? "https://basescan.org"
+				: "https://sepolia.basescan.org",
+		admin: admin,
+		researchFundingWallet: researchFundingWallet,
+		swapAddress: "0x3Cc223D3A738eA81125689355F8C16A56768dF70", // Assuming this is constant or manually defined
+	};
+
+	return serverUtilsObject;
 }
 
 main()
-	.then(() => process.exit(0))
+	.then((result) => {
+		console.log("Deployment completed. Updated Object:");
+		console.log(result);
+		process.exit(0);
+	})
 	.catch((error) => {
 		console.error(error);
 		process.exit(1);

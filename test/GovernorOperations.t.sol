@@ -64,15 +64,12 @@ contract GovernorOperationsTest is Test {
         govRes = new GovernorResearch(
             address(staking),
             admin,
-            researchFundingWallet,
-            address(usdc),
-            address(sci)
+            researchFundingWallet
         );
 
         govOps = new GovernorOperations(
             address(staking),
             admin,
-            address(sci),
             address(po),
             signer
         );
@@ -80,8 +77,8 @@ contract GovernorOperationsTest is Test {
         address[] memory governors = new address[](2);
         governors[0] = address(govOps);
         governors[1] = address(govRes);
-        executor = new GovernorExecutor(admin, 2 days, governors);
-        guard = new GovernorGuard(admin, address(govOps));
+        executor = new GovernorExecutor(admin, 2 days, address(govOps), address(govRes));
+        guard = new GovernorGuard(admin, address(govOps), address(govRes));
 
         transactions = new Transaction(
             opWallet,
@@ -732,7 +729,7 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         govOps.schedule(id);
         vm.startPrank(admin);
-        guard.cancel(id);
+        guard.cancelOps(id);
         GovernorOperations.Proposal memory proposal = govOps.getProposalInfo(
             id
         );
@@ -741,24 +738,6 @@ contract GovernorOperationsTest is Test {
         );
         vm.stopPrank();
     }
-
-    // function test_CancelOperationsProposalWithQV() public {
-    //     vm.startPrank(addr2);
-    //     staking.lock(2000000e18);
-    //     uint256 id = govOps.getProposalIndex();
-    //     govOps.propose("Info", address(transactions), true);
-    //     vm.stopPrank();
-    //     vm.warp(4.1 weeks);
-    //     vm.startPrank(addr3);
-    //     guard.cancel(id);
-    //     GovernorOperations.Proposal memory proposal = govOps.getProposalInfo(
-    //         id
-    //     );
-    //     assertTrue(
-    //         proposal.status == GovernorOperations.ProposalStatus.Cancelled
-    //     );
-    //     vm.stopPrank();
-    // }
 
     function test_EmitCancelledEventRejected() public {
         vm.startPrank(addr2);
@@ -775,7 +754,7 @@ contract GovernorOperationsTest is Test {
         govOps.schedule(id);
         vm.expectEmit(true, true, false, true);
         emit Cancelled(id, false);
-        guard.cancel(id);
+        guard.cancelOps(id);
         vm.stopPrank();
     }
 
@@ -794,7 +773,7 @@ contract GovernorOperationsTest is Test {
         govOps.schedule(id);
         vm.expectEmit(true, true, false, true);
         emit Cancelled(id, false);
-        guard.cancel(id);
+        guard.cancelOps(id);
         vm.stopPrank();
     }
 

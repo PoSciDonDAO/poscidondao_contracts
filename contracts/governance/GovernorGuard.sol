@@ -5,21 +5,22 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorCancel {
     function cancel(uint256 id) external;
-    function cancelRejected(uint256 id) external;
 }
 
 contract GovernorGuard is AccessControl {
     address public admin;
-    IGovernorCancel public gov;
+    IGovernorCancel public govOps;
+    IGovernorCancel public govRes;
 
     event SetNewAdmin(address indexed user, address indexed newAdmin);
 
     error ProposalAlreadyDropped(uint256 id);
 
-    constructor(address admin_, address govAddress_) {
+    constructor(address admin_, address govOps_, address govRes_) {
 
         admin = admin_;
-        gov = IGovernorCancel(govAddress_);
+        govOps = IGovernorCancel(govOps_);
+        govRes = IGovernorCancel(govRes_);
 
         // Grant the initial admin role to the deployer
         _setupRole(DEFAULT_ADMIN_ROLE, admin_);
@@ -42,20 +43,20 @@ contract GovernorGuard is AccessControl {
      * @param id The ID of the proposal to drop.
      * @notice Only the admin can call this function.
      */
-    function cancel(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        try gov.cancel(id) {
+    function cancelOps(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        try govOps.cancel(id) {
         } catch {
             revert ProposalAlreadyDropped(id);
         }
     }
 
-    /**
+        /**
      * @dev Drops a proposal by calling the drop function on the Governor contract.
      * @param id The ID of the proposal to drop.
      * @notice Only the admin can call this function.
      */
-    function cancelRejected(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        try gov.cancelRejected(id) {
+    function cancelRes(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        try govRes.cancel(id) {
         } catch {
             revert ProposalAlreadyDropped(id);
         }

@@ -45,7 +45,6 @@ contract PoToSciExchangeTest is Test {
         govOps = new GovernorOperations(
             address(staking),
             admin,
-            address(sci),
             address(po),
             signer
         );
