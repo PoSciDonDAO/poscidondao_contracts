@@ -7,26 +7,26 @@ import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
+import "../../contracts/governance/GovernorExecutorRoleManager.sol";
 
-interface IGovernorRoleToGovRes {
-    function addGovernorsGovOps(address action) external;
-}
+// interface IGovernorRoleExternal {
+//     function giveActionGovernorRole(address action) external;
+//     function removeActionGovernorRole(address action) external;
+// }
 
 /**
  * @title GovernorOperations
  * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
  * It integrates with external contracts for staking validation, participation and proposal execution.
  */
-contract GovernorOperations is AccessControl, ReentrancyGuard {
+contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     using ECDSA for bytes32;
     using SignatureChecker for bytes32;
 
     // *** ERRORS *** //
-    error CannotBeZeroAddress();
     error ContractTerminated(uint256 blockNumber);
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
@@ -87,7 +87,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     address public stakingAddress;
     address public admin;
     address private signer;
-    address public govRes;
 
     ///*** STORAGE & MAPPINGS ***///
 
@@ -98,7 +97,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
-    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
 
     ///*** ENUMERATORS ***///
@@ -133,8 +132,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address indexed govExec,
         address indexed action
     );
-    event GovernorAdded(address newGovernorAddress);
-    event GovernorRemoved(address formerGovernorAddress);
+
     event Proposed(
         uint256 indexed id,
         address indexed govExec,
@@ -180,16 +178,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address admin_,
         address sci_,
         address po_,
-        address signer_,
-        address govRes_
+        address signer_
     ) {
         if (
             stakingAddress_ == address(0) ||
             admin_ == address(0) ||
             sci_ == address(0) ||
             po_ == address(0) ||
-            signer_ == address(0) || 
-            govRes_ == address(0)
+            signer_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -197,13 +193,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         admin = admin_;
         po = IPo(po_);
         signer = signer_;
-        govRes = govRes_;
 
         opThreshold = 5000e18;
         maxVotingStreak = 5;
         proposalLifeTime = 4 weeks; //testing
-        quorum = 6000e18; //testing
-        // quorum = (IERC20(sci_).totalSupply() / 10000) * 300; //3% of circulating supply
+        quorum = (IERC20(sci_).totalSupply() / 10000) * 300; //3% of circulating supply
         voteLockTime = 1 weeks; //testing
         proposeLockTime = 1 weeks; //testing
         voteChangeTime = 1 hours;
@@ -246,52 +240,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the GovernorExecution addresses in batch.
-     * @param newGovernorAddresses An array of new Governor Execution addresses.
-     */
-    function addGovernorsAdmin(
-        address[] memory newGovernorAddresses
-    ) public notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
-            address newGovernorAddress = newGovernorAddresses[i];
-            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
-
-            // Set the governor execution address
-            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
-
-            // Emit event for each new governor
-            emit GovernorAdded(newGovernorAddress);
-        }
-    }
-
-    /**
-     * @dev Removes the GovernorExecution addresses in batch.
-     * @param formerGovernorAddresses An array of Governor Execution addresses to remove.
-     */
-    function removeGovernorsAdmin(
-        address[] memory formerGovernorAddresses
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
-            address formerGovernorAddress = formerGovernorAddresses[i];
-            if (formerGovernorAddress == address(0))
-                revert CannotBeZeroAddress();
-
-            // Remove the governor execution address
-            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
-
-            // Emit event for each removed governor
-            emit GovernorRemoved(formerGovernorAddress);
-        }
-    }
-
-    /**
      * @dev sets the GovernorExecution address
      */
     function setGovExec(
         address newGovernorAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovernorAddress);
-        _grantRole(GOVERNOR_ROLE, newGovernorAddress);
         emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
     }
 
@@ -302,7 +256,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newGovGuardAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         govGuard = IGovernorGuard(newGovGuardAddress);
-        _grantRole(GOVERNOR_ROLE, newGovGuardAddress);
+        _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit SetNewGovGuardAddress(msg.sender, newGovGuardAddress);
     }
 
@@ -334,7 +288,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovParams(
         bytes32 param,
         uint256 data
-    ) external notTerminated onlyRole(GOVERNOR_ROLE) {
+    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
@@ -360,16 +314,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (param == "opThreshold") opThreshold = data;
 
         emit SetGovParam(param, data);
-    }
-
-    /**
-     * @dev sets the max voting streak for PO tokens
-     */
-    function setMaxVotingStreak(
-        uint256 newMaxVotingStreak
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        maxVotingStreak = newMaxVotingStreak;
-        emit SetNewMaxVotingStreak(msg.sender, newMaxVotingStreak);
     }
 
     /**
@@ -449,54 +393,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _recordVote(id, support, actualVotes);
     }
 
-    function _proposalSchedulingChecks(
-        uint256 id,
-        bool revertable
-    ) internal view returns (bool) {
-        uint256 sqrtQuorum = Math.sqrt(quorum / 10 ** 18) * 10 ** 18;
-
-        bool isProposalOngoing = block.timestamp < proposals[id].endTimestamp;
-
-        bool isProposalActive = proposals[id].status == ProposalStatus.Active;
-
-        bool quorumReached = proposals[id].quadraticVoting
-            ? proposals[id].totalVotes >= sqrtQuorum
-            : proposals[id].totalVotes >= quorum;
-
-        bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
-            proposals[id].votesAgainst;
-
-        bool passed = !isProposalOngoing &&
-            isProposalActive &&
-            quorumReached &&
-            isVotesForGreaterThanVotesAgainst;
-
-        if (!passed && revertable) {
-            if (isProposalOngoing) {
-                revert ProposalOngoing(
-                    id,
-                    block.timestamp,
-                    proposals[id].endTimestamp
-                );
-            }
-            if (!isProposalActive) {
-                revert IncorrectPhase(proposals[id].status);
-            }
-            if (!quorumReached) {
-                revert QuorumNotReached(
-                    id,
-                    proposals[id].totalVotes,
-                    proposals[id].quadraticVoting ? sqrtQuorum : quorum
-                );
-            }
-            if (!isVotesForGreaterThanVotesAgainst) {
-                revert ProposalNotPassed();
-            }
-        }
-
-        return passed;
-    }
-
     /**
      * @dev schedules the the execution or completion of a proposal
      * @param id the _index of the proposal of interest
@@ -528,7 +424,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param id the _index of the proposal of interest
      */
     /**
-     * @dev Executes a scheduled proposal by temporarily assigning the GOVERNOR_ROLE to the target action,
+     * @dev Executes a scheduled proposal by temporarily assigning the EXECUTOR_ROLE to the target action,
      * executing the action, and then removing the role. Reverts if conditions for execution are not met.
      * @param id The ID of the proposal to be executed.
      */
@@ -542,13 +438,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         address[] memory governor = new address[](1);
         governor[0] = address(proposals[id].action);
-        
-        _addGovernorsInternal(governor);
-        IGovernorRoleToGovRes(govRes).addGovernorsGovOps(proposals[id].action);
-        
+
+        _addExecutorsInternal(governor);
+
         govExec.execution(proposals[id].action);
 
-        _removeGovernorsInternal(governor);
+        _removeExecutorsInternal(governor);
 
         proposals[id].status = ProposalStatus.Executed;
 
@@ -578,11 +473,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the _index of the proposal of interest
      */
-    function cancel(uint256 id) external nonReentrant onlyRole(GOVERNOR_ROLE) {
+    function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
         if (proposals[id].status == ProposalStatus.Executed)
             revert IncorrectPhase(proposals[id].status);
 
-        govExec.cancel(proposals[id].action);
+        if (proposals[id].executable) govExec.cancel(proposals[id].action);
 
         proposals[id].status = ProposalStatus.Cancelled;
 
@@ -593,9 +488,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev cancels the proposal
      * @param id the _index of the proposal of interest
      */
-    function cancelRejected(
-        uint256 id
-    ) external nonReentrant onlyRole(GOVERNOR_ROLE) {
+    function cancelRejected(uint256 id) external nonReentrant {
+        if (id >= _index) revert ProposalInexistent();
+
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {
@@ -643,7 +538,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
     {
         return (
             proposalLifeTime,
@@ -651,7 +546,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             voteLockTime,
             proposeLockTime,
             voteChangeTime,
-            voteChangeCutOff
+            voteChangeCutOff,
+            opThreshold
         );
     }
 
@@ -705,27 +601,83 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** INTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Grants the GOVERNOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
-     * @param newGovernorAddresses An array of addresses to be granted the GOVERNOR_ROLE.
+     * @dev Internal function that performs checks to determine if a proposal can be scheduled.
+     *      - Checks include proposal status, quorum requirements, and vote tally.
+     *      - Optionally reverts with specific errors if `revertable` is set to true.
+     * @param id The unique identifier of the proposal.
+     * @param revertable If true, reverts with an error if any check fails.
+     * @return passed A boolean value indicating whether all the checks are passed.
      */
-    function _addGovernorsInternal(
+    function _proposalSchedulingChecks(
+        uint256 id,
+        bool revertable
+    ) internal view returns (bool) {
+        uint256 sqrtQuorum = Math.sqrt(quorum / 10 ** 18) * 10 ** 18;
+
+        bool isProposalOngoing = block.timestamp < proposals[id].endTimestamp;
+
+        bool isProposalActive = proposals[id].status == ProposalStatus.Active;
+
+        bool quorumReached = proposals[id].quadraticVoting
+            ? proposals[id].totalVotes >= sqrtQuorum
+            : proposals[id].totalVotes >= quorum;
+
+        bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
+            proposals[id].votesAgainst;
+
+        bool passed = !isProposalOngoing &&
+            isProposalActive &&
+            quorumReached &&
+            isVotesForGreaterThanVotesAgainst;
+
+        if (!passed && revertable) {
+            if (isProposalOngoing) {
+                revert ProposalOngoing(
+                    id,
+                    block.timestamp,
+                    proposals[id].endTimestamp
+                );
+            }
+            if (!isProposalActive) {
+                revert IncorrectPhase(proposals[id].status);
+            }
+            if (!quorumReached) {
+                revert QuorumNotReached(
+                    id,
+                    proposals[id].totalVotes,
+                    proposals[id].quadraticVoting ? sqrtQuorum : quorum
+                );
+            }
+            if (!isVotesForGreaterThanVotesAgainst) {
+                revert ProposalNotPassed();
+            }
+        }
+
+        return passed;
+    }
+
+    /**
+     * @dev Grants the EXECUTOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
+     * @param newGovernorAddresses An array of addresses to be granted the EXECUTOR_ROLE.
+     */
+    function _addExecutorsInternal(
         address[] memory newGovernorAddresses
     ) internal notTerminated {
         for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
             address newGovernorAddress = newGovernorAddresses[i];
             if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
 
-            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
+            _grantRole(EXECUTOR_ROLE, newGovernorAddress);
 
             emit GovernorAdded(newGovernorAddress);
         }
     }
 
     /**
-     * @dev Revokes the GOVERNOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
-     * @param formerGovernorAddresses An array of addresses to be removed from the GOVERNOR_ROLE.
+     * @dev Revokes the EXECUTOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
+     * @param formerGovernorAddresses An array of addresses to be removed from the EXECUTOR_ROLE.
      */
-    function _removeGovernorsInternal(
+    function _removeExecutorsInternal(
         address[] memory formerGovernorAddresses
     ) internal notTerminated {
         for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
@@ -733,7 +685,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (formerGovernorAddress == address(0))
                 revert CannotBeZeroAddress();
 
-            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
+            _revokeRole(EXECUTOR_ROLE, formerGovernorAddress);
 
             emit GovernorRemoved(formerGovernorAddress);
         }

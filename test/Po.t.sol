@@ -44,8 +44,7 @@ contract PoTest is Test {
             admin,
             address(sci),
             address(po),
-            signer,
-            addr2
+            signer
         );
 
         govOps.setPoToken(address(po));

@@ -6,20 +6,19 @@ import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IER
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {IStaking} from "contracts/interfaces/IStaking.sol";
-import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "../../contracts/governance/GovernorExecutorRoleManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 interface IGov {
     function setTerminated() external;
 }
 
-contract Staking is IStaking, AccessControl, ReentrancyGuard {
+contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotBeTerminated();
-    error CannotBeZeroAddress();
     error CannotClaim();
     error CannotDelegateToAnotherDelegator();
     error CannotDelegateToContract();
@@ -177,7 +176,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function addDelegate(
         address newDelegate
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(EXECUTOR_ROLE) {
         if (delegates[newDelegate]) {
             revert DelegateAlreadyAdded(newDelegate);
         }
@@ -199,7 +198,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function removeDelegate(
         address formerDelegate
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(EXECUTOR_ROLE) {
         if (!delegates[formerDelegate]) {
             revert DelegateNotAllowListed(formerDelegate);
         }

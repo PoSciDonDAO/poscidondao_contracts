@@ -4,10 +4,10 @@ pragma solidity ^0.8.19;
 import "./../interfaces/IStaking.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
-import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "../../contracts/governance/GovernorExecutorRoleManager.sol";
 
-contract GovernorResearch is AccessControl, ReentrancyGuard {
+contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     ///*** ERRORS ***///
     error CannotBeZeroAddress();
     error CannotComplete();
@@ -17,9 +17,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInput();
     error ProposalLifeTimePassed();
+    error ProposalNotPassed();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
-    error QuorumNotReached();
+    error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
 
@@ -72,8 +73,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
-    bytes32 public constant GOVOPS_ROLE = keccak256("GOVOPS_ROLE");
-    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    bytes32 public constant OPERATIONS_ROLE = keccak256("OPERATIONS_ROLE");
+    bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
     bytes32 public constant DUE_DILIGENCE_ROLE =
         keccak256("DUE_DILIGENCE_ROLE");
@@ -102,16 +103,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Cancelled(uint256 indexed id);
+    event Cancelled(uint256 indexed id, bool indexed rejected);
     event Completed(uint256 indexed id);
     event Executed(
         uint256 indexed id,
         address indexed govExec,
         address indexed action
     );
-    event GovernorAdded(address newGovernorAddress);
-    event GovernorRemoved(address formerGovernorAddress);
-
     event Proposed(
         uint256 indexed id,
         address indexed user,
@@ -195,21 +193,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the GovernorExecution address
      */
-    function setGovOps(
-        address newGovOps
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(GOVOPS_ROLE, newGovOps);
-        emit SetNewGovExecAddress(msg.sender, newGovOps);
-    }
-
-    /**
-     * @dev sets the GovernorExecution address
-     */
     function setGovExec(
         address newGovExecAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovExecAddress);
-        _grantRole(GOVERNOR_ROLE, newGovExecAddress);
         emit SetNewGovExecAddress(msg.sender, newGovExecAddress);
     }
 
@@ -220,7 +207,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newGovGuardAddress
     ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
         govGuard = IGovernorGuard(newGovGuardAddress);
-        _grantRole(GOVERNOR_ROLE, newGovGuardAddress);
+        _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit SetNewGovGuardAddress(msg.sender, newGovGuardAddress);
     }
 
@@ -238,7 +225,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function grantDueDiligenceRole(
         address[] memory members
-    ) external notTerminated onlyRole(GOVERNOR_ROLE) {
+    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
         IStaking staking = IStaking(stakingAddress);
         for (uint256 i = 0; i < members.length; i++) {
             _validateStakingRequirements(staking, members[i]);
@@ -252,7 +239,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function revokeDueDiligenceRole(
         address[] memory members
-    ) external notTerminated onlyRole(GOVERNOR_ROLE) {
+    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
         for (uint256 i = 0; i < members.length; i++) {
             _revokeRole(DUE_DILIGENCE_ROLE, members[i]);
         }
@@ -266,22 +253,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address member
     ) external view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
-    }
-
-    /**
-     * @dev Sets the GovernorExecution addresses in batch.
-     * @param newGovernorAddress An array of new Governor Execution addresses.
-     */
-    function addGovernorsGovOps(
-        address newGovernorAddress
-    ) public notTerminated onlyRole(GOVOPS_ROLE) {
-        if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
-
-        // Set the governor execution address
-        _grantRole(GOVERNOR_ROLE, newGovernorAddress);
-
-        // Emit event for each new governor
-        emit GovernorAdded(newGovernorAddress);
     }
 
     /**
@@ -317,45 +288,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the GovernorExecution addresses in batch.
-     * @param newGovernorAddresses An array of new Governor Execution addresses.
-     */
-    function addGovernorsAdmin(
-        address[] memory newGovernorAddresses
-    ) public notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
-            address newGovernorAddress = newGovernorAddresses[i];
-            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
-
-            // Set the governor execution address
-            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
-
-            // Emit event for each new governor
-            emit GovernorAdded(newGovernorAddress);
-        }
-    }
-
-    /**
-     * @dev Removes the GovernorExecution addresses in batch.
-     * @param formerGovernorAddresses An array of Governor Execution addresses to remove.
-     */
-    function removeGovernorsAdmin(
-        address[] memory formerGovernorAddresses
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
-        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
-            address formerGovernorAddress = formerGovernorAddresses[i];
-            if (formerGovernorAddress == address(0))
-                revert CannotBeZeroAddress();
-
-            // Remove the governor execution address
-            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
-
-            // Emit event for each removed governor
-            emit GovernorRemoved(formerGovernorAddress);
-        }
-    }
-
-    /**
      * @dev sets the governance parameters given data
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
@@ -363,7 +295,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function setGovParams(
         bytes32 param,
         uint256 data
-    ) external notTerminated onlyRole(GOVERNOR_ROLE) {
+    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
@@ -452,22 +384,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external nonReentrant notTerminated onlyRole(DUE_DILIGENCE_ROLE) {
         if (id >= _index) revert ProposalInexistent();
 
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
+        bool schedulable = _proposalSchedulingChecks(id, true);
 
-        if (block.timestamp < proposals[id].endTimestamp)
-            revert ProposalOngoing(
-                id,
-                block.timestamp,
-                proposals[id].endTimestamp
-            );
-        if (proposals[id].totalVotes < quorum) revert QuorumNotReached();
+        if (schedulable) {
+            if (proposals[id].executable) {
+                govExec.schedule(proposals[id].action);
+            }
+            proposals[id].status = ProposalStatus.Scheduled;
 
-        proposals[id].status = ProposalStatus.Scheduled;
-
-        govExec.schedule(proposals[id].action);
-
-        emit Scheduled(id);
+            emit Scheduled(id);
+        }
     }
 
     /**
@@ -484,14 +410,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         if (!proposals[id].executable) revert CannotExecute();
 
-        address[] memory governor = new address[](1);
-        governor[0] = address(proposals[id].action);
-        
-        _addGovernorsInternal(governor);
-        
         govExec.execution(proposals[id].action);
 
-        _removeGovernorsInternal(governor);
         proposals[id].status = ProposalStatus.Executed;
 
         emit Executed(id, address(govExec), proposals[id].action);
@@ -520,30 +440,34 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev cancels the proposal
+     * @param id the _index of the proposal of interest
+     */
+    function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
+        if (proposals[id].status == ProposalStatus.Executed)
+            revert IncorrectPhase(proposals[id].status);
+
+        if (proposals[id].executable) govExec.cancel(proposals[id].action);
+
+        proposals[id].status = ProposalStatus.Cancelled;
+
+        emit Cancelled(id, false);
+    }
+
+    /**
+     * @dev cancels the proposal
      * @param id the index of the proposal of interest
      */
-    function cancel(
+    function cancelRejected(
         uint256 id
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (terminated) {
+        if (id >= _index) revert ProposalInexistent();
+
+        bool schedulable = _proposalSchedulingChecks(id, false);
+
+        if (!schedulable) {
             proposals[id].status = ProposalStatus.Cancelled;
 
-            emit Cancelled(id);
-        } else {
-            if (id >= _index) revert ProposalInexistent();
-
-            if (proposals[id].status != ProposalStatus.Active)
-                revert IncorrectPhase(proposals[id].status);
-
-            if (block.timestamp < proposals[id].endTimestamp)
-                revert ProposalOngoing(
-                    id,
-                    block.timestamp,
-                    proposals[id].endTimestamp
-                );
-            proposals[id].status = ProposalStatus.Cancelled;
-
-            emit Cancelled(id);
+            emit Cancelled(id, true);
         }
     }
 
@@ -566,7 +490,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
+        returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
     {
         return (
             proposalLifeTime,
@@ -574,7 +498,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             voteLockTime,
             proposeLockTime,
             voteChangeTime,
-            voteChangeCutOff
+            voteChangeCutOff,
+            ddThreshold
         );
     }
 
@@ -636,38 +561,51 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** INTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Grants the GOVERNOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
-     * @param newGovernorAddresses An array of addresses to be granted the GOVERNOR_ROLE.
+     * @dev Internal function that performs checks to determine if a proposal can be scheduled.
+     *      - Checks include proposal status, quorum requirements, and vote tally.
+     *      - Optionally reverts with specific errors if `revertable` is set to true.
+     * @param id The unique identifier of the proposal.
+     * @param revertable If true, reverts with an error if any check fails.
+     * @return passed A boolean value indicating whether all the checks are passed.
      */
-    function _addGovernorsInternal(
-        address[] memory newGovernorAddresses
-    ) internal notTerminated {
-        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
-            address newGovernorAddress = newGovernorAddresses[i];
-            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
+    function _proposalSchedulingChecks(
+        uint256 id,
+        bool revertable
+    ) internal view returns (bool) {
+        bool isProposalOngoing = block.timestamp < proposals[id].endTimestamp;
 
-            _grantRole(GOVERNOR_ROLE, newGovernorAddress);
+        bool isProposalActive = proposals[id].status == ProposalStatus.Active;
 
-            emit GovernorAdded(newGovernorAddress);
+        bool quorumReached = proposals[id].totalVotes >= quorum;
+
+        bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
+            proposals[id].votesAgainst;
+
+        bool passed = !isProposalOngoing &&
+            isProposalActive &&
+            quorumReached &&
+            isVotesForGreaterThanVotesAgainst;
+
+        if (!passed && revertable) {
+            if (isProposalOngoing) {
+                revert ProposalOngoing(
+                    id,
+                    block.timestamp,
+                    proposals[id].endTimestamp
+                );
+            }
+            if (!isProposalActive) {
+                revert IncorrectPhase(proposals[id].status);
+            }
+            if (!quorumReached) {
+                revert QuorumNotReached(id, proposals[id].totalVotes, quorum);
+            }
+            if (!isVotesForGreaterThanVotesAgainst) {
+                revert ProposalNotPassed();
+            }
         }
-    }
 
-    /**
-     * @dev Revokes the GOVERNOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
-     * @param formerGovernorAddresses An array of addresses to be removed from the GOVERNOR_ROLE.
-     */
-    function _removeGovernorsInternal(
-        address[] memory formerGovernorAddresses
-    ) internal notTerminated {
-        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
-            address formerGovernorAddress = formerGovernorAddresses[i];
-            if (formerGovernorAddress == address(0))
-                revert CannotBeZeroAddress();
-
-            _revokeRole(GOVERNOR_ROLE, formerGovernorAddress);
-
-            emit GovernorRemoved(formerGovernorAddress);
-        }
+        return passed;
     }
 
     /**

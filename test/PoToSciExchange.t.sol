@@ -47,8 +47,7 @@ contract PoToSciExchangeTest is Test {
             admin,
             address(sci),
             address(po),
-            signer,
-            addr2
+            signer
         );
 
         ex = new PoToSciExchange(rewardWallet, address(sci), address(po));
