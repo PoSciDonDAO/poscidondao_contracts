@@ -9,7 +9,7 @@ import "../../contracts/governance/GovernorExecutorRoleManager.sol";
 
 contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     ///*** ERRORS ***///
-    error CannotBeZeroAddress();
+
     error CannotComplete();
     error CannotExecute();
     error ContractTerminated(uint256 blockNumber);
@@ -21,6 +21,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
     error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
+    error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
 
@@ -61,7 +62,6 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     address public researchFundingWallet;
     address public usdc;
     address public sci;
-    address public govOps;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 public ddThreshold;
@@ -73,7 +73,6 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
-    bytes32 public constant OPERATIONS_ROLE = keccak256("OPERATIONS_ROLE");
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
     bytes32 public constant DUE_DILIGENCE_ROLE =
@@ -99,6 +98,16 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
      */
     modifier notTerminated() {
         if (terminated) revert ContractTerminated(block.number);
+        _;
+    }
+
+    /**
+     * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
+     */
+    modifier onlyExecutor() {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+            revert Unauthorized(msg.sender);
+        }
         _;
     }
 
@@ -225,7 +234,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
      */
     function grantDueDiligenceRole(
         address[] memory members
-    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
+    ) external notTerminated onlyExecutor {
         IStaking staking = IStaking(stakingAddress);
         for (uint256 i = 0; i < members.length; i++) {
             _validateStakingRequirements(staking, members[i]);
@@ -239,7 +248,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
      */
     function revokeDueDiligenceRole(
         address[] memory members
-    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
+    ) external notTerminated onlyExecutor {
         for (uint256 i = 0; i < members.length; i++) {
             _revokeRole(DUE_DILIGENCE_ROLE, members[i]);
         }
@@ -295,7 +304,7 @@ contract GovernorResearch is GovernorExecutorRoleManager, ReentrancyGuard {
     function setGovParams(
         bytes32 param,
         uint256 data
-    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
+    ) external notTerminated onlyExecutor {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 

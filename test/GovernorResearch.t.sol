@@ -41,10 +41,6 @@ contract GovernorResearchTest is Test {
     address admin = vm.addr(7);
     address researchersWallet = vm.addr(8);
     address signer = vm.addr(9);
-    bytes32 govIdCircuitId =
-        0x729d660e1c02e4e419745e617d643f897a538673ccf1051e093bbfa58b0a120b;
-    bytes32 phoneCircuitId =
-        0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
 
     function setUp() public {
         usdc = new MockUsdc(10000000e18);
@@ -163,9 +159,6 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
-        address[] memory governors2 = new address[](1);
-        governors2[0] = address(electionOps);
-        govRes.addExecutors(governors2);
         vm.stopPrank();
         vm.startPrank(addr1);
         staking.lock(2000000e18);

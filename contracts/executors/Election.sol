@@ -6,12 +6,9 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorRoleGrant {
     function grantDueDiligenceRole(address[] memory members) external;
-    function checkExecutorRole(address member) external returns(bool);
 }
 
 contract Election is ReentrancyGuard, AccessControl {
-
-    error IsNotExecutor(address contractAddress);
 
     IGovernorRoleGrant govRes;
     address[] targetWallets;
@@ -31,8 +28,6 @@ contract Election is ReentrancyGuard, AccessControl {
      * @dev Execute the proposal to elect a scientist
      */
     function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        bool isExecutor = govRes.checkExecutorRole(address(this));
-        if(!isExecutor) revert IsNotExecutor(address(this));
         govRes.grantDueDiligenceRole(targetWallets);
     }
 }

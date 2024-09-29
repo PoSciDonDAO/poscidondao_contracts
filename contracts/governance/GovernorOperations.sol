@@ -27,6 +27,9 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     using SignatureChecker for bytes32;
 
     // *** ERRORS *** //
+    error CannotExecute();
+    error CannotVoteOnQVProposals();
+    error ExecutableProposalsCannotBeCompleted();
     error ContractTerminated(uint256 blockNumber);
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
@@ -43,9 +46,7 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     );
     error ProposalNotPassed();
     error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
-    error CannotExecute();
-    error CannotVoteOnQVProposals();
-    error ExecutableProposalsCannotBeCompleted();
+    error Unauthorized(address caller);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -123,6 +124,18 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         _;
     }
 
+
+    /**
+     * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
+     */
+    modifier onlyExecutor() {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
+
+
     /*** EVENTS ***/
     event Cancelled(uint256 indexed id, bool indexed rejected);
     event Completed(uint256 indexed id);
@@ -196,10 +209,10 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
 
         opThreshold = 5000e18;
         maxVotingStreak = 5;
-        proposalLifeTime = 4 weeks; //testing
+        proposalLifeTime = 4 weeks;
         quorum = (IERC20(sci_).totalSupply() / 10000) * 300; //3% of circulating supply
-        voteLockTime = 1 weeks; //testing
-        proposeLockTime = 1 weeks; //testing
+        voteLockTime = 1 weeks;
+        proposeLockTime = 1 weeks; 
         voteChangeTime = 1 hours;
         voteChangeCutOff = 3 days;
 
@@ -288,7 +301,7 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
     function setGovParams(
         bytes32 param,
         uint256 data
-    ) external notTerminated onlyRole(EXECUTOR_ROLE) {
+    ) external notTerminated onlyExecutor {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
@@ -439,11 +452,7 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         address[] memory governor = new address[](1);
         governor[0] = address(proposals[id].action);
 
-        _addExecutorsInternal(governor);
-
         govExec.execution(proposals[id].action);
-
-        _removeExecutorsInternal(governor);
 
         proposals[id].status = ProposalStatus.Executed;
 
@@ -654,41 +663,6 @@ contract GovernorOperations is GovernorExecutorRoleManager, ReentrancyGuard {
         }
 
         return passed;
-    }
-
-    /**
-     * @dev Grants the EXECUTOR_ROLE to an array of addresses provided. Used for temporary governor assignments.
-     * @param newGovernorAddresses An array of addresses to be granted the EXECUTOR_ROLE.
-     */
-    function _addExecutorsInternal(
-        address[] memory newGovernorAddresses
-    ) internal notTerminated {
-        for (uint256 i = 0; i < newGovernorAddresses.length; i++) {
-            address newGovernorAddress = newGovernorAddresses[i];
-            if (newGovernorAddress == address(0)) revert CannotBeZeroAddress();
-
-            _grantRole(EXECUTOR_ROLE, newGovernorAddress);
-
-            emit GovernorAdded(newGovernorAddress);
-        }
-    }
-
-    /**
-     * @dev Revokes the EXECUTOR_ROLE from an array of addresses provided. Used to remove temporary governor roles.
-     * @param formerGovernorAddresses An array of addresses to be removed from the EXECUTOR_ROLE.
-     */
-    function _removeExecutorsInternal(
-        address[] memory formerGovernorAddresses
-    ) internal notTerminated {
-        for (uint256 i = 0; i < formerGovernorAddresses.length; i++) {
-            address formerGovernorAddress = formerGovernorAddresses[i];
-            if (formerGovernorAddress == address(0))
-                revert CannotBeZeroAddress();
-
-            _revokeRole(EXECUTOR_ROLE, formerGovernorAddress);
-
-            emit GovernorRemoved(formerGovernorAddress);
-        }
     }
 
     /**

@@ -4,35 +4,30 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface IGovernorRoleGrant {
-    function grantDueDiligenceRole(address[] memory members) external;
-    function checkExecutorRole(address member) external returns(bool);
+interface IGovernorAddDelegate {
+    function addDelegate(address newDelegate) external;
 }
 
 contract AddDelegate is ReentrancyGuard, AccessControl {
 
-    error IsNotExecutor(address contractAddress);
-
-    IGovernorRoleGrant govRes;
-    address[] targetWallets;
+    IGovernorAddDelegate staking;
+    address targetWallet;
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     constructor(
-        address[] memory targetWallets_,
+        address targetWallet_,
         address govExecAddress_,
-        address govResAddress_
+        address stakingAddress_
     ) {
-        govRes = IGovernorRoleGrant(govResAddress_);
-        targetWallets = targetWallets_;
+        staking = IGovernorAddDelegate(stakingAddress_);
+        targetWallet = targetWallet_;
         _grantRole(EXECUTOR_ROLE, govExecAddress_);
     }
 
     /**
-     * @dev Execute the proposal to elect a scientist
+     * @dev Execute the proposal to add a delegate
      */
     function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        bool isExecutor = govRes.checkExecutorRole(address(this));
-        if(!isExecutor) revert IsNotExecutor(address(this));
-        govRes.grantDueDiligenceRole(targetWallets);
+        staking.addDelegate(targetWallet);
     }
 }

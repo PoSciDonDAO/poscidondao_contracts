@@ -20,4 +20,12 @@ interface IGovernorExecution {
      * @param action The address of the action to execute.
      */
     function execution(address action) external;
+
+    /**
+     * @dev Checks if the given address has a specific role.
+     * @param role The role to check.
+     * @param account The address to check.
+     * @return True if the address has the role, false otherwise.
+     */
+    function hasRole(bytes32 role, address account) external view returns (bool);
 }

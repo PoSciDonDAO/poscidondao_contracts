@@ -83,8 +83,8 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
      * @notice The EXECUTOR_ROLE is required to execute this function.
      */
     function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        bool isExecutor = gov.checkExecutorRole(address(this));
-        if (!isExecutor) revert IsNotExecutor(address(this));
+        // bool isExecutor = gov.checkExecutorRole(address(this));
+        // if (!isExecutor) revert IsNotExecutor(address(this));
         gov.setGovParams(param, data);
     }
 }

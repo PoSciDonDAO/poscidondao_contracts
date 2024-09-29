@@ -8,6 +8,7 @@ import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ER
 import {IStaking} from "contracts/interfaces/IStaking.sol";
 import "../../contracts/governance/GovernorExecutorRoleManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
+import "./../interfaces/IGovernorExecution.sol";
 
 interface IGov {
     function setTerminated() external;
@@ -60,6 +61,7 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
     address public admin;
     address public govOpsContract;
     address public govResContract;
+    IGovernorExecution govExec;
     uint256 private totStaked;
     uint256 private totDelegated;
     uint256 public delegateThreshold;
@@ -81,6 +83,16 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
         _;
     }
 
+    /**
+     * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
+     */
+    modifier onlyExecutor() {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+            revert Unauthorized(msg.sender);
+        }
+        _;
+    }
+
     /*** EVENTS ***/
     event BurnedForTermination(address owner, uint256 amount);
     event DelegateAdded(address indexed delegate);
@@ -93,10 +105,7 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
     );
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event Locked(address indexed user, address indexed asset, uint256 amount);
-    event SetNewAdmin(
-        address indexed user,
-        address indexed newAddress
-    );
+    event SetNewAdmin(address indexed user, address indexed newAddress);
     event Snapshotted(
         address indexed owner,
         uint256 votingRights,
@@ -127,12 +136,21 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
+     * @dev sets the GovernorExecution address
+     */
+    function setGovExec(
+        address newGovernorAddress
+    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+        govExec = IGovernorExecution(newGovernorAddress);
+        // emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
+    }
+
+
+    /**
      * @dev Updates the treasury wallet address and transfers admin role.
      * @param newAdmin The address to be set as the new treasury wallet.
      */
-    function setAdmin(
-        address newAdmin
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         address oldAdmin = admin;
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
@@ -174,9 +192,7 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
      * @dev Adds an address to the delegate whitelist if tokens have been staked
      * @param newDelegate Address to be added to the whitelist
      */
-    function addDelegate(
-        address newDelegate
-    ) external onlyRole(EXECUTOR_ROLE) {
+    function addDelegate(address newDelegate) external onlyExecutor {
         if (delegates[newDelegate]) {
             revert DelegateAlreadyAdded(newDelegate);
         }
@@ -198,7 +214,7 @@ contract Staking is IStaking, GovernorExecutorRoleManager, ReentrancyGuard {
      */
     function removeDelegate(
         address formerDelegate
-    ) external onlyRole(EXECUTOR_ROLE) {
+    ) external onlyExecutor {
         if (!delegates[formerDelegate]) {
             revert DelegateNotAllowListed(formerDelegate);
         }

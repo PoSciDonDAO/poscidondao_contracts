@@ -16,6 +16,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     uint256 public delay;
     address public admin;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     // Use a mapping to track governor addresses
     mapping(address => bool) public governors;
@@ -46,18 +47,6 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin The address to be set as the new admin.
-     */
-    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldAdmin = admin;
-        admin = newAdmin;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit SetNewAdmin(oldAdmin, newAdmin);
-    }
-
-    /**
      * @dev Adds a new governor to the list.
      * @param newGovernor The address to be added as a new governor.
      */
@@ -66,28 +55,6 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         governors[newGovernor] = true;
         _grantRole(GOVERNOR_ROLE, newGovernor);
         emit SetNewGovernor(msg.sender, newGovernor);
-    }
-
-    /**
-     * @dev Removes a governor from the list of governor addresses.
-     * @param governorToRemove The address of the governor to remove.
-     */
-    function removeGovernor(address governorToRemove) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (!governors[governorToRemove]) revert GovernorNotFound(governorToRemove);
-        governors[governorToRemove] = false;
-        _revokeRole(GOVERNOR_ROLE, governorToRemove);
-        emit RemovedGovernor(msg.sender, governorToRemove);
-    }
-
-    /**
-     * @dev Sets a new delay for scheduling actions.
-     * @param newDelay The new delay in seconds.
-     */
-    function setDelay(uint256 newDelay) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newDelay == 0) revert CannotBeZero();
-        uint256 oldDelay = delay;
-        delay = newDelay;
-        emit SetNewDelay(oldDelay, newDelay);
     }
 
     /**
@@ -113,7 +80,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Executes a scheduled action.
+     * @dev Executes a scheduled action with a temporary `EXECUTOR_ROLE`.
      * @param action The address of the action to execute.
      */
     function execution(address action) external nonReentrant onlyRole(GOVERNOR_ROLE) {
@@ -125,11 +92,16 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert TooEarly(block.timestamp, scheduled);
         }
 
+        _grantRole(EXECUTOR_ROLE, action);
+
         scheduledTime[action] = 0;
         (bool success, ) = action.call(abi.encodeWithSignature("execute()"));
         if (!success) {
+            _revokeRole(EXECUTOR_ROLE, action);
             revert ExecutionFailed();
         }
+
+        _revokeRole(EXECUTOR_ROLE, action);
     }
 
     /**

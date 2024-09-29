@@ -15,6 +15,7 @@ import "contracts/executors/Impeachment.sol";
 import "contracts/executors/GovernorParameters.sol";
 import "contracts/governance/GovernorExecutor.sol";
 import "contracts/governance/GovernorGuard.sol";
+import "contracts/executors/AddDelegate.sol";
 import "forge-std/console2.sol";
 
 contract GovernorOperationsTest is Test {
@@ -31,6 +32,8 @@ contract GovernorOperationsTest is Test {
     Election election;
     Impeachment impeachment;
     GovernorParameters govParams;
+    GovernorParameters govParamsRes;
+    AddDelegate addDelegate;
 
     address signer = vm.addr(10);
     address customAddress = signer;
@@ -95,17 +98,17 @@ contract GovernorOperationsTest is Test {
         sci.approve(address(transactions), 100000000000000e18);
         usdc.approve(address(transactions), 100000000000000e6);
         sci.approve(address(staking), 1000000000000e18);
-        govOps.setGovExec(address(executor));
-        govOps.setGovGuard(address(guard));
-        govRes.setGovExec(address(executor));
-        // govRes.setGovGuard(address(guard));
         deal(address(usdc), admin, 100000000e6);
         deal(address(sci), admin, 10000000e18);
 
         po.setGovOps(address(govOps));
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
-        // govRes.setGovOps(address(govOps));
+        govOps.setGovGuard(address(guard));
+        // govRes.setGovGuard(address(guard));
+        govOps.setGovExec(address(executor));
+        staking.setGovExec(address(executor));
+        govRes.setGovExec(address(executor));
         vm.stopPrank();
 
         vm.startPrank(customAddress);
@@ -144,13 +147,6 @@ contract GovernorOperationsTest is Test {
         deal(address(sci), addr3, 100000000e18);
         deal(address(usdc), addr3, 100000000e6);
         vm.stopPrank();
-
-        govParams = new GovernorParameters(
-            address(govOps),
-            address(executor),
-            "quorum",
-            (IERC20(sci).totalSupply() / 10000) * 600
-        );
     }
 
     function test_SetParticipationToken() public {
@@ -190,16 +186,38 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_ChangeGovernanceParameters() public {
+    function test_AddDelegate() public {
+        vm.startPrank(addr1);
+        staking.lock(2000000e18);
+        addDelegate = new AddDelegate(
+            addr1,
+            address(executor),
+            address(staking)
+        );
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(addDelegate), false);
+        govOps.voteStandard(id, true);
+        vm.warp(block.timestamp + 4.1 weeks);
+        govOps.schedule(id);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id);
+        vm.stopPrank();
+    }
+
+    function test_ChangeGovernanceParametersGovOps() public {
         vm.startPrank(admin);
-        address[] memory governors = new address[](1);
-        governors[0] = address(govParams);
-        govOps.addExecutors(governors);
+        //no need to add as executor as done automatically
+        govParams = new GovernorParameters(
+            address(govOps),
+            address(executor),
+            "quorum",
+            (IERC20(sci).totalSupply() / 10000) * 600
+        );
         vm.stopPrank();
         vm.startPrank(addr1);
         staking.lock(2000000e18);
         uint256 id = govOps.getProposalIndex();
-        (, uint256 quorum, , , , ) = govOps.getGovernanceParameters();
+        (, uint256 quorum, , , , , ) = govOps.getGovernanceParameters();
         assertEq(quorum, (IERC20(sci).totalSupply() / 10000) * 300);
         govOps.propose("Info", address(govParams), false);
         govOps.voteStandard(id, true);
@@ -208,8 +226,36 @@ contract GovernorOperationsTest is Test {
         vm.warp(block.timestamp + 3 days);
         govOps.execute(id);
         vm.stopPrank();
-        (, uint256 quorum1, , , , ) = govOps.getGovernanceParameters();
+        (, uint256 quorum1, , , , , ) = govOps.getGovernanceParameters();
         assertEq(quorum1, (IERC20(sci).totalSupply() / 10000) * 600);
+    }
+
+    function test_ChangeGovernanceParametersGovRes() public {
+        vm.startPrank(admin);
+        govParamsRes = new GovernorParameters(
+            address(govRes),
+            address(executor),
+            "quorum",
+            3
+        );
+        // address[] memory governors = new address[](1);
+        // governors[0] = address(govParamsRes);
+        // govRes.addExecutors(governors);
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        staking.lock(2000000e18);
+        uint256 id = govOps.getProposalIndex();
+        (, uint256 quorum, , , , , ) = govRes.getGovernanceParameters();
+        assertEq(quorum, 1);
+        govOps.propose("Info", address(govParamsRes), false);
+        govOps.voteStandard(id, true);
+        vm.warp(4.1 weeks);
+        govOps.schedule(id);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id);
+        vm.stopPrank();
+        (, uint256 quorum1, , , , , ) = govRes.getGovernanceParameters();
+        assertEq(quorum1, 3);
     }
 
     function test_ElectScientists() public {
@@ -233,9 +279,9 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
-        address[] memory governors = new address[](1);
-        governors[0] = address(election);
-        govRes.addExecutors(governors);
+        // address[] memory governors = new address[](1);
+        // governors[0] = address(election);
+        // govRes.addExecutors(governors);
         vm.stopPrank();
         vm.startPrank(addr1);
         staking.lock(2000000e18);
@@ -271,9 +317,9 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
-        address[] memory governors = new address[](1);
-        governors[0] = address(election);
-        govRes.addExecutors(governors);
+        // address[] memory governors = new address[](1);
+        // governors[0] = address(election);
+        // govRes.addExecutors(governors);
         vm.stopPrank();
         vm.startPrank(addr1);
         staking.lock(2000000e18);
@@ -307,7 +353,7 @@ contract GovernorOperationsTest is Test {
         govOps.schedule(id2);
         vm.warp(block.timestamp + 3 days);
         vm.startPrank(admin);
-        govRes.addExecutors(governors2);
+        // govRes.addExecutors(governors2);
         govOps.execute(id2);
         vm.stopPrank();
 

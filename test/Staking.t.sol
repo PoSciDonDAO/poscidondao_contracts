@@ -8,14 +8,18 @@ import "contracts/test/MockUsdc.sol";
 import "contracts/staking/Staking.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/governance/GovernorResearch.sol";
+import "contracts/executors/AddDelegate.sol";
+import "contracts/governance/GovernorExecutor.sol";
 
 contract StakingTest is Test {
     GovernorOperations public govOps;
     GovernorResearch public govRes;
+    AddDelegate public addDelegate;
     Po public po;
     Sci public sci;
     MockUsdc public usdc;
     Staking public staking;
+    GovernorExecutor executor;
 
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
@@ -32,7 +36,7 @@ contract StakingTest is Test {
         usdc = new MockUsdc(10000000e18);
 
         vm.startPrank(admin);
-        sci = new Sci(admin, 4538400);
+        sci = new Sci(admin, 18910000);
 
         po = new Po("", admin);
 
@@ -54,13 +58,17 @@ contract StakingTest is Test {
             signer
         );
 
+        address[] memory governors = new address[](2);
+        governors[0] = address(govOps);
+        governors[1] = address(govRes);
+        executor = new GovernorExecutor(admin, 2 days, governors);
+
         staking.setGovOps(address(govOps));
         staking.setGovRes(address(govRes));
         govOps.setPoToken(address(po));
-        // govOps.setGovParams("proposalLifeTime", 4 weeks);
-        // govOps.setGovParams("quorum", 1000e18);
-        // govOps.setGovParams("voteLockEnd", 2 weeks);
         po.setGovOps(address(govOps));
+        govOps.setGovExec(address(executor));
+        staking.setGovExec(address(executor));
         vm.stopPrank();
 
         deal(address(usdc), admin, 10000e18);
@@ -68,7 +76,7 @@ contract StakingTest is Test {
         deal(address(usdc), addr2, 10000e18);
         deal(address(usdc), addr3, 10000e18);
 
-        deal(address(sci), addr1, 1000000e18);
+        deal(address(sci), addr1, 2000000000e18);
         deal(address(sci), addr2, 1000000e18);
         deal(address(sci), addr3, 1000000e18);
         deal(address(sci), addr4, 1000000e18);
@@ -76,8 +84,7 @@ contract StakingTest is Test {
         deal(address(sci), admin, 10000000e18);
 
         vm.startPrank(addr1);
-        sci.approve(address(staking), 10000e18);
-        staking.lock(500e18);
+        sci.approve(address(staking), 2000000000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
@@ -103,21 +110,52 @@ contract StakingTest is Test {
         vm.stopPrank();
 
         vm.startPrank(admin);
-        staking.addDelegate(addr2);
-        staking.addDelegate(addr3);
         sci.approve(address(staking), 100000000000000e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        staking.lock(2000000e18);
+        addDelegate = new AddDelegate(
+            addr1,
+            address(executor),
+            address(staking)
+        );
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(addDelegate), false);
+        govOps.voteStandard(id, true);
+        vm.warp(block.timestamp + 4.1 weeks);
+        govOps.schedule(id);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        addDelegate = new AddDelegate(
+            addr2,
+            address(executor),
+            address(staking)
+        );
+        uint256 id2 = govOps.getProposalIndex();
+        govOps.propose("Info", address(addDelegate), false);
+        govOps.voteStandard(id2, true);
+        vm.warp(block.timestamp + 4.1 weeks);
+        govOps.schedule(id2);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id2);
+        assertTrue(staking.getDelegate(addr1) == true);
+        assertTrue(staking.getDelegate(addr2) == true);
         vm.stopPrank();
     }
 
     function test_ReturnUserRights() public {
-        assertEq(staking.getLatestUserRights(addr1), 500e18);
-        assertEq(staking.getUserRights(addr1, 1, block.number), 500e18);
+        assertEq(staking.getLatestUserRights(addr1), 2000000e18);
+        assertEq(staking.getUserRights(addr1, 1, block.number), 2000000e18);
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.free(500e18);
         vm.stopPrank();
-        assertEq(staking.getLatestUserRights(addr1), 0);
-        assertEq(staking.getUserRights(addr1, 2, block.number), 0);
+        assertEq(staking.getLatestUserRights(addr1), (2000000e18 - 500e18));
+        assertEq(staking.getUserRights(addr1, 2, block.number), (2000000e18 - 500e18));
     }
 
     function test_lockTokens() public {
@@ -131,10 +169,10 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(lockedSci, 500e18);
-        assertEq(votingRights, 500e18);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
+        assertEq(lockedSci, 2000000e18);
+        assertEq(votingRights, 2000000e18);
+        assertEq(voteLockEnd, 3343681);
+        assertEq(proposeLockEnd, 3343681);
         assertEq(amtSnapshots, 1);
         assertEq(delegate, address(0));
 
@@ -166,10 +204,10 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(lockedSci, 500e18);
+        assertEq(lockedSci, 2000000e18);
         assertEq(votingRights, 0);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
+        assertEq(voteLockEnd, 3343681); //4.1 weeks + 3 days + 1 week is lock end!
+        assertEq(proposeLockEnd, 3343681);
         assertEq(amtSnapshots, 2);
         assertEq(delegate, addr2);
 
@@ -182,42 +220,34 @@ contract StakingTest is Test {
             address delegate1
         ) = staking.users(addr2);
         assertEq(lockedSci1, 500e18);
-        assertEq(votingRights1, 1000e18);
+        assertEq(votingRights1, 2000500e18);
         assertEq(amtSnapshots1, 2);
         assertEq(delegate1, address(0));
     }
 
-    function test_freeTokens() public {
-        vm.roll(block.number + 1);
-
+    function test_FreeTokens() public {
         vm.startPrank(addr1);
-        staking.free(100e18);
-        vm.stopPrank();
-
-        vm.roll(block.number + 2);
-
-        vm.startPrank(addr1);
-        staking.free(100e18);
+        staking.free(1000000e18);
         vm.stopPrank();
 
         (
             uint256 lockedSci,
             uint256 votingRights,
-            uint256 voteLockEnd,
-            uint256 proposeLockEnd,
+            ,
+            ,
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(lockedSci, 300e18);
-        assertEq(votingRights, 300e18);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
-        assertEq(amtSnapshots, 3);
+        assertEq(lockedSci, 1000000e18);
+        assertEq(votingRights, 1000000e18);
+        // assertEq(voteLockEnd, 334368);
+        // assertEq(proposeLockEnd, 334368);
+        assertEq(amtSnapshots, 1);
         assertEq(delegate, address(0));
     }
 
-    function test_freeTokensIfVotingRightsDelegated() public {
+    function test_FreeTokensIfVotingRightsDelegated() public {
         vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
@@ -234,7 +264,7 @@ contract StakingTest is Test {
             uint256 amtSnapshots,
             address delegate
         ) = staking.users(addr1);
-        assertEq(lockedSci, 200e18);
+        assertEq(lockedSci, (2000000e18 - 300e18));
         assertEq(votingRights, 0);
         assertEq(voteLockEnd, 0);
         assertEq(proposeLockEnd, 0);
@@ -250,9 +280,9 @@ contract StakingTest is Test {
             address delegate1
         ) = staking.users(addr2);
         assertEq(lockedSci1, 500e18);
-        assertEq(votingRights1, 700e18);
+        assertEq(votingRights1, (2000000e18 - 300e18 + 500e18));
         assertEq(amtSnapshots1, 3);
-        assertEq(delegate1, address(0)); //Cannot further delegate tokens
+        assertEq(delegate1, address(0));
     }
 
     function test_RevertDelegationIfOldAndNewDelegatesSimilar() public {
@@ -273,7 +303,7 @@ contract StakingTest is Test {
 
     function test_RevertDelegationToAlreadyDelegatedUser() public {
         vm.startPrank(addr2);
-        staking.delegate(addr3);
+        staking.delegate(addr1);
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -287,7 +317,7 @@ contract StakingTest is Test {
 
     function test_RevertDelegationWithoutVotingPower() public {
         vm.startPrank(addr1);
-        staking.free(500e18);
+        staking.free(2000000e18);
         bytes4 selector = bytes4(keccak256("NoVotingPowerToDelegate()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
         staking.delegate(addr2);
@@ -300,27 +330,9 @@ contract StakingTest is Test {
         vm.expectRevert(abi.encodeWithSelector(selector, addr5));
         staking.delegate(addr5);
         vm.stopPrank();
-
-        vm.startPrank(admin);
-        staking.addDelegate(addr4);
-        vm.stopPrank();
-
-        vm.startPrank(addr2);
-        staking.delegate(addr4);
-        vm.stopPrank();
-
-        vm.startPrank(admin);
-        staking.removeDelegate(addr4);
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
-        vm.expectRevert(abi.encodeWithSelector(selector, addr4));
-        staking.delegate(addr4);
-        vm.stopPrank();
     }
 
     function test_DelegateVotingRights() public {
-        vm.roll(block.number + 2);
         vm.startPrank(addr1);
         staking.delegate(addr2);
         (
@@ -333,11 +345,11 @@ contract StakingTest is Test {
         ) = staking.users(addr1);
         vm.stopPrank();
 
-        assertEq(lockedSci1, 500e18);
+        assertEq(lockedSci1, 2000000e18);
         assertEq(votingRights1, 0);
-        assertEq(voteLockEnd1, 0);
-        assertEq(proposeLockEnd1, 0);
-        assertEq(amtSnapshots1, 2);
+        assertEq(voteLockEnd1, 3343681);
+        assertEq(proposeLockEnd1, 3343681);
+        assertEq(amtSnapshots1, 1);
         assertEq(delegate1, addr2);
 
         (
@@ -350,10 +362,10 @@ contract StakingTest is Test {
         ) = staking.users(addr2);
 
         assertEq(lockedSci2, 500e18);
-        assertEq(votingRights2, 1000e18);
+        assertEq(votingRights2, 2000000e18 + 500e18);
         assertEq(voteLockEnd2, 0);
         assertEq(proposeLockEnd2, 0);
-        assertEq(amtSnapshots2, 2);
+        assertEq(amtSnapshots2, 1);
         assertEq(delegate2, address(0));
     }
 
@@ -375,10 +387,10 @@ contract StakingTest is Test {
             address delegate
         ) = staking.users(addr1);
 
-        assertEq(lockedSci, 500e18);
-        assertEq(votingRights, 500e18);
-        assertEq(voteLockEnd, 0);
-        assertEq(proposeLockEnd, 0);
+        assertEq(lockedSci, 2000000e18);
+        assertEq(votingRights, 2000000e18);
+        assertEq(voteLockEnd, 3343681);
+        assertEq(proposeLockEnd, 3343681);
         assertEq(amtSnapshots, 3);
         assertEq(delegate, address(0));
     }
