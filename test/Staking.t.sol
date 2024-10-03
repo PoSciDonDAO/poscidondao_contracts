@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Po.sol";
 import "contracts/tokens/Sci.sol";
-import "contracts/test/MockUsdc.sol";
+import "contracts/test/Usdc.sol";
 import "contracts/staking/Staking.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/governance/GovernorResearch.sol";
@@ -17,7 +17,7 @@ contract StakingTest is Test {
     AddDelegate public addDelegate;
     Po public po;
     Sci public sci;
-    MockUsdc public usdc;
+    Usdc public usdc;
     Staking public staking;
     GovernorExecutor executor;
 
@@ -33,7 +33,7 @@ contract StakingTest is Test {
     event Freed(address indexed user, address indexed asset, uint256 amount);
 
     function setUp() public {
-        usdc = new MockUsdc(10000000e18);
+        usdc = new Usdc(10000000e18);
 
         vm.startPrank(admin);
         sci = new Sci(admin, 18910000);
@@ -392,23 +392,4 @@ contract StakingTest is Test {
         assertEq(delegate, address(0));
     }
 
-    function test_TerminateDAO() public {
-        vm.startPrank(admin);
-        staking.burnForTermination(100000e18);
-        staking.burnForTermination(4627500e18);
-
-        assertEq(
-            (18910000 / 10000) * staking.terminationThreshold() * 1e18,
-            4727500e18
-        );
-        vm.stopPrank();
-
-        vm.startPrank(admin);
-        staking.terminate();
-        vm.stopPrank();
-
-        assertEq(staking.terminated(), true);
-        assertEq(govOps.terminated(), true);
-        assertEq(govRes.terminated(), true);
-    }
 }

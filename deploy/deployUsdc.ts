@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  console.log(`Running deploy script for the MockUsdc contract`);
+  console.log(`Running deploy script for the Usdc contract`);
   // load wallet private key from env file
   const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -24,7 +24,7 @@ async function main() {
 
   const constructorArguments = [amount];
 
-  const Contract = await ethers.getContractFactory("MockUsdc");
+  const Contract = await ethers.getContractFactory("Usdc");
   // Estimate contract deployment fee
   const estimatedGas = await ethers.provider.estimateGas(
     Contract.getDeployTransaction(...constructorArguments)

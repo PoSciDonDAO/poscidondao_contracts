@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/test/MockUsdc.sol";
+import "contracts/test/Usdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/tokens/Po.sol";
 import "contracts/exchange/PoToSciExchange.sol";
@@ -18,7 +18,7 @@ import "contracts/governance/GovernorGuard.sol";
 import "forge-std/console2.sol";
 
 contract GovernorResearchTest is Test {
-    MockUsdc usdc;
+    Usdc usdc;
     Sci sci;
     Po po;
     PoToSciExchange exchange;
@@ -43,7 +43,7 @@ contract GovernorResearchTest is Test {
     address signer = vm.addr(9);
 
     function setUp() public {
-        usdc = new MockUsdc(10000000e18);
+        usdc = new Usdc(10000000e18);
 
         vm.startPrank(admin);
 
@@ -505,16 +505,4 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
     }
 
-    function test_GovernanceDoesNotWorkAfterTermination() public {
-        vm.startPrank(admin);
-        staking.burnForTermination(5000000e18);
-        staking.terminate();
-        vm.stopPrank();
-        assertEq(govRes.terminated(), true);
-        vm.startPrank(addr1);
-        bytes4 selector1 = bytes4(keccak256("ContractTerminated(uint256)"));
-        vm.expectRevert(abi.encodeWithSelector(selector1, block.number));
-        govRes.propose("Info", address(transaction));
-        vm.stopPrank();
-    }
 }

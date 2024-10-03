@@ -26,7 +26,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotExecute();
     error CannotVoteOnQVProposals();
     error ExecutableProposalsCannotBeCompleted();
-    error ContractTerminated(uint256 blockNumber);
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
     error InvalidInput();
@@ -87,14 +86,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _index;
-    bool public terminated = false;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint256) private votingStreak;
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
-    bytes32 public constant STAKING_ROLE = keccak256("STAKING_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     ///*** ENUMERATORS ***///
@@ -111,14 +108,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** MODIFIER ***///
-
-    /**
-     * @notice Ensures operations can only proceed if the contract has not been terminated.
-     */
-    modifier notTerminated() {
-        if (terminated) revert ContractTerminated(block.number);
-        _;
-    }
 
     /**
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
@@ -172,7 +161,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event SetNewSignerAddress(address indexed user, address indexed newAddress);
     event SetNewAdmin(address indexed user, address indexed newAddress);
     event Scheduled(uint256 indexed id);
-    event Terminated(address admin, uint256 blockNumber);
     event Voted(
         uint256 indexed id,
         address indexed user,
@@ -209,18 +197,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         voteChangeCutOff = 3 days;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
-        _grantRole(STAKING_ROLE, stakingAddress_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
-
-    /**
-     * @dev terminates the governance smart contract
-     */
-    function setTerminated() external notTerminated onlyRole(STAKING_ROLE) {
-        terminated = true;
-        emit Terminated(msg.sender, block.number);
-    }
 
     /**
      * @dev Updates the admin address and transfers admin role.
@@ -239,7 +218,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setStakingAddress(
         address newStakingAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         stakingAddress = newStakingAddress;
         emit SetNewStakingAddress(msg.sender, newStakingAddress);
     }
@@ -249,7 +228,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setGovExec(
         address newGovernorAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovernorAddress);
         emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
     }
@@ -259,7 +238,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setGovGuard(
         address newGovGuardAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govGuard = IGovernorGuard(newGovGuardAddress);
         _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit SetNewGovGuardAddress(msg.sender, newGovGuardAddress);
@@ -278,9 +257,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the PO token address and interface
      */
-    function setPoToken(
-        address po_
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         po = IPo(po_);
         emit SetNewPoToken(msg.sender, po_);
     }
@@ -290,10 +267,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function setGovParams(
-        bytes32 param,
-        uint256 data
-    ) external notTerminated onlyExecutor {
+    function setGovParams(bytes32 param, uint256 data) external onlyExecutor {
         //the duration of the proposal
         if (param == "proposalLifeTime") proposalLifeTime = data;
 
@@ -331,7 +305,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         string memory info,
         address action,
         bool quadraticVoting
-    ) external nonReentrant notTerminated returns (uint256) {
+    ) external nonReentrant returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
 
         bool executable;
@@ -365,10 +339,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param id the _index of the proposal
      * @param support user's choice to support a proposal or not
      */
-    function voteStandard(
-        uint id,
-        bool support
-    ) external nonReentrant notTerminated {
+    function voteStandard(uint id, bool support) external nonReentrant {
         _votingChecks(id, msg.sender);
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
@@ -385,7 +356,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool support,
         bool isUnique,
         bytes memory signature
-    ) external nonReentrant notTerminated {
+    ) external nonReentrant {
         _votingChecks(id, msg.sender);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
@@ -402,7 +373,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev schedules the the execution or completion of a proposal
      * @param id the _index of the proposal of interest
      */
-    function schedule(uint256 id) external nonReentrant notTerminated {
+    function schedule(uint256 id) external nonReentrant {
         if (id >= _index) revert ProposalInexistent();
 
         if (block.timestamp < proposals[id].endTimestamp)
@@ -433,7 +404,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * executing the action, and then removing the role. Reverts if conditions for execution are not met.
      * @param id The ID of the proposal to be executed.
      */
-    function execute(uint256 id) external payable nonReentrant notTerminated {
+    function execute(uint256 id) external payable nonReentrant {
         if (id >= _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)
@@ -455,7 +426,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev completes off-chain execution proposals
      * @param id the _index of the proposal of interest
      */
-    function complete(uint256 id) external nonReentrant notTerminated {
+    function complete(uint256 id) external nonReentrant {
         if (id > _index) revert ProposalInexistent();
 
         if (proposals[id].status != ProposalStatus.Scheduled)

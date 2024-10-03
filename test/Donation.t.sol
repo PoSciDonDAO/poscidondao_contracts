@@ -3,14 +3,13 @@ pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/donating/Donation.sol";
-import "contracts/test/MockUsdc.sol";
-import "contracts/test/MockWeth.sol";
+import "contracts/test/Usdc.sol";
+
 
 contract DonationTest is Test {
 
     Donation public don;
-    MockUsdc public usdc;
-    MockWeth public weth;
+    Usdc public usdc;
 
     address addr1 = vm.addr(1);
     address addr2 = vm.addr(2);
@@ -25,8 +24,7 @@ contract DonationTest is Test {
 
     function setUp() public {
 
-        usdc = new MockUsdc(10000000e6);
-        weth = new MockWeth(10000000e18);
+        usdc = new Usdc(10000000e6);
 
         vm.startPrank(dao);
             don = new Donation(
@@ -38,18 +36,14 @@ contract DonationTest is Test {
 
         vm.startPrank(addr1);
             usdc.approve(address(don), 10000e6);
-            weth.approve(address(don), 10000e18);
             deal(addr1, 10000000e18);
             deal(address(usdc), addr1, 10000e6);
-            deal(address(weth), addr1, 10000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
             usdc.approve(address(don), 10000e6);
-            weth.approve(address(don), 10000e18);
             deal(addr2, 10000000e18);
             deal(address(usdc), addr2, 10000e6);
-            deal(address(weth), addr2, 10000e18);
         vm.stopPrank();
 
         vm.startPrank(dao);

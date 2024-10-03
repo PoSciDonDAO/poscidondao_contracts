@@ -17,8 +17,6 @@ async function main() {
 		"0x2cAa8A69F17b415B4De7e3bD9878767221791828",
 	];
 
-	console.log()
-
 	const membersWhitelist = [
 		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
 		"0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488",
@@ -50,6 +48,7 @@ async function main() {
 		"0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e",
 		"0x083BcEEb941941e15a8a2870D5a4922b5f07Cc81",
 		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
+		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C", //nft scouser
 	];
 
 	const abi = [

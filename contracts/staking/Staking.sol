@@ -4,15 +4,10 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import {IStaking} from "contracts/interfaces/IStaking.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
-
-interface IGov {
-    function setTerminated() external;
-}
 
 contract Staking is IStaking, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -37,7 +32,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     ///*** TOKEN ***//
     IERC20 private sci;
-    ERC20Burnable private sciBurn;
 
     ///*** STRUCTS ***///
     struct User {
@@ -67,8 +61,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     uint256 private totStaked;
     uint256 private totDelegated;
     uint256 public delegateThreshold;
-    uint256 public terminationThreshold;
-    uint256 public totBurnedForTermination;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
     mapping(address => User) public users;
     mapping(address => bool) private delegates;
@@ -137,8 +129,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
         admin = admin_;
         sci = IERC20(sci_);
-        sciBurn = ERC20Burnable(sci_);
-        terminationThreshold = 2500; // 25% of total supply with 10000 precision
         delegateThreshold = 100e18;
         delegates[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
@@ -166,17 +156,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         emit SetNewAdmin(oldAdmin, newAdmin);
-    }
-
-    /**
-     * @dev sets the amount of staked sci tokens needed to become a delegate
-     * @param newThreshold the new threshold to become a delegate
-     */
-    function setTerminationThreshold(
-        uint256 newThreshold
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        terminationThreshold = newThreshold;
-        emit TerminationThresholdChanged();
     }
 
     /**
@@ -421,38 +400,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
         emit ProposeLockEndTimeUpdated(user, proposeLockEnd);
         return true;
-    }
-
-    /**
-     * @dev burns a given amount of SCI tokens for termination
-     * @notice DD role members need to unstake their tokens and burn them here
-     * @param amount the amount of tokens that will be locked
-     */
-    function burnForTermination(
-        uint256 amount
-    ) external nonReentrant notTerminated {
-        sciBurn.burnFrom(msg.sender, amount);
-
-        totBurnedForTermination += amount;
-
-        emit BurnedForTermination(msg.sender, amount);
-    }
-
-    /**
-     * @dev terminates the staking and governance smart contracts
-     */
-    function terminate() external nonReentrant notTerminated {
-        if (
-            totBurnedForTermination <
-            (TOTAL_SUPPLY_SCI / 10000) * terminationThreshold
-        ) revert CannotBeTerminated();
-
-        IGov(govOpsContract).setTerminated();
-        IGov(govResContract).setTerminated();
-
-        terminated = true;
-
-        emit Terminated(msg.sender, block.number);
     }
 
     /**

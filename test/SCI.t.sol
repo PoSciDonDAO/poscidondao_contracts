@@ -5,14 +5,14 @@ import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/staking/Staking.sol";
 import "contracts/governance/GovernorOperations.sol";
-import "contracts/test/MockUsdc.sol";
+import "contracts/test/Usdc.sol";
 import "contracts/tokens/Po.sol";
 
 contract SciTest is Test {
     Sci public sci;
     Staking public staking;
     GovernorOperations public govOps;
-    MockUsdc public usdc;
+    Usdc public usdc;
     Po public po;
 
     address addr1 = vm.addr(1);

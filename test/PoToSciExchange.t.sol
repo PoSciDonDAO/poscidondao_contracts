@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "lib/forge-std/src/Test.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/tokens/Po.sol";
-import "contracts/test/MockUsdc.sol";
+import "contracts/test/Usdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/staking/Staking.sol";
 import "contracts/exchange/PoToSciExchange.sol";
@@ -12,7 +12,7 @@ import "contracts/exchange/PoToSciExchange.sol";
 contract PoToSciExchangeTest is Test {
     GovernorOperations public govOps;
     Po public po;
-    MockUsdc public usdc;
+    Usdc public usdc;
     Staking public staking;
     Sci public sci;
     PoToSciExchange public ex;
@@ -34,7 +34,7 @@ contract PoToSciExchangeTest is Test {
         0xbce052cf723dca06a21bd3cf838bc518931730fb3db7859fc9cc86f0d5483495;
 
     function setUp() public {
-        usdc = new MockUsdc(10000000e6);
+        usdc = new Usdc(10000000e6);
 
         vm.startPrank(admin);
         sci = new Sci(admin, 18910000);
@@ -52,7 +52,7 @@ contract PoToSciExchangeTest is Test {
         ex = new PoToSciExchange(rewardWallet, address(sci), address(po));
 
         govOps.setPoToken(address(po));
-        staking.setSciToken(address(sci));
+        
         staking.setGovOps(address(govOps));
         po.setGovOps(address(govOps));
         vm.stopPrank();

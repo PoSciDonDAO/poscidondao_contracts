@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
-import "contracts/test/MockUsdc.sol";
+import "contracts/test/Usdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/tokens/Po.sol";
 import "contracts/exchange/PoToSciExchange.sol";
@@ -19,7 +19,7 @@ import "contracts/executors/AddDelegate.sol";
 import "forge-std/console2.sol";
 
 contract GovernorOperationsTest is Test {
-    MockUsdc usdc;
+    Usdc usdc;
     Sci sci;
     Po po;
     PoToSciExchange exchange;
@@ -49,7 +49,7 @@ contract GovernorOperationsTest is Test {
     event Cancelled(uint256 indexed id, bool indexed rejected);
 
     function setUp() public {
-        usdc = new MockUsdc(10000000e18);
+        usdc = new Usdc(10000000e18);
 
         vm.startPrank(admin);
 
