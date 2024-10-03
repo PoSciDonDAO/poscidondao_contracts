@@ -72,11 +72,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         _;
     }
 
-    modifier notTerminated() {
-        if (terminated) revert ContractsTerminated();
-        _;
-    }
-
     /**
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
@@ -141,7 +136,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      */
     function setGovExec(
         address newGovernorAddress
-    ) external notTerminated onlyRole(DEFAULT_ADMIN_ROLE) {
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovernorAddress);
         emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
     }
@@ -225,7 +220,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev delegates the owner's voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
-    function delegate(address newDelegate) external nonReentrant notTerminated {
+    function delegate(address newDelegate) external nonReentrant {
         address owner = msg.sender;
         address oldDelegate = users[owner].delegate;
         uint256 lockedSci = users[owner].lockedSci;
@@ -284,7 +279,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev locks a given amount of SCI tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lock(uint256 amount) external nonReentrant notTerminated {
+    function lock(uint256 amount) external nonReentrant {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
         IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
 
