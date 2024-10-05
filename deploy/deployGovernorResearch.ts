@@ -20,18 +20,18 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const stakingAddress = "0xD800cBb54DBE5e126d21f859c4E2a6c8DE9986fB";
+	const staking = "0xD800cBb54DBE5e126d21f859c4E2a6c8DE9986fB";
 	const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const sciToken = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 
 	const constructorArguments = [
-		stakingAddress,
+		staking,
 		treasuryWallet,
 		researchFundingWallet,
 		usdc,
-		sciToken,
+		sci,
 	];
 
 	const Contract = await ethers.getContractFactory("GovernorResearch");

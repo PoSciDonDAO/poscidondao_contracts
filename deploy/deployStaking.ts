@@ -21,9 +21,9 @@ async function main() {
   }
 
   const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-  const sciToken = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+  const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 
-  const constructorArguments = [treasuryWallet, sciToken];
+  const constructorArguments = [treasuryWallet, sci];
 
   const Contract = await ethers.getContractFactory("Staking");
   // Estimate contract deployment fee

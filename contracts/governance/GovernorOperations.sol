@@ -152,7 +152,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 newMaxVotingStreak
     );
 
-    event SetNewPoToken(address indexed user, address poToken);
+    event SetNewPoToken(address indexed user, address po);
     event SetNewStakingAddress(
         address indexed user,
         address indexed newAddress
@@ -169,32 +169,32 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     );
 
     constructor(
-        address stakingAddress_,
+        address staking_,
         address admin_,
         address po_,
         address signer_
     ) {
         if (
-            stakingAddress_ == address(0) ||
+            staking_ == address(0) ||
             admin_ == address(0) ||
             po_ == address(0) ||
             signer_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
-        stakingAddress = stakingAddress_;
+        stakingAddress = staking_;
         admin = admin_;
         po = IPo(po_);
         signer = signer_;
 
         opThreshold = 5000e18;
-        maxVotingStreak = 5;
-        proposalLifeTime = 4 weeks;
         quorum = 567300e18; // 3% of circulating supply of 18.91 million SCI
-        voteLockTime = 1 weeks;
-        proposeLockTime = 1 weeks;
-        voteChangeTime = 1 hours;
-        voteChangeCutOff = 3 days;
+        maxVotingStreak = 5;
+        proposalLifeTime = 30 minutes;
+        voteLockTime = 0 weeks;
+        proposeLockTime = 0 weeks;
+        voteChangeTime = 10 minutes; //normally 1 hour
+        voteChangeCutOff = 10 minutes; //normally 3 days
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }

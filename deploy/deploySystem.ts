@@ -34,11 +34,11 @@ async function main() {
 	};
 
 	const rpcUrl = getRpcUrl();
-	const donationAddress: string =
+	const donation: string =
 		"0x5247514Ee8139f849057721d932701A83679F107";
-	const usdcAddress: string = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+	const usdc: string = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const admin: string = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const sciToken: string = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const sci: string = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 	const researchFundingWallet: string =
 		"0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
@@ -74,22 +74,22 @@ async function main() {
 	};
 
 	// 3. Deploy PO (Participation) token
-	await deployAndVerify("Po", ["https://baseURI.example/", admin], "poToken");
+	await deployAndVerify("Po", ["https://baseURI.example/", admin], "po");
 
 	// 4. Deploy PoToSciExchange
 	await deployAndVerify(
 		"PoToSciExchange",
-		[admin, sciToken, addresses.poToken],
+		[admin, sci, addresses.po],
 		"poToSciExchange"
 	);
 
 	// 5. Deploy Staking
-	await deployAndVerify("Staking", [admin, sciToken], "staking");
+	await deployAndVerify("Staking", [admin, sci], "staking");
 
 	// 6. Deploy GovernorOperations
 	await deployAndVerify(
 		"GovernorOperations",
-		[addresses.staking, admin, addresses.poToken, signer],
+		[addresses.staking, admin, addresses.po, signer],
 		"governorOperations"
 	);
 
@@ -120,12 +120,12 @@ async function main() {
 	const serverUtilsObject = {
 		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532, // base testnet: 84532, base mainnet: 8453
 		providerUrl: `${rpcUrl}`,
-		usdcAddress: usdcAddress, // Constant address for USDC
-		donationAddress: donationAddress,
-		poTokenAddress: addresses.poToken,
-		sciTokenAddress: sciToken,
+		usdc: usdc, // Constant address for USDC
+		donation: donation,
+		poAddress: addresses.po,
+		sci: sci,
 		poToSciExchangeAddress: addresses.poToSciExchange,
-		stakingAddress: addresses.staking,
+		staking: addresses.staking,
 		governorOperationsAddress: addresses.governorOperations,
 		governorResearchAddress: addresses.governorResearch,
 		explorerLink:

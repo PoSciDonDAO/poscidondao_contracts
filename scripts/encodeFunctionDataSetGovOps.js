@@ -38,7 +38,7 @@ function encodeFunctionData(functionSignature, inputs) {
 
 // Example usage with an array of addresses
 const functionSignatureArray = "setGovOps(address)";
-const functionInput = "0x8c6D709613E91Ee2301d98e2d1fCFa6f98e980CA";
+const functionInput = "0x1EA514904EC76AF3cC699f39Ee4aA49C02a51D81";
 
 const encodedInputDataArray = encodeFunctionData(
 	functionSignatureArray,

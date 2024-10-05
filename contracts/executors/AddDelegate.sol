@@ -17,9 +17,9 @@ contract AddDelegate is ReentrancyGuard, AccessControl {
     constructor(
         address targetWallet_,
         address govExecAddress_,
-        address stakingAddress_
+        address staking_
     ) {
-        staking = IGovernorAddDelegate(stakingAddress_);
+        staking = IGovernorAddDelegate(staking_);
         targetWallet = targetWallet_;
         _grantRole(EXECUTOR_ROLE, govExecAddress_);
     }

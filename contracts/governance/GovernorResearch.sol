@@ -146,30 +146,29 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     );
 
     constructor(
-        address stakingAddress_,
+        address staking_,
         address admin_,
         address researchFundingWallet_
     ) {
         if (
-            stakingAddress_ == address(0) ||
+            staking_ == address(0) ||
             admin_ == address(0) ||
             researchFundingWallet_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
-        stakingAddress = stakingAddress_;
+        stakingAddress = staking_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
 
 
         ddThreshold = 1000e18;
-
-        proposalLifeTime = 4 weeks;
         quorum = 1;
-        voteLockTime = 1 weeks;
-        proposeLockTime = 1 weeks;
-        voteChangeTime = 1 hours;
-        voteChangeCutOff = 3 days;
+        proposalLifeTime = 30 minutes;
+        voteLockTime = 0 weeks;
+        proposeLockTime = 0 weeks;
+        voteChangeTime = 10 minutes; //normally 1 hour
+        voteChangeCutOff = 10 minutes; //normally 3 days
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
