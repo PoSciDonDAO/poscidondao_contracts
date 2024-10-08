@@ -14,14 +14,13 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 /**
  * @title SCI
  * @dev Implementation of SCI, PoSciDonDAO's ERC20 Token.
- * This contract handles token minting, burning, and role-based permissions.
  */
 contract Sci is ERC20Burnable, AccessControl {
     error CannotBeZeroAddress();
 
     /**
-     * @dev Sets the values for {name} and {symbol}, initializes {treasuryWallet}
-     * with the token distribution amount, and grants default admin role.
+     * @dev Sets the values for {name} and {symbol} and initializes {treasuryWallet}
+     * with the token distribution amount.
      * @param treasuryWallet_ address of the treasury wallet.
      */
     constructor(
