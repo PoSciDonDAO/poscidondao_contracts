@@ -1,0 +1,29 @@
+{
+	"version": "1.0",
+	"chainId": "84532",
+	"createdAt": 1726333366255,
+	"meta": {
+		"name": "Setting GovernorOperations address to Staking, GovernorResearch and PO token addresses",
+		"description": "",
+		"txBuilderVersion": "1.17.0",
+		"createdFromSafeAddress": "0x96f67a852f8D3Bc05464C4F91F97aACE060e247A",
+		"createdFromOwnerAddress": "",
+		"checksum": "0x51d01e2573d535d00981fab7cfc078a9a22aeb60a0f007817324583ba1999055"
+	},
+	"transactions": [
+		{
+			"to": "0xd451e378f74979417277d2c82aB0D89a18f6330C",
+			"value": "0",
+			"data": "0xc1cc275e0000000000000000000000001EA514904EC76AF3cC699f39Ee4aA49C02a51D81",
+			"contractMethod": null,
+			"contractInputsValues": {}
+		},
+		{
+			"to": "0x84cD77523711b94468e90e2f5AA6163f65b88639",
+			"value": "0",
+			"data": "0xc1cc275e0000000000000000000000001EA514904EC76AF3cC699f39Ee4aA49C02a51D81",
+			"contractMethod": null,
+			"contractInputsValues": null
+		}
+	]
+}

@@ -2,5 +2,5 @@
 pragma solidity ^0.8.19;
 
 interface IPo {
-    function mint(address user) external;
+    function mint(address user, uint256 amount) external;
 }

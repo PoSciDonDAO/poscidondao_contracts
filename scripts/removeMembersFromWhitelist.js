@@ -4,9 +4,9 @@ const { ethers } = require("ethers");
 async function main() {
 	// Load environment variables
 	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
-
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 	const contractAddress = "0xf5369906e03C0bA84956b7c214188cc38A11E9D3";
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);

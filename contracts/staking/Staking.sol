@@ -4,20 +4,17 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ERC20Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {IStaking} from "contracts/interface/IStaking.sol";
-import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import {IStaking} from "contracts/interfaces/IStaking.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
-
-interface IGov {
-    function setTerminated() external;
-}
+import "./../interfaces/IGovernorExecution.sol";
+import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 contract Staking is IStaking, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
     error AlreadyDelegated();
+    error CannotBeZeroAddress();
     error CannotBeTerminated();
     error CannotClaim();
     error CannotDelegateToAnotherDelegator();
@@ -35,7 +32,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
 
     ///*** TOKEN ***//
     IERC20 private sci;
-    ERC20Burnable private sciBurn;
 
     ///*** STRUCTS ***///
     struct User {
@@ -54,16 +50,17 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
     bool public terminated = false;
     bool public terminatedOperations = false;
     bool public terminatedResearchFunding = false;
+    address public admin;
     address public govOpsContract;
     address public govResContract;
+    IGovernorExecution govExec;
     uint256 private totStaked;
     uint256 private totDelegated;
     uint256 public delegateThreshold;
-    uint256 public terminationThreshold;
-    uint256 public totBurnedForTermination;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
     mapping(address => User) public users;
     mapping(address => bool) private delegates;
@@ -75,23 +72,37 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         _;
     }
 
-    modifier notTerminated() {
-        if (terminated) revert ContractsTerminated();
+    /**
+     * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
+     */
+    modifier onlyExecutor() {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+            revert Unauthorized(msg.sender);
+        }
         _;
     }
 
     /*** EVENTS ***/
     event BurnedForTermination(address owner, uint256 amount);
-    event DelegateAdded(address indexed delegate);
-    event DelegateRemoved(address indexed delegate);
     event Delegated(
         address indexed owner,
         address indexed oldDelegate,
         address indexed newDelegate,
         uint256 delegatedAmount
     );
+    event DelegateAdded(address indexed delegate);
+    event DelegateRemoved(address indexed delegate);
+    event DelegateThresholdSet();
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event Locked(address indexed user, address indexed asset, uint256 amount);
+    event SetGovOps(address indexed user, address indexed newAddress);
+    event SetGovRes(address indexed user, address indexed newAddress);
+
+    event SetNewAdmin(address indexed user, address indexed newAddress);
+    event SetNewGovExecAddress(
+        address indexed user,
+        address indexed newAddress
+    );
     event Snapshotted(
         address indexed owner,
         uint256 votingRights,
@@ -103,57 +114,61 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address admin,
         uint256 blockNumber
     );
+    event TerminationThresholdChanged();
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
     event ProposeLockEndTimeUpdated(address user, uint256 proposeLockEndTime);
 
-    constructor(address treasuryWallet_, address sci_) {
-        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+    constructor(address admin_, address sci_) {
+        if (admin_ == address(0) || sci_ == address(0)) {
+            revert CannotBeZeroAddress();
+        }
+        admin = admin_;
         sci = IERC20(sci_);
-        sciBurn = ERC20Burnable(sci_);
-        terminationThreshold = 2500; // 25% of total supply with 10000 precision
         delegateThreshold = 100e18;
         delegates[address(0)] = true;
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the sci token address.
-     * @param sciTokenAddress the address of the tradable ($SCI) token
+     * @dev sets the GovernorExecution address
      */
-    function setSciToken(
-        address sciTokenAddress
+    function setGovExec(
+        address newGovernorAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        sci = IERC20(sciTokenAddress);
+        govExec = IGovernorExecution(newGovernorAddress);
+        emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
     }
 
     /**
-     * @dev sets the amount of staked sci tokens needed to become a delegate
-     * @param newThreshold the new threshold to become a delegate
+     * @dev Updates the treasury wallet address and transfers admin role.
+     * @param newAdmin The address to be set as the new treasury wallet.
      */
-    function setDelegateThreshold(
-        uint256 newThreshold
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        terminationThreshold = newThreshold;
+    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        address oldAdmin = admin;
+        admin = newAdmin;
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        emit SetNewAdmin(oldAdmin, newAdmin);
     }
 
     /**
      * @dev sets the amount of burned sci tokens needed terminate the DAO
      * @param newThreshold the new threshold to terminate the DAO, precision = 10000
      */
-    function setTerminationThreshold(
+    function setDelegateThreshold(
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delegateThreshold = newThreshold;
+        emit DelegateThresholdSet();
     }
 
     /**
      * @dev Adds an address to the delegate whitelist if tokens have been staked
      * @param newDelegate Address to be added to the whitelist
      */
-    function addDelegate(
-        address newDelegate
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addDelegate(address newDelegate) external onlyExecutor {
         if (delegates[newDelegate]) {
             revert DelegateAlreadyAdded(newDelegate);
         }
@@ -173,9 +188,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev Removes an address from the delegate whitelist
      * @param formerDelegate Address to be removed from the whitelist
      */
-    function removeDelegate(
-        address formerDelegate
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removeDelegate(address formerDelegate) external onlyExecutor {
         if (!delegates[formerDelegate]) {
             revert DelegateNotAllowListed(formerDelegate);
         }
@@ -190,6 +203,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govOpsContract = newGovOps;
+        emit SetGovOps(msg.sender, newGovOps);
     }
 
     /**
@@ -199,13 +213,14 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         address newGovRes
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govResContract = newGovRes;
+        emit SetGovRes(msg.sender, newGovRes);
     }
 
     /**
      * @dev delegates the owner's voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
-    function delegate(address newDelegate) external nonReentrant notTerminated {
+    function delegate(address newDelegate) external nonReentrant {
         address owner = msg.sender;
         address oldDelegate = users[owner].delegate;
         uint256 lockedSci = users[owner].lockedSci;
@@ -264,7 +279,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
      * @dev locks a given amount of SCI tokens
      * @param amount the amount of tokens that will be locked
      */
-    function lock(uint256 amount) external nonReentrant notTerminated {
+    function lock(uint256 amount) external nonReentrant {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
         IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -380,38 +395,6 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
         emit ProposeLockEndTimeUpdated(user, proposeLockEnd);
         return true;
-    }
-
-    /**
-     * @dev burns a given amount of SCI tokens for termination
-     * @notice DD role members need to unstake their tokens and burn them here
-     * @param amount the amount of tokens that will be locked
-     */
-    function burnForTermination(
-        uint256 amount
-    ) external nonReentrant notTerminated {
-        sciBurn.burnFrom(msg.sender, amount);
-
-        totBurnedForTermination += amount;
-
-        emit BurnedForTermination(msg.sender, amount);
-    }
-
-    /**
-     * @dev terminates the staking and governance smart contracts
-     */
-    function terminate() external nonReentrant notTerminated {
-        if (
-            totBurnedForTermination <
-            (TOTAL_SUPPLY_SCI / 10000) * terminationThreshold
-        ) revert CannotBeTerminated();
-
-        IGov(govOpsContract).setTerminated();
-        IGov(govResContract).setTerminated();
-
-        terminated = true;
-
-        emit Terminated(msg.sender, block.number);
     }
 
     /**

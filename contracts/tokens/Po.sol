@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.19;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
@@ -23,7 +23,6 @@ contract Po is ERC1155Burnable, AccessControl {
     bool internal frozenGovOps = false; /// @notice Indicates if the GovOps contract address has been frozen.
     string private _uri; /// @notice Base URI for token metadata.
     uint256 private constant PARTICIPATION_TOKEN_ID = 0; /// @notice ID for Participation (PO) token.
-    uint256 private constant MINT_AMOUNT = 1; /// @notice Standard mint amount.
     uint256 private _totalSupply;
 
     /**
@@ -74,7 +73,7 @@ contract Po is ERC1155Burnable, AccessControl {
     }
 
     /**
-     * @dev Freezes the base URI, preventing any further changes.
+     * @dev Freezes the governance operations address, preventing any further changes.
      */
     function freezeGovOps() external onlyRole(DEFAULT_ADMIN_ROLE) {
         frozenGovOps = true;
@@ -83,15 +82,24 @@ contract Po is ERC1155Burnable, AccessControl {
     /**
      * @dev Mints a specified amount of participation tokens to a user.
      * @param user Address of the user to mint tokens to.
+     * @param amount the amount of tokens to be minted
      */
-    function mint(address user) external onlyGov {
-        _mint(user, PARTICIPATION_TOKEN_ID, MINT_AMOUNT, "");
-        _totalSupply += MINT_AMOUNT;
+    function mint(address user, uint256 amount) external onlyGov {
+        _mint(user, PARTICIPATION_TOKEN_ID, amount, "");
+        _totalSupply += amount;
+    }
+
+    /**
+     * @dev Mints a specified amount of participation tokens to a user by the admin.
+     * @param amount Number of tokens to mint.
+     */
+    function mintByAdmin(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _mint(msg.sender, PARTICIPATION_TOKEN_ID, amount, "");
+        _totalSupply += amount;
     }
 
     /**
      * @dev Mints a specified amount of participation tokens to a user.
-     * @param account Address of the user to mint tokens to.
      */
     function burn(address account, uint256 id, uint256 value) public override {
         require(
@@ -130,29 +138,29 @@ contract Po is ERC1155Burnable, AccessControl {
     }
 
     /**
-     * @dev Prevents token transfer functionality by always reverting the transaction.
+     * @dev Allows token transfers only if the sender has the DEFAULT_ADMIN_ROLE.
      */
     function safeTransferFrom(
-        address,
-        address,
-        uint256,
-        uint256,
-        bytes memory
-    ) public pure override {
-        revert("ERC1155Soulbound: token transfer disabled");
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
+        super.safeTransferFrom(from, to, id, amount, data);
     }
 
     /**
-     * @dev Prevents batch token transfer functionality by always reverting the transaction.
+     * @dev Allows batch token transfers only if the sender has the DEFAULT_ADMIN_ROLE.
      */
     function safeBatchTransferFrom(
-        address,
-        address,
-        uint256[] memory,
-        uint256[] memory,
-        bytes memory
-    ) public pure override {
-        revert("ERC1155Soulbound: token transfer disabled");
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) public override onlyRole(DEFAULT_ADMIN_ROLE) {
+        super.safeBatchTransferFrom(from, to, ids, amounts, data);
     }
 
     /**

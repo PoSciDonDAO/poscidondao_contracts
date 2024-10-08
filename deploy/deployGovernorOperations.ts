@@ -20,21 +20,17 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const govResAddress = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
-	const stakingAddress = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
-	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const sciToken = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-	const poToken = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
-	const signerAddress = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
+	const staking = "0xD800cBb54DBE5e126d21f859c4E2a6c8DE9986fB";
+	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const po = "0x4F7Caf670DA9C53A6a1F533b4915C51CB47FbE76";
+	const signerAddress = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
 	const constructorArguments = [
-		govResAddress,
-		stakingAddress,
-		treasuryWallet,
-		usdc,
-		sciToken,
-		poToken,
+		staking,
+		admin,
+		sci,
+		po,
 		signerAddress,
 	];
 

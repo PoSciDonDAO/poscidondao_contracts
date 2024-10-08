@@ -4,11 +4,11 @@ const { ethers } = require("ethers");
 async function main() {
 	// Load environment variables
 	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
-
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
 	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
-	const newGovResAddress = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
+	const newGovResAddress = "0x0772546B576152f806935A9c57d38C633c05B0d4";
 
 	if (!newGovResAddress) {
 		console.error(

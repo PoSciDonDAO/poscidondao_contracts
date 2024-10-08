@@ -4,14 +4,13 @@ const { ethers } = require("ethers");
 async function main() {
 	// Load environment variables
 	const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? "";
-
+	const ALCHEMY_URL = process.env.ALCHEMY_URL ?? "";
+	const providerUrl = `${ALCHEMY_URL}${ALCHEMY_KEY}`;
 	const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
-	const providerUrl = `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`;
-	const contractAddressStaking = "0x0D9666506da4ace5ef4aa10863992853158BB6e2";
-	const contractAddressSci = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-	const contractAddressGovRes = "0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1";
-	const contractAddressPo = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
-	const newGovOpsAddress = "0x71308C317B645b2e77812482806b786E8766399a";
+	const contractAddressStaking = "0xD800cBb54DBE5e126d21f859c4E2a6c8DE9986fB";
+	const contractAddressGovRes = "0x3212504672D01ec8339B99fF7A12A332Af6bf08a";
+	const contractAddressPo = "0xa69023aC575084D5aaa621f56AE3EC528F4D2794";
+	const newGovOpsAddress = "0xe69836F4C1F690716C414F37CbC69D509418d714";
 
 	// Connect to the Ethereum network
 	const provider = new ethers.providers.JsonRpcProvider(providerUrl);
@@ -26,11 +25,7 @@ async function main() {
 		abi,
 		wallet
 	);
-	const contractSci = new ethers.Contract(
-		contractAddressSci,
-		abi,
-		wallet
-	);
+
 	const contractGovRes = new ethers.Contract(
 		contractAddressGovRes,
 		abi,

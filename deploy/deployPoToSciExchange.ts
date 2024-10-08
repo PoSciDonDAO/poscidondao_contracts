@@ -20,11 +20,11 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-	const sciToken = "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3";
-	const poToken = "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a";
+	const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const po = "0x4F7Caf670DA9C53A6a1F533b4915C51CB47FbE76";
 
-	const constructorArguments = [treasuryWallet, sciToken, poToken];
+	const constructorArguments = [treasuryWallet, sci, po];
 
 	const Contract = await ethers.getContractFactory("PoToSciExchange");
 	// Estimate contract deployment fee

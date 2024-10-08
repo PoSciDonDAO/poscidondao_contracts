@@ -19,12 +19,11 @@ async function main() {
   if (!hardhatArguments.network) {
     throw new Error("please pass --network");
   }
+  
+  const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+  const initialMintAmount = 18910000;
 
-  const treasuryWallet = "0x690bf2db31d39ee0a88fcac89117b66a588e865a";
-
-  const constructorArguments = [
-    treasuryWallet
-  ];
+  const constructorArguments = [treasuryWallet, initialMintAmount];
 
   const Contract = await ethers.getContractFactory("Sci");
   // Estimate contract deployment fee

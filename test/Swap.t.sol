@@ -4,11 +4,10 @@ pragma solidity ^0.8.13;
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/exchange/Swap.sol";
-import "contracts/test/MockUsdc.sol";
-import "contracts/test/MockWeth.sol";
+import "contracts/test/Usdc.sol";
 
 contract SwapTest is Test {
-    MockUsdc public usdc;
+    Usdc public usdc;
 
     Sci public sci;
     Swap public swap;
@@ -25,15 +24,19 @@ contract SwapTest is Test {
     function setUp() public {
         vm.startPrank(treasuryWallet);
 
-        usdc = new MockUsdc(10000000e6);
+        usdc = new Usdc(10000000e6);
         sci = new Sci(treasuryWallet, 4538400);
-        swap = new Swap(treasuryWallet, address(sci), address(usdc));
+        address[] memory membersList = new address[](3);
+        membersList[0] = addr1;
+        membersList[1] = addr2;
+        membersList[2] = addr3;
+        swap = new Swap(treasuryWallet, address(sci), address(usdc), membersList);
         deal(address(sci), treasuryWallet, 100000000e18);
         sci.approve(address(swap), 10000000e18);
-        address[] memory whitelist = new address[](2);
-        whitelist[0] = addr1;
-        whitelist[1] = addr2;
-        swap.addMembersToWhitelist(whitelist);
+        // address[] memory whitelist = new address[](2);
+        // whitelist[0] = addr1;
+        // whitelist[1] = addr2;
+        // swap.addMembersToWhitelist(whitelist);
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -42,10 +45,10 @@ contract SwapTest is Test {
         deal(address(usdc), addr1, 1000000e6);
         vm.stopPrank();
 
-        vm.startPrank(addr3);
+        vm.startPrank(addr4);
         usdc.approve(address(swap), 10000000e6);
-        deal(addr3, 10000000 ether);
-        deal(address(usdc), addr3, 1000000e6);
+        deal(addr4, 10000000 ether);
+        deal(address(usdc), addr4, 1000000e6);
         vm.stopPrank();
     }
 
@@ -91,7 +94,7 @@ contract SwapTest is Test {
     function testRevertSwapUsdcNotWhitelisted() public {
         uint256 amount = 10000e6;
 
-        vm.startPrank(addr3);
+        vm.startPrank(addr4);
         usdc.approve(address(swap), amount);
         vm.expectRevert(abi.encodeWithSignature("NotWhitelisted()"));
         swap.swapUsdc(amount);
@@ -101,7 +104,7 @@ contract SwapTest is Test {
     function testRevertSwapEthNotWhitelisted() public {
         uint256 amount = 1e18;
 
-        vm.startPrank(addr3);
+        vm.startPrank(addr4);
         vm.expectRevert(abi.encodeWithSignature("NotWhitelisted()"));
         swap.swapEth{value: amount}();
         vm.stopPrank();
