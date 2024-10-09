@@ -11,7 +11,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
 
     address public usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
     address public sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311;
-    address public governorExecutor = 0xcE58AF6e4400A82e45B4EDf22C8769E31DFCf5Ec;
+    address public governorExecutor = 0x4c80b5F7a85B5A6FeA00C7354cBE763e6B426e95;
     address public targetWallet;
     uint256 public amountUsdc;
     uint256 public amountSci;

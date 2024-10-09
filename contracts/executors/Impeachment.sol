@@ -11,28 +11,22 @@ interface IGovernorRoleRevoke {
 
 contract Impeachment is ReentrancyGuard, AccessControl {
 
-    // error IsNotExecutor(address contractAddress);
-
-    IGovernorRoleRevoke govRes;
-    address[] targetWallets;
+    address[] public targetWallets;
+    address public governorResearch = 0xb4385384EF9DeB20b1EB91e78C088558eA4Fecea;
+    address public governorExecutor = 0x4c80b5F7a85B5A6FeA00C7354cBE763e6B426e95;
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     constructor(
-        address[] memory targetWallets_,
-        address govExecAddress_,
-        address govResAddress_
+        address[] memory targetWallets_
     ) {
-        govRes = IGovernorRoleRevoke(govResAddress_);
         targetWallets = targetWallets_;
-        _grantRole(EXECUTOR_ROLE, govExecAddress_);
+        _grantRole(EXECUTOR_ROLE, governorExecutor);
     }
 
     /**
      * @dev Execute the proposal to elect a scientist
      */
     function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        // bool isExecutor = govRes.checkExecutorRole(address(this));
-        // if(!isExecutor) revert IsNotExecutor(address(this));
-        govRes.revokeDueDiligenceRole(targetWallets);
+        IGovernorRoleRevoke(governorResearch).revokeDueDiligenceRole(targetWallets);
     }
 }

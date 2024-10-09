@@ -2,11 +2,9 @@
 src = "src"
 out = "artifacts"
 libs = ["node_modules", "lib"]
+dotenv = ".env"
 remappings = [
-    "@ensdomains/=node_modules/@ensdomains/",
-    "@imtbl/=node_modules/@imtbl/",
     "@openzeppelin/=node_modules/@openzeppelin",
-    "erc721a/=node_modules/erc721a/",
     "hardhat/=node_modules/hardhat/",
 ]
 

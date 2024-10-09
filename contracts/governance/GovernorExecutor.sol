@@ -113,18 +113,16 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         if (scheduled == 0) {
             revert NotScheduled(action);
         }
-        if (block.timestamp < scheduled) {
+        if (scheduled > block.timestamp) {
             revert TooEarly(block.timestamp, scheduled);
         }
 
-        _grantRole(EXECUTOR_ROLE, action);
-
-        scheduledTime[action] = 0;
         (bool success, ) = action.call(abi.encodeWithSignature("execute()"));
         if (!success) {
             _revokeRole(EXECUTOR_ROLE, action);
             revert ExecutionFailed();
         }
+        scheduledTime[action] = 0;
 
         _revokeRole(EXECUTOR_ROLE, action);
     }

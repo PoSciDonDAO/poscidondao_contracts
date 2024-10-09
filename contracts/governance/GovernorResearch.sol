@@ -85,7 +85,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         Scheduled,
         Executed,
         Completed, //Completed status only for proposals that cannot be executed
-        Cancelled
+        Canceled
     }
 
     ///*** MODIFIERS ***///
@@ -101,18 +101,20 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Cancelled(uint256 indexed id, bool indexed rejected);
+    event Canceled(uint256 indexed id, bool indexed rejected);
     event Completed(uint256 indexed id);
     event Executed(
         uint256 indexed id,
         address indexed govExec,
         address indexed action
     );
+    
     event Proposed(
         uint256 indexed id,
         address indexed user,
         address indexed action
     );
+
     event Voted(
         uint256 indexed id,
         address indexed user,
@@ -427,9 +429,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         if (proposals[id].executable) govExec.cancel(proposals[id].action);
 
-        proposals[id].status = ProposalStatus.Cancelled;
+        proposals[id].status = ProposalStatus.Canceled;
 
-        emit Cancelled(id, false);
+        emit Canceled(id, false);
     }
 
     /**
@@ -444,9 +446,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {
-            proposals[id].status = ProposalStatus.Cancelled;
+            proposals[id].status = ProposalStatus.Canceled;
 
-            emit Cancelled(id, true);
+            emit Canceled(id, true);
         }
     }
 

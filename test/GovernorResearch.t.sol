@@ -79,19 +79,15 @@ contract GovernorResearchTest is Test {
         govRes.setGovGuard(address(guard));
         govParams = new GovernorParameters(
             address(govOps),
-            address(executor),
             "quorum",
             3
         );
 
         transaction = new Transaction(
             researchersWallet,
-            10000e6,
-            5000e18,
-            address(executor),
             researchFundingWallet,
-            address(usdc),
-            address(sci)
+            10000e6,
+            5000e18
         );
 
         staking.setGovRes(address(govRes));
@@ -149,9 +145,7 @@ contract GovernorResearchTest is Test {
         electedMembers[2] = addr1;
         electedMembers[3] = addr2;
         electionOps = new Election(
-            electedMembers,
-            address(executor),
-            address(govRes)
+            electedMembers
         );
         vm.stopPrank();
         vm.startPrank(admin);
@@ -462,7 +456,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
         assertTrue(
-            proposal.status == GovernorResearch.ProposalStatus.Cancelled
+            proposal.status == GovernorResearch.ProposalStatus.Canceled
         );
         vm.stopPrank();
     }
@@ -480,7 +474,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
         assertTrue(
-            proposal.status == GovernorResearch.ProposalStatus.Cancelled
+            proposal.status == GovernorResearch.ProposalStatus.Canceled
         );
         vm.stopPrank();
     }
@@ -500,7 +494,7 @@ contract GovernorResearchTest is Test {
             id
         );
         assertTrue(
-            proposal.status == GovernorOperations.ProposalStatus.Cancelled
+            proposal.status == GovernorOperations.ProposalStatus.Canceled
         );
         vm.stopPrank();
     }

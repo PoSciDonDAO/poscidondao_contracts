@@ -6,7 +6,6 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorParams {
     function setGovParams(bytes32 param, uint256 data) external;
-
     function checkExecutorRole(address member) external view returns (bool);
 }
 
@@ -14,11 +13,9 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
     error IsNotExecutor(address contractAddress);
     error InvalidParameter(bytes32 param);
 
-    IGovernorParams gov;
-
-    bytes32 param;
-    uint256 data;
-
+    address public gov;
+    address public governorExecutor = 0x4c80b5F7a85B5A6FeA00C7354cBE763e6B426e95;    bytes32 public param;
+    uint256 public data;
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     /**
@@ -29,16 +26,13 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
      */
     constructor(
         address govAddress_,
-        address govExecAddress_,
         string memory param_,
         uint256 data_
     ) {
-        gov = IGovernorParams(govAddress_);
-        param = _toBytes32(param_); // Use the correct bytes32 format
+        gov = govAddress_;
+        param = _toBytes32(param_);
         data = data_;
-        _grantRole(EXECUTOR_ROLE, govExecAddress_);
-        
-        // Check if the provided param is valid
+        _grantRole(EXECUTOR_ROLE, governorExecutor);
         _checkValidParameter(param);
     }
 
@@ -83,8 +77,6 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
      * @notice The EXECUTOR_ROLE is required to execute this function.
      */
     function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        // bool isExecutor = gov.checkExecutorRole(address(this));
-        // if (!isExecutor) revert IsNotExecutor(address(this));
-        gov.setGovParams(param, data);
+        IGovernorParams(gov).setGovParams(param, data);
     }
 }

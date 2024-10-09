@@ -32,6 +32,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error ProposalCannotBeCanceled();
     error ProposalLifeTimePassed();
     error ProposeLock();
     error ProposalOngoing(
@@ -93,6 +94,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     ///*** ENUMERATORS ***///
 
@@ -104,7 +106,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         Scheduled,
         Executed,
         Completed, //Completed status only for proposals that cannot be executed
-        Cancelled
+        Canceled
     }
 
     ///*** MODIFIER ***///
@@ -120,7 +122,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Cancelled(uint256 indexed id, bool indexed rejected);
+    event Canceled(uint256 indexed id, bool indexed rejected);
     event Completed(uint256 indexed id);
     event EmergencyCancel(uint256 indexed id, string reason);
     event Executed(
@@ -131,7 +133,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     event Proposed(
         uint256 indexed id,
-        address indexed govExec,
+        address indexed user,
         address indexed action
     );
 
@@ -191,8 +193,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         quorum = 567300e18; // 3% of circulating supply of 18.91 million SCI
         maxVotingStreak = 5;
         proposalLifeTime = 30 minutes;
-        voteLockTime = 0 weeks;
-        proposeLockTime = 0 weeks;
+        voteLockTime = 0; //normally 1 week
+        proposeLockTime = 0; //normally 1 week
         voteChangeTime = 10 minutes; //normally 1 hour
         voteChangeCutOff = 10 minutes; //normally 3 days
 
@@ -227,10 +229,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev sets the GovernorExecution address
      */
     function setGovExec(
-        address newGovernorAddress
+        address newGovExecAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govExec = IGovernorExecution(newGovernorAddress);
-        emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
+        govExec = IGovernorExecution(newGovExecAddress);
+        emit SetNewGovExecAddress(msg.sender, newGovExecAddress);
     }
 
     /**
@@ -328,7 +330,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             staking
         );
 
-        emit Proposed(currentIndex, address(govExec), action);
+        emit Proposed(currentIndex, msg.sender, action);
 
         return currentIndex;
     }
@@ -412,9 +414,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (!proposals[id].executable) revert CannotExecute();
 
-        address[] memory governor = new address[](1);
-        governor[0] = address(proposals[id].action);
-
         govExec.execution(proposals[id].action);
 
         proposals[id].status = ProposalStatus.Executed;
@@ -451,9 +450,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (proposals[id].executable) govExec.cancel(proposals[id].action);
 
-        proposals[id].status = ProposalStatus.Cancelled;
+        proposals[id].status = ProposalStatus.Canceled;
 
-        emit Cancelled(id, false);
+        emit Canceled(id, false);
     }
 
     /**
@@ -466,9 +465,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {
-            proposals[id].status = ProposalStatus.Cancelled;
+            proposals[id].status = ProposalStatus.Canceled;
 
-            emit Cancelled(id, true);
+            emit Canceled(id, true);
+        } else {
+            revert ProposalCannotBeCanceled();
         }
     }
 

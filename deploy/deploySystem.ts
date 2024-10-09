@@ -1,6 +1,10 @@
+"use client";
+
 import { ethers, run, hardhatArguments } from "hardhat";
 import { ContractFactory, Signer } from "ethers";
 import dotenv from "dotenv";
+import fs from "fs";
+import { GovernorExecutor } from "../typechain";
 dotenv.config();
 
 interface DeployedContracts {
@@ -34,8 +38,7 @@ async function main() {
 	};
 
 	const rpcUrl = getRpcUrl();
-	const donation: string =
-		"0x5247514Ee8139f849057721d932701A83679F107";
+	const donation: string = "0x5247514Ee8139f849057721d932701A83679F107";
 	const usdc: string = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const admin: string = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const sci: string = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
@@ -61,14 +64,14 @@ async function main() {
 		addresses[contractKey] = contract.address;
 
 		// console.log(
-		// 	`Verifying ${contractName} in ${delayTime / 1000} seconds...`
+		//  `Verifying ${contractName} in ${delayTime / 1000} seconds...`
 		// );
 		// await contract.deployTransaction.wait(5); // Wait for the transaction to be mined
 		// await new Promise((resolve) => setTimeout(resolve, delayTime)); // Wait for verification delay
 
 		// await run("verify:verify", {
-		// 	address: contract.address,
-		// 	constructorArguments: constructorArgs,
+		//  address: contract.address,
+		//  constructorArguments: constructorArgs,
 		// });
 		// console.log(`${contractName} has been verified`);
 	};
@@ -104,14 +107,14 @@ async function main() {
 	await deployAndVerify(
 		"GovernorExecutor",
 		[admin, 600, addresses.governorOperations, addresses.governorResearch],
-		"executor"
+		"governorExecutor"
 	);
 
 	// 9. Deploy GovernorGuard for both GovernorResearch and GovernorOperations
 	await deployAndVerify(
 		"GovernorGuard",
 		[admin, addresses.governorOperations, addresses.governorResearch],
-		"guard"
+		"governorGuard"
 	);
 
 	console.log("All contracts deployed and verified successfully");
@@ -120,22 +123,29 @@ async function main() {
 	const serverUtilsObject = {
 		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532, // base testnet: 84532, base mainnet: 8453
 		providerUrl: `${rpcUrl}`,
-		usdc: usdc, // Constant address for USDC
-		donation: donation,
-		poAddress: addresses.po,
-		sci: sci,
-		poToSciExchangeAddress: addresses.poToSciExchange,
-		staking: addresses.staking,
-		governorOperationsAddress: addresses.governorOperations,
-		governorResearchAddress: addresses.governorResearch,
 		explorerLink:
 			hardhatArguments.network === "baseMainnet"
 				? "https://basescan.org"
 				: "https://sepolia.basescan.org",
 		admin: admin,
 		researchFundingWallet: researchFundingWallet,
-		swapAddress: "0x3Cc223D3A738eA81125689355F8C16A56768dF70", // Assuming this is constant or manually defined
+		usdc: usdc,
+		sci: sci,
+		swapAddress: "0x3Cc223D3A738eA81125689355F8C16A56768dF70",
+		donation: donation,
+		po: addresses.po,
+		poToSciExchange: addresses.poToSciExchange,
+		staking: addresses.staking,
+		governorOperations: addresses.governorOperations,
+		governorResearch: addresses.governorResearch,
+		governorExecutor: addresses.governorExecutor,
+		governorGuard: addresses.governorGuard
 	};
+
+	fs.writeFileSync(
+		"scripts/deployedContracts.json",
+		JSON.stringify(serverUtilsObject, null, 2)
+	);
 
 	return serverUtilsObject;
 }
