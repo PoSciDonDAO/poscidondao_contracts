@@ -2,23 +2,58 @@ const { ethers } = require("ethers");
 const fs = require("fs");
 const path = require("path");
 
-function encodeFunctionData(functionSignature, input) {
-	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
-	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
-}
-
-const deployedContractsPath = path.join(__dirname, "../deployedContracts.json");
-const deployedContracts = JSON.parse(
-	fs.readFileSync(deployedContractsPath, "utf8")
+// Path to the Solidity file
+const deployedAddressesPath = path.join(
+	__dirname,
+	"../../contracts/DeployedAddresses.sol"
 );
 
+// Read and parse the Solidity file
+const parseSolidityAddresses = (filePath) => {
+	const fileContent = fs.readFileSync(filePath, "utf8");
+	const regex = /address constant (\w+) = ([^;]+);/g;
+	const addresses = {};
+	let match;
+	while ((match = regex.exec(fileContent)) !== null) {
+		const [, key, value] = match;
+		// Remove unnecessary characters and trim
+		const address = value.replace(/"/g, "").trim();
+		addresses[key] = address;
+	}
+	return addresses;
+};
+
+// Parse addresses from DeployedAddresses.sol
+const deployedContracts = parseSolidityAddresses(deployedAddressesPath);
+
+// Extract required contract addresses
 const governorExecutorAddress = deployedContracts.governorExecutor;
 const governorGuardAddress = deployedContracts.governorGuard;
 const governorOperationsAddress = deployedContracts.governorOperations;
 const stakingAddress = deployedContracts.staking;
 const governorResearchAddress = deployedContracts.governorResearch;
-const poTokenAddress = deployedContracts.poToken;
+const poAddress = deployedContracts.po;
 
+if (
+	!governorExecutorAddress ||
+	!governorGuardAddress ||
+	!governorOperationsAddress ||
+	!stakingAddress ||
+	!governorResearchAddress ||
+	!poAddress
+) {
+	throw new Error(
+		"One or more contract addresses are missing in DeployedAddresses.sol. Please check the file."
+	);
+}
+
+// Helper function to encode function data
+function encodeFunctionData(functionSignature, input) {
+	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
+	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
+}
+
+// Define transactions based on the extracted addresses
 const transactions = [
 	{
 		to: stakingAddress,
@@ -65,7 +100,7 @@ const transactions = [
 		contractInputsValues: null,
 	},
 	{
-		to: poTokenAddress,
+		to: poAddress,
 		value: "0",
 		data: encodeFunctionData(
 			"setGovOps(address)",
@@ -86,31 +121,45 @@ const transactions = [
 	},
 ];
 
+// Create the Safe batch transaction object
 const safeBatchTransaction = {
 	version: "1.0",
 	chainId: "84532",
 	createdAt: Date.now(),
 	meta: {
-		name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Token Contracts",
+		name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Contracts",
 		description:
-			"Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO Token and Staking contracts.",
+			"Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and Staking contracts.",
 		txBuilderVersion: "1.17.0",
 		createdFromSafeAddress: "0x96f67a852f8D3Bc05464C4F91F97aACE060e247A",
 		createdFromOwnerAddress: "",
-		checksum: ethers.utils.keccak256(
-			ethers.utils.toUtf8Bytes("SafeBatchTransaction")
-		),
 	},
 	transactions: transactions,
 };
 
-const outputPath = path.join(__dirname, "safeBatchTransaction.json");
-fs.writeFileSync(
-	outputPath,
-	JSON.stringify(safeBatchTransaction, null, 2),
-	"utf8"
+// Calculate the checksum for the transactions
+const checksum = ethers.utils.keccak256(
+	ethers.utils.toUtf8Bytes(JSON.stringify(safeBatchTransaction.transactions))
 );
+safeBatchTransaction.meta.checksum = checksum;
 
-console.log(
-	`Batch transaction JSON successfully generated with the updated metadata at: ${outputPath}`
-);
+// Define the output file path for the batch transaction JSON
+const outputPath = path.join(__dirname, "safeBatchTransaction.json");
+
+try {
+	if (fs.existsSync(outputPath)) {
+		console.log(
+			`Existing file found at ${outputPath}, it will be replaced.`
+		);
+	}
+	fs.writeFileSync(
+		outputPath,
+		JSON.stringify(safeBatchTransaction, null, 2),
+		"utf8"
+	);
+	console.log(
+		`Batch transaction JSON successfully generated and saved at: ${outputPath}`
+	);
+} catch (err) {
+	console.error("Error writing the file:", err);
+}

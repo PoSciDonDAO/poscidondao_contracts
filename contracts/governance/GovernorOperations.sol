@@ -414,7 +414,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (!proposals[id].executable) revert CannotExecute();
 
+        _grantRole(EXECUTOR_ROLE, proposals[id].action);
+
         govExec.execution(proposals[id].action);
+
+        _revokeRole(EXECUTOR_ROLE, proposals[id].action);
 
         proposals[id].status = ProposalStatus.Executed;
 

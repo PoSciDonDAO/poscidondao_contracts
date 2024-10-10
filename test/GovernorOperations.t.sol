@@ -12,7 +12,7 @@ import "contracts/governance/GovernorResearch.sol";
 import "contracts/executors/Transaction.sol";
 import "contracts/executors/Election.sol";
 import "contracts/executors/Impeachment.sol";
-import "contracts/executors/GovernorParameters.sol";
+import "contracts/executors/ParameterChange.sol";
 import "contracts/governance/GovernorExecutor.sol";
 import "contracts/governance/GovernorGuard.sol";
 import "contracts/executors/AddDelegate.sol";
@@ -32,8 +32,8 @@ contract GovernorOperationsTest is Test {
     Transaction transactions;
     Election election;
     Impeachment impeachment;
-    GovernorParameters govParams;
-    GovernorParameters govParamsRes;
+    ParameterChange govParams;
+    ParameterChange govParamsRes;
     AddDelegate addDelegate;
     // address signer = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
     address addr1 = vm.addr(1);
@@ -69,7 +69,7 @@ contract GovernorOperationsTest is Test {
         executor = GovernorExecutor(DeployedAddresses.governorExecutor);
         guard = GovernorGuard(DeployedAddresses.governorGuard);
 
-        transactions = new Transaction(admin, opWallet, 10000e6, 5000e18);
+        transactions = new Transaction(admin, opWallet, 10000e6, 5000e18, address(executor));
 
         sci.approve(address(govOps), 100000000000000e18);
         usdc.approve(address(govOps), 100000000000000e6);
@@ -186,8 +186,9 @@ contract GovernorOperationsTest is Test {
     function test_ChangeGovernanceParametersGovOps() public {
         vm.startPrank(admin);
         //no need to add as executor as done automatically
-        govParams = new GovernorParameters(
+        govParams = new ParameterChange(
             address(govOps),
+            address(executor),
             "quorum",
             (IERC20(sci).totalSupply() / 10000) * 600
         );
@@ -210,7 +211,7 @@ contract GovernorOperationsTest is Test {
 
     function test_ChangeGovernanceParametersGovRes() public {
         vm.startPrank(admin);
-        govParamsRes = new GovernorParameters(address(govRes), "quorum", 3);
+        govParamsRes = new ParameterChange(address(govRes), address(executor), "quorum", 3);
         // address[] memory governors = new address[](1);
         // governors[0] = address(govParamsRes);
         // govRes.addExecutors(governors);
@@ -244,7 +245,7 @@ contract GovernorOperationsTest is Test {
         electedMembers[1] = researchFundingWallet;
         electedMembers[2] = addr1;
         electedMembers[3] = addr2;
-        election = new Election(electedMembers);
+        election = new Election(electedMembers, address(govRes), address(executor));
         vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
@@ -278,7 +279,7 @@ contract GovernorOperationsTest is Test {
         electedMembers[1] = researchFundingWallet;
         electedMembers[2] = addr1;
         electedMembers[3] = addr2;
-        election = new Election(electedMembers);
+        election = new Election(electedMembers, address(govRes), address(executor));
         vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
@@ -301,7 +302,7 @@ contract GovernorOperationsTest is Test {
         address[] memory impeachedMembers = new address[](2);
         impeachedMembers[0] = addr1;
         impeachedMembers[1] = addr2;
-        impeachment = new Impeachment(impeachedMembers);
+        impeachment = new Impeachment(impeachedMembers, address(govRes), address(executor));
         address[] memory governors2 = new address[](1);
         governors2[0] = address(impeachment);
         vm.stopPrank();

@@ -6,17 +6,18 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorParams {
     function setGovParams(bytes32 param, uint256 data) external;
-    function checkExecutorRole(address member) external view returns (bool);
 }
 
-contract GovernorParameters is ReentrancyGuard, AccessControl {
+contract ParameterChange is ReentrancyGuard, AccessControl {
     error IsNotExecutor(address contractAddress);
     error InvalidParameter(bytes32 param);
 
     address public gov;
-    address public governorExecutor = 0x4c80b5F7a85B5A6FeA00C7354cBE763e6B426e95;    bytes32 public param;
+    address public governorExecutor;
     uint256 public data;
-    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    bytes32 public param;
+
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     /**
      * @dev Constructor that initializes the GovernorParameters contract.
@@ -26,13 +27,15 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
      */
     constructor(
         address govAddress_,
+        address governorExecutor_,
         string memory param_,
         uint256 data_
     ) {
         gov = govAddress_;
+        governorExecutor = governorExecutor_;
         param = _toBytes32(param_);
         data = data_;
-        _grantRole(EXECUTOR_ROLE, governorExecutor);
+        _grantRole(GOVERNOR_ROLE, governorExecutor_);
         _checkValidParameter(param);
     }
 
@@ -61,7 +64,9 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
      * @param source The string to convert.
      * @return result The bytes32 representation of the string.
      */
-    function _toBytes32(string memory source) internal pure returns (bytes32 result) {
+    function _toBytes32(
+        string memory source
+    ) internal pure returns (bytes32 result) {
         bytes memory tempBytes = bytes(source);
         if (tempBytes.length == 0) {
             return 0x0;
@@ -74,9 +79,9 @@ contract GovernorParameters is ReentrancyGuard, AccessControl {
 
     /**
      * @dev Execute the proposal to set a governance parameter.
-     * @notice The EXECUTOR_ROLE is required to execute this function.
+     * @notice The GOVERNOR_ROLE is required to execute this function.
      */
-    function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
+    function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorParams(gov).setGovParams(param, data);
     }
 }

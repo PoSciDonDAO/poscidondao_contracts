@@ -4,17 +4,58 @@ import { ethers, run, hardhatArguments } from "hardhat";
 import { ContractFactory, Signer } from "ethers";
 import dotenv from "dotenv";
 import fs from "fs";
-import { GovernorExecutor } from "../typechain";
+import path from "path";
 dotenv.config();
 
 interface DeployedContracts {
-	[key: string]: string;
+	[key: string]: string | number;
 }
 
-async function main() {
-	// Load deployer's private key from the .env file
-	const PRIVATE_KEY: string = process.env.DEPLOYER_PRIVATE_KEY || "";
+function generateSolidityAddressFile(
+	deployedContracts: DeployedContracts
+): void {
+	const contractsDir: string = path.join(__dirname, "..", "contracts");
+	const outputPath: string = path.join(contractsDir, "DeployedAddresses.sol");
 
+	if (!fs.existsSync(contractsDir)) {
+		fs.mkdirSync(contractsDir, { recursive: true });
+	}
+
+	const solidityFileContent: string = `
+  // SPDX-License-Identifier: UNLICENSED
+  pragma solidity ^0.8.13;
+
+  library DeployedAddresses {
+      ${Object.entries(deployedContracts)
+			.map(([key, value]) => {
+				if (key === "providerUrl" || key === "explorerLink") {
+					return `string constant ${key} = ${JSON.stringify(value)};`;
+				} else if (ethers.utils.isAddress(value.toString())) {
+					const checksummedAddress: string = ethers.utils.getAddress(
+						value.toString()
+					);
+					return `address constant ${key} = ${checksummedAddress};`;
+				} else if (typeof value === "number") {
+					return `uint constant ${key} = ${value};`;
+				} else {
+					return `address constant ${key} = ${value};`;
+				}
+			})
+			.join("\n")}
+  }
+  `;
+
+	fs.writeFileSync(outputPath, solidityFileContent);
+	console.log(`DeployedAddresses.sol has been generated at ${outputPath}`);
+}
+
+function encodeFunctionData(functionSignature: string, input: any): string {
+	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
+	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
+}
+
+async function main(): Promise<DeployedContracts> {
+	const PRIVATE_KEY: string = process.env.DEPLOYER_PRIVATE_KEY || "";
 	if (!PRIVATE_KEY)
 		throw new Error(
 			"⛔️ Private key not detected! Add it to the .env file!"
@@ -27,90 +68,58 @@ async function main() {
 	);
 	console.log("Account Balance:", (await deployer.getBalance()).toString());
 
-	// Check for the network argument
-	if (!hardhatArguments.network) {
-		throw new Error("Please pass --network");
-	}
+	if (!hardhatArguments.network) throw new Error("Please pass --network");
 
-	// Step 1: Define common addresses
-	const getRpcUrl = () => {
+	const getRpcUrl = (): string => {
 		return `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`;
 	};
 
-	const rpcUrl = getRpcUrl();
-	const donation: string = "0x5247514Ee8139f849057721d932701A83679F107";
-	const usdc: string = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const admin: string = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const sci: string = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
-	const researchFundingWallet: string =
-		"0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+	const rpcUrl: string = getRpcUrl();
+	const donation = "0x5247514Ee8139f849057721d932701A83679F107";
+	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
-	// Store deployed contract addresses
 	const addresses: DeployedContracts = {};
 
-	// Helper function to deploy and verify contracts
 	const deployAndVerify = async (
 		contractName: string,
 		constructorArgs: any[],
 		contractKey: string
-		// delayTime: number = 30000
 	): Promise<void> => {
 		const Contract: ContractFactory = await ethers.getContractFactory(
 			contractName
 		);
 		const contract = await Contract.deploy(...constructorArgs);
+		await contract.deployed();
 		console.log(`${contractName} deployed at:`, contract.address);
 		addresses[contractKey] = contract.address;
-
-		// console.log(
-		//  `Verifying ${contractName} in ${delayTime / 1000} seconds...`
-		// );
-		// await contract.deployTransaction.wait(5); // Wait for the transaction to be mined
-		// await new Promise((resolve) => setTimeout(resolve, delayTime)); // Wait for verification delay
-
-		// await run("verify:verify", {
-		//  address: contract.address,
-		//  constructorArguments: constructorArgs,
-		// });
-		// console.log(`${contractName} has been verified`);
 	};
 
-	// 3. Deploy PO (Participation) token
 	await deployAndVerify("Po", ["https://baseURI.example/", admin], "po");
-
-	// 4. Deploy PoToSciExchange
 	await deployAndVerify(
 		"PoToSciExchange",
 		[admin, sci, addresses.po],
 		"poToSciExchange"
 	);
-
-	// 5. Deploy Staking
 	await deployAndVerify("Staking", [admin, sci], "staking");
-
-	// 6. Deploy GovernorOperations
 	await deployAndVerify(
 		"GovernorOperations",
 		[addresses.staking, admin, addresses.po, signer],
 		"governorOperations"
 	);
-
-	// 7. Deploy GovernorResearch
 	await deployAndVerify(
 		"GovernorResearch",
 		[addresses.staking, admin, researchFundingWallet],
 		"governorResearch"
 	);
-
-	// 8. Deploy GovernorExecutor for both GovernorResearch and GovernorOperations
 	await deployAndVerify(
 		"GovernorExecutor",
 		[admin, 600, addresses.governorOperations, addresses.governorResearch],
 		"governorExecutor"
 	);
-
-	// 9. Deploy GovernorGuard for both GovernorResearch and GovernorOperations
 	await deployAndVerify(
 		"GovernorGuard",
 		[admin, addresses.governorOperations, addresses.governorResearch],
@@ -118,11 +127,10 @@ async function main() {
 	);
 
 	console.log("All contracts deployed and verified successfully");
-	console.log("Deployed Contract Addresses:", addresses);
 
-	const serverUtilsObject = {
-		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532, // base testnet: 84532, base mainnet: 8453
-		providerUrl: `${rpcUrl}`,
+	generateSolidityAddressFile({
+		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
+		providerUrl: rpcUrl,
 		explorerLink:
 			hardhatArguments.network === "baseMainnet"
 				? "https://basescan.org"
@@ -139,15 +147,99 @@ async function main() {
 		governorOperations: addresses.governorOperations,
 		governorResearch: addresses.governorResearch,
 		governorExecutor: addresses.governorExecutor,
-		governorGuard: addresses.governorGuard
+		governorGuard: addresses.governorGuard,
+	});
+
+	// Batch Transaction JSON Creation
+	const transactions = [
+		{
+			to: addresses.staking,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovExec(address)",
+				addresses.governorExecutor
+			),
+		},
+		{
+			to: addresses.governorResearch,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovExec(address)",
+				addresses.governorExecutor
+			),
+		},
+		{
+			to: addresses.governorOperations,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovExec(address)",
+				addresses.governorExecutor
+			),
+		},
+		{
+			to: addresses.governorOperations,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovGuard(address)",
+				addresses.governorGuard
+			),
+		},
+		{
+			to: addresses.governorResearch,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovGuard(address)",
+				addresses.governorGuard
+			),
+		},
+		{
+			to: addresses.po,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovOps(address)",
+				addresses.governorOperations
+			),
+		},
+		{
+			to: addresses.staking,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovOps(address)",
+				addresses.governorOperations
+			),
+		},
+	];
+
+	const safeBatchTransaction = {
+		version: "1.0",
+		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
+		createdAt: Date.now(),
+		meta: {
+			name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Contracts",
+			description:
+				"Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and Staking contracts.",
+			txBuilderVersion: "1.17.0",
+			createdFromSafeAddress: admin,
+			createdFromOwnerAddress: "",
+		},
+		transactions: transactions,
+		checksum: ethers.utils.keccak256(
+			ethers.utils.toUtf8Bytes(JSON.stringify(transactions))
+		),
 	};
 
+	// Overwrite the `safeBatchTransaction.json` file every time the script is run
+	const outputPath = path.join(__dirname, "safeBatchTransaction.json");
 	fs.writeFileSync(
-		"scripts/deployedContracts.json",
-		JSON.stringify(serverUtilsObject, null, 2)
+		outputPath,
+		JSON.stringify(safeBatchTransaction, null, 2),
+		"utf8"
+	);
+	console.log(
+		`Batch transaction JSON successfully generated and saved at: ${outputPath}`
 	);
 
-	return serverUtilsObject;
+	return addresses;
 }
 
 main()
