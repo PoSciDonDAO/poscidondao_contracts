@@ -30,6 +30,6 @@ contract AddDelegate is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorAddDelegate(staking).addDelegate(targetWallet);
-        _grantRole(GOVERNOR_ROLE, governorExecutor);
+        _revokeRole(GOVERNOR_ROLE, governorExecutor);
     }
 }
