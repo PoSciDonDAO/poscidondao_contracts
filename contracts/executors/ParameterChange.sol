@@ -20,7 +20,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     /**
-     * @dev Constructor that initializes the GovernorParameters contract.
+     * @dev Constructor that initializes the ParameterChange contract.
      * @param govAddress_ The address of the Governor contract.
      * @param param_ The governance parameter (as a string) to be set.
      * @param data_ The value of the governance parameter.

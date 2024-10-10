@@ -9,25 +9,27 @@ interface IGovernorAddDelegate {
 }
 
 contract AddDelegate is ReentrancyGuard, AccessControl {
-
-    IGovernorAddDelegate staking;
-    address targetWallet;
-    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    IGovernorAddDelegate public staking;
+    address public targetWallet;
+    address public governorExecutor;
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     constructor(
         address targetWallet_,
-        address govExecAddress_,
+        address governorExecutor_,
         address staking_
     ) {
         staking = IGovernorAddDelegate(staking_);
         targetWallet = targetWallet_;
-        _grantRole(EXECUTOR_ROLE, govExecAddress_);
+        governorExecutor = governorExecutor_;
+        _grantRole(GOVERNOR_ROLE, governorExecutor_);
     }
 
     /**
      * @dev Execute the proposal to add a delegate
      */
-    function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
+    function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         staking.addDelegate(targetWallet);
+        _grantRole(GOVERNOR_ROLE, governorExecutor);
     }
 }

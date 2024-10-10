@@ -9,24 +9,29 @@ interface IGovernorRoleGrant {
 }
 
 contract Election is ReentrancyGuard, AccessControl {
-
     address[] public targetWallets;
-    address public governorResearch = 0xb4385384EF9DeB20b1EB91e78C088558eA4Fecea;
-    address public governorExecutor = 0x4c80b5F7a85B5A6FeA00C7354cBE763e6B426e95;
-    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    address public governorResearch;
+    address public governorExecutor;
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     constructor(
-        address[] memory targetWallets_
+        address[] memory targetWallets_,
+        address governorResearch_,
+        address governorExecutor_
     ) {
-
         targetWallets = targetWallets_;
-        _grantRole(EXECUTOR_ROLE, governorExecutor);
+        governorResearch = governorResearch_;
+        governorExecutor = governorExecutor_;
+        _grantRole(GOVERNOR_ROLE, governorExecutor);
     }
 
     /**
      * @dev Execute the proposal to elect a scientist
      */
-    function execute() external nonReentrant onlyRole(EXECUTOR_ROLE) {
-        IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(targetWallets);
+    function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
+        IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(
+            targetWallets
+        );
+        _revokeRole(GOVERNOR_ROLE, governorExecutor);
     }
 }
