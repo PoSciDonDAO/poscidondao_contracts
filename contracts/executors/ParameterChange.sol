@@ -45,7 +45,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      */
     function _checkValidParameter(bytes32 param_) internal pure {
         if (
-            param_ != _toBytes32("proposalLifeTime") &&
+            param_ != _toBytes32("proposalLifetime") &&
             param_ != _toBytes32("quorum") &&
             param_ != _toBytes32("voteLockTime") &&
             param_ != _toBytes32("proposeLockTime") &&
@@ -83,5 +83,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorParams(gov).setGovParams(param, data);
+        _revokeRole(GOVERNOR_ROLE, governorExecutor);
+
     }
 }

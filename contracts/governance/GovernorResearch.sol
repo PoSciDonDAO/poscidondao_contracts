@@ -16,7 +16,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInput();
-    error ProposalLifeTimePassed();
+    error ProposalLifetimePassed();
     error ProposalNotPassed();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
@@ -49,7 +49,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     IGovernorGuard private govGuard;
 
     ///*** GOVERNANCE PARAMETERS ***///
-    uint256 public proposalLifeTime;
+    uint256 public proposalLifetime;
     uint256 public quorum;
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
@@ -166,7 +166,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         ddThreshold = 1000e18;
         quorum = 1;
-        proposalLifeTime = 30 minutes;
+        proposalLifetime = 30 minutes;
         voteLockTime = 0 weeks;
         proposeLockTime = 0 weeks;
         voteChangeTime = 10 minutes; //normally 1 hour
@@ -279,7 +279,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 data
     ) external onlyExecutor {
         //the duration of the proposal
-        if (param == "proposalLifeTime") proposalLifeTime = data;
+        if (param == "proposalLifetime") proposalLifetime = data;
 
         //provide a percentage of the total supply
         if (param == "quorum") quorum = data;
@@ -461,7 +461,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Retrieves the current governance parameters.
-     * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
+     * @return proposalLifetime The lifetime of a proposal from its creation to its completion.
      * @return quorum The percentage of votes required for a proposal to be considered valid.
      * @return voteLockTime The duration for which voting on a proposal is open.
      * @return proposeLockTime The lock time before which a new proposal cannot be made.
@@ -474,7 +474,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
     {
         return (
-            proposalLifeTime,
+            proposalLifetime,
             quorum,
             voteLockTime,
             proposeLockTime,
@@ -605,7 +605,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
         if (block.timestamp > proposals[id].endTimestamp)
-            revert ProposalLifeTimePassed();
+            revert ProposalLifetimePassed();
         if (
             userVoteData[voter][id].voted &&
             block.timestamp >= proposals[id].endTimestamp - voteChangeCutOff
@@ -697,7 +697,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         Proposal memory proposal = Proposal(
             info,
             block.number,
-            block.timestamp + proposalLifeTime,
+            block.timestamp + proposalLifetime,
             ProposalStatus.Active,
             action,
             0,

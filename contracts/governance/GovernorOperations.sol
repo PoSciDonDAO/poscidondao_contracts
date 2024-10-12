@@ -33,7 +33,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error VoteChangeWindowExpired();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error ProposalCannotBeCanceled();
-    error ProposalLifeTimePassed();
+    error ProposalLifetimePassed();
     error ProposeLock();
     error ProposalOngoing(
         uint256 id,
@@ -71,7 +71,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     IGovernorGuard private govGuard;
 
     ///*** GOVERNANCE PARAMETERS ***///
-    uint256 public proposalLifeTime;
+    uint256 public proposalLifetime;
     uint256 public quorum;
     uint256 public proposeLockTime;
     uint256 public voteLockTime;
@@ -192,7 +192,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         opThreshold = 5000e18;
         quorum = 567300e18; // 3% of circulating supply of 18.91 million SCI
         maxVotingStreak = 5;
-        proposalLifeTime = 30 minutes;
+        proposalLifetime = 30 minutes;
         voteLockTime = 0; //normally 1 week
         proposeLockTime = 0; //normally 1 week
         voteChangeTime = 10 minutes; //normally 1 hour
@@ -271,7 +271,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setGovParams(bytes32 param, uint256 data) external onlyExecutor {
         //the duration of the proposal
-        if (param == "proposalLifeTime") proposalLifeTime = data;
+        if (param == "proposalLifetime") proposalLifetime = data;
 
         //provide a percentage of the total supply
         if (param == "quorum") quorum = data;
@@ -288,11 +288,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         //the time before the end of the proposal that users can change their votes
         if (param == "voteChangeCutOff") voteChangeCutOff = data;
 
-        //the max voting streak indirectly affecting the number of PO tokens users can receive
-        if (param == "maxVotingStreak") maxVotingStreak = data;
-
         //the number of tokens the user must have staked to propose
         if (param == "opThreshold") opThreshold = data;
+
+        //the max voting streak indirectly affecting the number of PO tokens users can receive
+        if (param == "maxVotingStreak") maxVotingStreak = data;
 
         emit SetGovParam(param, data);
     }
@@ -505,7 +505,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Retrieves the current governance parameters.
-     * @return proposalLifeTime The lifetime of a proposal from its creation to its completion.
+     * @return proposalLifetime The lifetime of a proposal from its creation to its completion.
      * @return quorum The percentage of votes required for a proposal to be considered valid.
      * @return voteLockTime The duration for which voting on a proposal is open.
      * @return proposeLockTime The lock time before which a new proposal cannot be made.
@@ -518,7 +518,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
     {
         return (
-            proposalLifeTime,
+            proposalLifetime,
             quorum,
             voteLockTime,
             proposeLockTime,
@@ -712,7 +712,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
         if (block.timestamp > proposals[id].endTimestamp)
-            revert ProposalLifeTimePassed();
+            revert ProposalLifetimePassed();
         if (
             userVoteData[voter][id].voted &&
             block.timestamp >= proposals[id].endTimestamp - voteChangeCutOff
@@ -823,7 +823,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         Proposal memory proposal = Proposal(
             info,
             block.number,
-            block.timestamp + proposalLifeTime,
+            block.timestamp + proposalLifetime,
             ProposalStatus.Active,
             action,
             0,

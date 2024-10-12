@@ -11,6 +11,105 @@ interface DeployedContracts {
 	[key: string]: string | number;
 }
 
+// Path to the artifacts and ABI directories
+const artifactsDir = path.join(
+	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/artifacts/contracts"
+);
+const abiOutputDir = path.join(
+	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/abi"
+);
+const bytecodeOutputDir = path.join(abiOutputDir, "bytecode");
+
+function encodeFunctionData(functionSignature: string, input: any): string {
+	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
+	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
+}
+
+function setupAbiAndBytecodeDirs() {
+	// If ABI directory exists, delete it
+	if (fs.existsSync(abiOutputDir)) {
+		fs.rmSync(abiOutputDir, { recursive: true, force: true });
+		console.log(`Removed existing directory: ${abiOutputDir}`);
+	}
+
+	// Create the ABI and bytecode directories
+	fs.mkdirSync(abiOutputDir, { recursive: true });
+	fs.mkdirSync(bytecodeOutputDir, { recursive: true });
+	console.log(
+		`Created directories: ${abiOutputDir} and ${bytecodeOutputDir}`
+	);
+}
+
+// Function to recursively extract ABIs and bytecodes from artifacts
+function extractAbisAndBytecodes(dir: string) {
+	const files = fs.readdirSync(dir);
+
+	files.forEach((file) => {
+		const fullPath = path.join(dir, file);
+		const stat = fs.statSync(fullPath);
+
+		// Skip the "interfaces" directory and files starting with "I" (except for Impeachment)
+		if (stat.isDirectory()) {
+			if (file.toLowerCase() == "interfaces") {
+				console.log(`Skipping directory: ${fullPath}`);
+				return;
+			}
+			// Recursively search in other subdirectories
+			extractAbisAndBytecodes(fullPath);
+		} else if (file.endsWith(".json")) {
+			// Skip files starting with "I" unless the file name is "Impeachment"
+			if (
+				file.startsWith("I") &&
+				path.basename(file, ".json") !== "Impeachment"
+			) {
+				console.log(`Skipping file starting with "I": ${file}`);
+				return;
+			}
+
+			// Read the artifact JSON file
+			const artifact = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+
+			// Extract ABI
+			if (artifact.abi) {
+				const contractName =
+					artifact.contractName || path.basename(file, ".json");
+				const abiFileName = `${contractName}.json`;
+				const abiFilePath = path.join(abiOutputDir, abiFileName);
+
+				// Write the ABI to the output file
+				fs.writeFileSync(
+					abiFilePath,
+					JSON.stringify(artifact.abi, null, 2)
+				);
+				console.log(
+					`Extracted ABI for ${contractName} to ${abiFilePath}`
+				);
+			}
+
+			// Extract bytecode
+			if (artifact.bytecode) {
+				const contractName =
+					artifact.contractName || path.basename(file, ".json");
+				const bytecodeFileName = `${contractName}.bytecode.json`;
+				const bytecodeFilePath = path.join(
+					bytecodeOutputDir,
+					bytecodeFileName
+				);
+
+				// Write the bytecode to the output file
+				fs.writeFileSync(
+					bytecodeFilePath,
+					JSON.stringify({ bytecode: artifact.bytecode }, null, 2)
+				);
+				console.log(
+					`Extracted bytecode for ${contractName} to ${bytecodeFilePath}`
+				);
+			}
+		}
+	});
+}
+
+// Function to generate the Solidity file containing deployed addresses
 function generateSolidityAddressFile(
 	deployedContracts: DeployedContracts
 ): void {
@@ -19,6 +118,11 @@ function generateSolidityAddressFile(
 
 	if (!fs.existsSync(contractsDir)) {
 		fs.mkdirSync(contractsDir, { recursive: true });
+	}
+
+	if (fs.existsSync(outputPath)) {
+		fs.unlinkSync(outputPath);
+		console.log(`Existing file at ${outputPath} has been deleted.`);
 	}
 
 	const solidityFileContent: string = `
@@ -49,11 +153,6 @@ function generateSolidityAddressFile(
 	console.log(`DeployedAddresses.sol has been generated at ${outputPath}`);
 }
 
-function encodeFunctionData(functionSignature: string, input: any): string {
-	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
-	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
-}
-
 async function main(): Promise<DeployedContracts> {
 	const PRIVATE_KEY: string = process.env.DEPLOYER_PRIVATE_KEY || "";
 	if (!PRIVATE_KEY)
@@ -81,7 +180,6 @@ async function main(): Promise<DeployedContracts> {
 	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 	const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-
 	const addresses: DeployedContracts = {};
 
 	const deployAndVerify = async (
@@ -98,6 +196,7 @@ async function main(): Promise<DeployedContracts> {
 		addresses[contractKey] = contract.address;
 	};
 
+	// Deploy contracts
 	await deployAndVerify("Po", ["https://baseURI.example/", admin], "po");
 	await deployAndVerify(
 		"PoToSciExchange",
@@ -126,8 +225,7 @@ async function main(): Promise<DeployedContracts> {
 		"governorGuard"
 	);
 
-	console.log("All contracts deployed and verified successfully");
-
+	// Generate Solidity address file
 	generateSolidityAddressFile({
 		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
 		providerUrl: rpcUrl,
@@ -150,7 +248,9 @@ async function main(): Promise<DeployedContracts> {
 		governorGuard: addresses.governorGuard,
 	});
 
-	// Batch Transaction JSON Creation
+	setupAbiAndBytecodeDirs();
+	extractAbisAndBytecodes(artifactsDir);
+
 	const transactions = [
 		{
 			to: addresses.staking,
@@ -228,8 +328,23 @@ async function main(): Promise<DeployedContracts> {
 		),
 	};
 
-	// Overwrite the `safeBatchTransaction.json` file every time the script is run
-	const outputPath = path.join(__dirname, "safeBatchTransaction.json");
+	const outputDir = path.join(__dirname, "../scripts/multiSigWalletScripts");
+
+	// Ensure the directory exists
+	if (!fs.existsSync(outputDir)) {
+		fs.mkdirSync(outputDir, { recursive: true });
+		console.log(`Directory created: ${outputDir}`);
+	}
+
+	const outputPath = path.join(outputDir, "safeBatchTransaction.json");
+
+	// Remove the existing file if it exists
+	if (fs.existsSync(outputPath)) {
+		fs.unlinkSync(outputPath); // Delete the existing file
+		console.log(`Existing file at ${outputPath} has been deleted.`);
+	}
+
+	// Write the updated JSON file
 	fs.writeFileSync(
 		outputPath,
 		JSON.stringify(safeBatchTransaction, null, 2),

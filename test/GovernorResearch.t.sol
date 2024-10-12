@@ -180,7 +180,7 @@ contract GovernorResearchTest is Test {
         assertEq(proposal.startBlockNum, block.number);
         assertEq(
             proposal.endTimestamp,
-            block.timestamp + govRes.proposalLifeTime()
+            block.timestamp + govRes.proposalLifetime()
         );
         assertEq(
             uint(proposal.status),
@@ -238,7 +238,7 @@ contract GovernorResearchTest is Test {
         govRes.propose("Info", address(transaction));
         vm.warp(
             block.timestamp +
-                govRes.proposalLifeTime() -
+                govRes.proposalLifetime() -
                 govRes.voteChangeCutOff() +
                 1
         );
@@ -303,7 +303,7 @@ contract GovernorResearchTest is Test {
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
-        uint256 proposalLifeTime = govRes.proposalLifeTime();
+        uint256 proposalLifetime = govRes.proposalLifetime();
         bytes4 selector = bytes4(
             keccak256("ProposalOngoing(uint256,uint256,uint256)")
         );
@@ -312,7 +312,7 @@ contract GovernorResearchTest is Test {
                 selector,
                 id,
                 block.timestamp,
-                block.timestamp + proposalLifeTime
+                block.timestamp + proposalLifetime
             )
         );
         govRes.schedule(id);
