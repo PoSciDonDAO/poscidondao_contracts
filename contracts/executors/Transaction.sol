@@ -9,6 +9,8 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 contract Transaction is ReentrancyGuard, AccessControl {
     using SafeERC20 for IERC20;
 
+    error CannotBeZeroAddress();
+
     address public usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
     address public sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311;
     address public targetWallet;
@@ -25,6 +27,14 @@ contract Transaction is ReentrancyGuard, AccessControl {
         uint256 amountSci_,
         address governorExecutor_
     ) {
+        if (
+            fundingWallet_ == address(0) ||
+            targetWallet_ == address(0) ||
+            governorExecutor_ == address(0)
+        ) {
+            revert CannotBeZeroAddress();
+        }
+
         targetWallet = targetWallet_;
         amountUsdc = amountUsdc_;
         amountSci = amountSci_;
@@ -37,7 +47,12 @@ contract Transaction is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         if (amountUsdc > 0) {
-            _transferToken(IERC20(usdc), fundingWallet, targetWallet, amountUsdc);
+            _transferToken(
+                IERC20(usdc),
+                fundingWallet,
+                targetWallet,
+                amountUsdc
+            );
         }
         if (amountSci > 0) {
             _transferToken(IERC20(sci), fundingWallet, targetWallet, amountSci);

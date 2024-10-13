@@ -8,7 +8,6 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 contract GovernorResearch is AccessControl, ReentrancyGuard {
-
     ///*** ERRORS ***///
     error CannotBeZeroAddress();
     error CannotComplete();
@@ -16,6 +15,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidInput();
+    error InvalidGovernanceParameter();
     error ProposalLifetimePassed();
     error ProposalNotPassed();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
@@ -38,6 +38,16 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool executable;
     }
 
+    struct GovernanceParameters {
+        uint256 proposalLifetime;
+        uint256 quorum;
+        uint256 voteLockTime;
+        uint256 proposeLockTime;
+        uint256 voteChangeTime;
+        uint256 voteChangeCutOff;
+        uint256 ddThreshold;
+    }
+
     struct UserVoteData {
         bool voted; // Whether the user has voted
         uint256 initialVoteTimestamp; // The timestamp of when the user first voted
@@ -48,23 +58,15 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     IGovernorExecution private govExec;
     IGovernorGuard private govGuard;
 
-    ///*** GOVERNANCE PARAMETERS ***///
-    uint256 public proposalLifetime;
-    uint256 public quorum;
-    uint256 public proposeLockTime;
-    uint256 public voteLockTime;
-    uint256 public voteChangeTime;
-    uint256 public voteChangeCutOff;
-
     ///*** KEY ADDRESSES ***///
     address public stakingAddress;
     address public admin;
     address public researchFundingWallet;
 
     ///*** STORAGE & MAPPINGS ***///
-    uint256 public ddThreshold;
     uint256 private _index;
     uint256 constant VOTE = 1;
+    GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint8) private proposedResearch;
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
@@ -101,18 +103,32 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event Canceled(uint256 indexed id, bool indexed rejected);
-    event Completed(uint256 indexed id);
+    event AdminUpdated(address indexed user, address indexed newAddress);
+    event Canceled(uint256 indexed id, address indexed user, bool indexed rejected);
+    event Completed(uint256 indexed id, address indexed user);
     event Executed(
         uint256 indexed id,
-        address indexed govExec,
+        address indexed user,
         address indexed action
     );
-    
+    event GovExecUpdated(address indexed user, address indexed newAddress);
+
+    event GovGuardUpdated(address indexed user, address indexed newAddress);
+    event ParameterUpdated(bytes32 indexed param, uint256 data);
+
     event Proposed(
         uint256 indexed id,
         address indexed user,
         address indexed action
+    );
+
+    event Scheduled(uint256 indexed id, address indexed user);
+
+    event StakingUpdated(address indexed user, address indexed newAddress);
+
+    event ResearchFundingUpdated(
+        address indexed user,
+        address indexed SetNewResearchFundingWallet
     );
 
     event Voted(
@@ -120,31 +136,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address indexed user,
         bool indexed support,
         uint256 amount
-    );
-    event Scheduled(uint256 indexed id);
-
-    event SetGovernanceParameter(bytes32 indexed param, uint256 data);
-
-    event SetNewAdmin(address indexed user, address indexed newAddress);
-
-    event SetNewGovExecAddress(
-        address indexed user,
-        address indexed newAddress
-    );
-
-    event SetNewGovGuardAddress(
-        address indexed user,
-        address indexed newAddress
-    );
-
-    event SetNewResearchFundingWallet(
-        address indexed user,
-        address indexed SetNewResearchFundingWallet
-    );
-
-    event SetNewStakingAddress(
-        address indexed user,
-        address indexed newAddress
     );
 
     constructor(
@@ -163,14 +154,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
 
-
-        ddThreshold = 1000e18;
-        quorum = 1;
-        proposalLifetime = 30 minutes;
-        voteLockTime = 0 weeks;
-        proposeLockTime = 0 weeks;
-        voteChangeTime = 10 minutes; //normally 1 hour
-        voteChangeCutOff = 10 minutes; //normally 3 days
+        governanceParams.ddThreshold = 1000e18;
+        governanceParams.proposalLifetime = 30 minutes;
+        governanceParams.quorum = 1;
+        governanceParams.voteLockTime = 0 weeks;
+        governanceParams.proposeLockTime = 0 weeks;
+        governanceParams.voteChangeTime = 10 minutes; //normally 1 hour
+        governanceParams.voteChangeCutOff = 10 minutes; //normally 3 days
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
@@ -187,7 +177,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newGovExecAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovExecAddress);
-        emit SetNewGovExecAddress(msg.sender, newGovExecAddress);
+        emit GovExecUpdated(msg.sender, newGovExecAddress);
     }
 
     /**
@@ -198,7 +188,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govGuard = IGovernorGuard(newGovGuardAddress);
         _grantRole(GUARD_ROLE, newGovGuardAddress);
-        emit SetNewGovGuardAddress(msg.sender, newGovGuardAddress);
+        emit GovGuardUpdated(msg.sender, newGovGuardAddress);
     }
 
     /**
@@ -246,7 +236,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit SetNewAdmin(oldAdmin, newAdmin);
+        emit AdminUpdated(oldAdmin, newAdmin);
     }
 
     /**
@@ -256,7 +246,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newresearchFundingWallet
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         researchFundingWallet = newresearchFundingWallet;
-        emit SetNewResearchFundingWallet(msg.sender, newresearchFundingWallet);
+        emit ResearchFundingUpdated(msg.sender, newresearchFundingWallet);
     }
 
     /**
@@ -266,7 +256,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newStakingAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         stakingAddress = newStakingAddress;
-        emit SetNewStakingAddress(msg.sender, newStakingAddress);
+        emit StakingUpdated(msg.sender, newStakingAddress);
     }
 
     /**
@@ -278,28 +268,20 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
-        //the duration of the proposal
-        if (param == "proposalLifetime") proposalLifetime = data;
+        if (param == "proposalLifetime")
+            governanceParams.proposalLifetime = data;
+        else if (param == "quorum") governanceParams.quorum = data;
+        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        else if (param == "proposeLockTime")
+            governanceParams.proposeLockTime = data;
+        else if (param == "voteChangeTime")
+            governanceParams.voteChangeTime = data;
+        else if (param == "voteChangeCutOff")
+            governanceParams.voteChangeCutOff = data;
+        else if (param == "ddThreshold") governanceParams.ddThreshold = data;
+        else revert InvalidGovernanceParameter();
 
-        //provide a percentage of the total supply
-        if (param == "quorum") quorum = data;
-
-        //the lock time of your tokens after voting
-        if (param == "voteLockTime") voteLockTime = data;
-
-        //the lock time of your tokens and ability to propose after proposing
-        if (param == "proposeLockTime") proposeLockTime = data;
-
-        //the time for a user to change their vote after their initial vote
-        if (param == "voteChangeTime") voteChangeTime = data;
-
-        //the time before the end of the proposal that users can change their votes
-        if (param == "voteChangeCutOff") voteChangeCutOff = data;
-
-        //the number of tokens the user must have staked to propose and vote
-        if (param == "ddThreshold") ddThreshold = data;
-
-        emit SetGovernanceParameter(param, data);
+        emit ParameterUpdated(param, data);
     }
 
     /**
@@ -311,12 +293,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function propose(
         string memory info,
         address action
-    )
-        external
-        nonReentrant
-        onlyRole(DUE_DILIGENCE_ROLE)
-        returns (uint256)
-    {
+    ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
 
         bool executable;
@@ -373,7 +350,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             }
             proposals[id].status = ProposalStatus.Scheduled;
 
-            emit Scheduled(id);
+            emit Scheduled(id, msg.sender);
         }
     }
 
@@ -416,7 +393,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Completed;
 
-        emit Completed(id);
+        emit Completed(id, msg.sender);
     }
 
     /**
@@ -431,7 +408,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Canceled;
 
-        emit Canceled(id, false);
+        emit Canceled(id, msg.sender, false);
     }
 
     /**
@@ -448,7 +425,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (!schedulable) {
             proposals[id].status = ProposalStatus.Canceled;
 
-            emit Canceled(id, true);
+            emit Canceled(id, msg.sender, true);
         }
     }
 
@@ -461,27 +438,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Retrieves the current governance parameters.
-     * @return proposalLifetime The lifetime of a proposal from its creation to its completion.
-     * @return quorum The percentage of votes required for a proposal to be considered valid.
-     * @return voteLockTime The duration for which voting on a proposal is open.
-     * @return proposeLockTime The lock time before which a new proposal cannot be made.
-     * @return voteChangeTime The time window during which a vote can be changed after the initial vote.
-     * @return voteChangeCutOff The time before the end of the proposal during which vote changes are no longer allowed.
      */
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+        returns (GovernanceParameters memory)
     {
-        return (
-            proposalLifetime,
-            quorum,
-            voteLockTime,
-            proposeLockTime,
-            voteChangeTime,
-            voteChangeCutOff,
-            ddThreshold
-        );
+        return governanceParams;
     }
 
     /**
@@ -557,7 +520,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         bool isProposalActive = proposals[id].status == ProposalStatus.Active;
 
-        bool quorumReached = proposals[id].totalVotes >= quorum;
+        bool quorumReached = proposals[id].totalVotes >=
+            governanceParams.quorum;
 
         bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
             proposals[id].votesAgainst;
@@ -579,7 +543,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 revert IncorrectPhase(proposals[id].status);
             }
             if (!quorumReached) {
-                revert QuorumNotReached(id, proposals[id].totalVotes, quorum);
+                revert QuorumNotReached(
+                    id,
+                    proposals[id].totalVotes,
+                    governanceParams.quorum
+                );
             }
             if (!isVotesForGreaterThanVotesAgainst) {
                 revert ProposalNotPassed();
@@ -608,12 +576,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             revert ProposalLifetimePassed();
         if (
             userVoteData[voter][id].voted &&
-            block.timestamp >= proposals[id].endTimestamp - voteChangeCutOff
+            block.timestamp >=
+            proposals[id].endTimestamp - governanceParams.voteChangeCutOff
         ) revert VoteChangeNotAllowedAfterCutOff();
         if (
             userVoteData[voter][id].voted &&
             block.timestamp >
-            userVoteData[voter][id].initialVoteTimestamp + voteChangeTime
+            userVoteData[voter][id].initialVoteTimestamp +
+                governanceParams.voteChangeTime
         ) {
             revert VoteChangeWindowExpired();
         }
@@ -655,7 +625,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         IStaking(stakingAddress).voted(
             msg.sender,
-            block.timestamp + voteLockTime
+            block.timestamp + governanceParams.voteLockTime
         );
 
         emit Voted(id, msg.sender, support, VOTE);
@@ -674,8 +644,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address member
     ) internal view {
         uint256 stakedSci = staking.getStakedSci(member);
-        if (stakedSci < ddThreshold) {
-            revert InsufficientBalance(stakedSci, ddThreshold);
+        if (stakedSci < governanceParams.ddThreshold) {
+            revert InsufficientBalance(stakedSci, governanceParams.ddThreshold);
         }
     }
 
@@ -697,7 +667,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         Proposal memory proposal = Proposal(
             info,
             block.number,
-            block.timestamp + proposalLifetime,
+            block.timestamp + governanceParams.proposalLifetime,
             ProposalStatus.Active,
             action,
             0,

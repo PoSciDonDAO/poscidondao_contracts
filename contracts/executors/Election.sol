@@ -9,16 +9,31 @@ interface IGovernorRoleGrant {
 }
 
 contract Election is ReentrancyGuard, AccessControl {
+    error CannotBeZeroAddress();
+
     address[] public targetWallets;
     address public governorResearch;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+
+    event Elected(address[] elected);
+
 
     constructor(
         address[] memory targetWallets_,
         address governorResearch_,
         address governorExecutor_
     ) {
+        if (
+            governorResearch_ == address(0) || governorExecutor_ == address(0)
+        ) {
+            revert CannotBeZeroAddress();
+        }
+        for (uint256 i = 0; i < targetWallets_.length; i++) {
+            if (targetWallets_[i] == address(0)) {
+                revert CannotBeZeroAddress();
+            }
+        }
         targetWallets = targetWallets_;
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
@@ -32,6 +47,7 @@ contract Election is ReentrancyGuard, AccessControl {
         IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(
             targetWallets
         );
+        emit Elected(targetWallets);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
     }
 }

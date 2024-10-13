@@ -14,7 +14,7 @@ interface DeployedContracts {
 const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
-const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+const researchFundingWallet = "0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF";
 
 const frontendAddressesFilePath =
 	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils/serverConfig.ts";
@@ -47,9 +47,7 @@ export const getPrivateKey = () => {
 export const getNetworkInfo = () => {
   const rpcUrl = getRpcUrl();
   return {
-    chainId: ${
-		hardhatArguments.network === "baseMainnet" ? 8453 : 84532
-	},
+    chainId: ${hardhatArguments.network === "baseMainnet" ? 8453 : 84532},
     providerUrl: \`\${rpcUrl}\`,
     explorerLink: '${
 		hardhatArguments.network === "baseMainnet"
@@ -87,6 +85,7 @@ export const getNetworkInfo = () => {
 	);
 }
 
+// Path for ABI and Bytecode directories
 const artifactsDir = path.join(
 	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/artifacts/contracts"
 );
@@ -95,115 +94,80 @@ const abiOutputDir = path.join(
 );
 const bytecodeOutputDir = path.join(abiOutputDir, "bytecode");
 
-// Path to copy the ABI directory
+// Frontend paths for ABI and bytecode
 const frontendAbiDir = path.join(
 	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/abi"
 );
-
 const frontendBytecodeDir = path.join(frontendAbiDir, "bytecode");
 
+// Ensure ABI and bytecode directories exist, remove old ones if necessary
 function setupAbiAndBytecodeDirs() {
-	// If ABI directory exists, delete it
+	// Remove backend ABI and bytecode directories
 	if (fs.existsSync(abiOutputDir)) {
 		fs.rmSync(abiOutputDir, { recursive: true, force: true });
-		console.log(`Removed existing directory: ${abiOutputDir}`);
+		console.log(`Removed existing backend directory: ${abiOutputDir}`);
 	}
-
-	// Create the ABI and bytecode directories
 	fs.mkdirSync(abiOutputDir, { recursive: true });
 	fs.mkdirSync(bytecodeOutputDir, { recursive: true });
-	console.log(
-		`Created directories: ${abiOutputDir} and ${bytecodeOutputDir}`
-	);
+	console.log(`Created backend ABI and bytecode directories`);
 
-	// If the frontend ABI directory exists, delete it
+	// Remove frontend ABI and bytecode directories
 	if (fs.existsSync(frontendAbiDir)) {
 		fs.rmSync(frontendAbiDir, { recursive: true, force: true });
 		console.log(
-			`Removed existing directory at frontend: ${frontendAbiDir}`
+			`Removed existing frontend ABI directory: ${frontendAbiDir}`
 		);
 	}
-
-	// Create the frontend ABI directory and bytecode subdirectory
 	fs.mkdirSync(frontendAbiDir, { recursive: true });
 	fs.mkdirSync(frontendBytecodeDir, { recursive: true });
-	console.log(
-		`Created frontend ABI directory and bytecode subdirectory: ${frontendAbiDir}`
-	);
+	console.log(`Created frontend ABI and bytecode directories`);
 }
 
-// Function to copy the ABI files to the frontend directory
+// Copy ABI files to frontend directory
 function copyAbiFilesToFrontend() {
 	const abiFiles = fs.readdirSync(abiOutputDir);
-
 	abiFiles.forEach((file) => {
 		const srcPath = path.join(abiOutputDir, file);
 		const destPath = path.join(frontendAbiDir, file);
-
 		if (fs.lstatSync(srcPath).isFile()) {
 			fs.copyFileSync(srcPath, destPath);
-			console.log(`Copied ${file} to frontend ABI directory`);
+			console.log(`Copied ABI ${file} to frontend directory`);
 		}
 	});
 }
 
-// Function to copy the bytecode files to the frontend directory under the ABI folder
+// Copy bytecode files to frontend directory
 function copyBytecodeFilesToFrontend() {
 	const bytecodeFiles = fs.readdirSync(bytecodeOutputDir);
-
 	bytecodeFiles.forEach((file) => {
 		const srcPath = path.join(bytecodeOutputDir, file);
 		const destPath = path.join(frontendBytecodeDir, file);
-
 		if (fs.lstatSync(srcPath).isFile()) {
 			fs.copyFileSync(srcPath, destPath);
-			console.log(`Copied ${file} to frontend bytecode directory`);
+			console.log(`Copied bytecode ${file} to frontend directory`);
 		}
 	});
 }
 
-function encodeFunctionData(functionSignature: string, input: any): string {
-	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
-	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
-}
-
-// Function to recursively extract ABIs and bytecodes from artifacts
+// Function to extract ABIs and bytecodes after deployment
 function extractAbisAndBytecodes(dir: string) {
 	const files = fs.readdirSync(dir);
-
 	files.forEach((file) => {
 		const fullPath = path.join(dir, file);
 		const stat = fs.statSync(fullPath);
-
-		// Skip the "interfaces" directory and files starting with "I" (except for Impeachment)
 		if (stat.isDirectory()) {
-			if (file.toLowerCase() == "interfaces") {
-				console.log(`Skipping directory: ${fullPath}`);
+			if (file.toLowerCase() === "interfaces") {
+				console.log(`Skipping interfaces directory: ${fullPath}`);
 				return;
 			}
-			// Recursively search in other subdirectories
 			extractAbisAndBytecodes(fullPath);
 		} else if (file.endsWith(".json")) {
-			// Skip files starting with "I" unless the file name is "Impeachment"
-			if (
-				file.startsWith("I") &&
-				path.basename(file, ".json") !== "Impeachment"
-			) {
-				console.log(`Skipping file starting with "I": ${file}`);
-				return;
-			}
-
-			// Read the artifact JSON file
 			const artifact = JSON.parse(fs.readFileSync(fullPath, "utf8"));
-
-			// Extract ABI
 			if (artifact.abi) {
 				const contractName =
 					artifact.contractName || path.basename(file, ".json");
 				const abiFileName = `${contractName}.json`;
 				const abiFilePath = path.join(abiOutputDir, abiFileName);
-
-				// Write the ABI to the output file
 				fs.writeFileSync(
 					abiFilePath,
 					JSON.stringify(artifact.abi, null, 2)
@@ -212,8 +176,6 @@ function extractAbisAndBytecodes(dir: string) {
 					`Extracted ABI for ${contractName} to ${abiFilePath}`
 				);
 			}
-
-			// Extract bytecode
 			if (artifact.bytecode) {
 				const contractName =
 					artifact.contractName || path.basename(file, ".json");
@@ -222,8 +184,6 @@ function extractAbisAndBytecodes(dir: string) {
 					bytecodeOutputDir,
 					bytecodeFileName
 				);
-
-				// Write the bytecode to the output file
 				fs.writeFileSync(
 					bytecodeFilePath,
 					JSON.stringify({ bytecode: artifact.bytecode }, null, 2)
@@ -234,6 +194,10 @@ function extractAbisAndBytecodes(dir: string) {
 			}
 		}
 	});
+}
+function encodeFunctionData(functionSignature: string, input: any): string {
+	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
+	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
 }
 
 // Function to generate the Solidity file containing deployed addresses
