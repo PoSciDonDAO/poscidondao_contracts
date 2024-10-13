@@ -20,11 +20,11 @@ async function main() {
     throw new Error("please pass --network");
   }
 
-  const donationWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+  const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
   const treasuryWallet = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 
-  const constructorArguments = [donationWallet, treasuryWallet, usdc];
+  const constructorArguments = [researchFundingWallet, treasuryWallet, usdc];
 
   const Contract = await ethers.getContractFactory("Donation");
   // Estimate contract deployment fee

@@ -123,7 +123,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     );
     event Scheduled(uint256 indexed id);
 
-    event SetGovParam(bytes32 indexed param, uint256 data);
+    event SetGovernanceParameter(bytes32 indexed param, uint256 data);
 
     event SetNewAdmin(address indexed user, address indexed newAddress);
 
@@ -274,7 +274,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function setGovParams(
+    function SetGovernanceParameters(
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
@@ -299,7 +299,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         //the number of tokens the user must have staked to propose and vote
         if (param == "ddThreshold") ddThreshold = data;
 
-        emit SetGovParam(param, data);
+        emit SetGovernanceParameter(param, data);
     }
 
     /**

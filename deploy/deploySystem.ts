@@ -11,7 +11,82 @@ interface DeployedContracts {
 	[key: string]: string | number;
 }
 
-// Path to the artifacts and ABI directories
+const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
+
+const frontendAddressesFilePath =
+	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils/serverConfig.ts";
+
+function generateFrontendAddressesFile(
+	usdc: string,
+	sci: string,
+	admin: string,
+	researchFundingWallet: string,
+	deployedContracts: DeployedContracts
+): void {
+	const fileContent = `
+'use server';
+
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
+const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
+
+export const getRpcUrl = () => {
+  ${
+		hardhatArguments.network === "baseMainnet"
+			? "return `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+			: "return `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+  };
+};
+
+export const getPrivateKey = () => {
+  return PRIVATE_KEY;
+};
+
+export const getNetworkInfo = () => {
+  const rpcUrl = getRpcUrl();
+  return {
+    chainId: ${
+		hardhatArguments.network === "baseMainnet" ? 8453 : 84532
+	},
+    providerUrl: \`\${rpcUrl}\`,
+    explorerLink: '${
+		hardhatArguments.network === "baseMainnet"
+			? "https://basescan.org/"
+			: "https://sepolia.basescan.org"
+	}' ,
+    admin: '${admin}',
+    researchFundingWallet: '${researchFundingWallet}',
+    usdc: '${usdc}',
+    sci: '${sci}',
+    swapAddress: '0x3Cc223D3A738eA81125689355F8C16A56768dF70',
+    donation: '${deployedContracts.donation}',
+    po: '${deployedContracts.po}',
+    poToSciExchange: '${deployedContracts.poToSciExchange}',
+    staking: '${deployedContracts.staking}',
+    governorOperations: '${deployedContracts.governorOperations}',
+    governorResearch: '${deployedContracts.governorResearch}',
+    governorExecutor: '${deployedContracts.governorExecutor}',
+    governorGuard: '${deployedContracts.governorGuard}',
+  };
+};
+`;
+	// If the file exists, remove it to replace with the new one
+	if (fs.existsSync(frontendAddressesFilePath)) {
+		fs.unlinkSync(frontendAddressesFilePath);
+		console.log(
+			`Existing file at ${frontendAddressesFilePath} has been deleted.`
+		);
+	}
+
+	// Write the new addresses to the file
+	fs.writeFileSync(frontendAddressesFilePath, fileContent, "utf8");
+	console.log(
+		`Governance system addresses have been saved at ${frontendAddressesFilePath}`
+	);
+}
+
 const artifactsDir = path.join(
 	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/artifacts/contracts"
 );
@@ -20,10 +95,12 @@ const abiOutputDir = path.join(
 );
 const bytecodeOutputDir = path.join(abiOutputDir, "bytecode");
 
-function encodeFunctionData(functionSignature: string, input: any): string {
-	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
-	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
-}
+// Path to copy the ABI directory
+const frontendAbiDir = path.join(
+	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/abi"
+);
+
+const frontendBytecodeDir = path.join(frontendAbiDir, "bytecode");
 
 function setupAbiAndBytecodeDirs() {
 	// If ABI directory exists, delete it
@@ -38,6 +115,56 @@ function setupAbiAndBytecodeDirs() {
 	console.log(
 		`Created directories: ${abiOutputDir} and ${bytecodeOutputDir}`
 	);
+
+	// If the frontend ABI directory exists, delete it
+	if (fs.existsSync(frontendAbiDir)) {
+		fs.rmSync(frontendAbiDir, { recursive: true, force: true });
+		console.log(
+			`Removed existing directory at frontend: ${frontendAbiDir}`
+		);
+	}
+
+	// Create the frontend ABI directory and bytecode subdirectory
+	fs.mkdirSync(frontendAbiDir, { recursive: true });
+	fs.mkdirSync(frontendBytecodeDir, { recursive: true });
+	console.log(
+		`Created frontend ABI directory and bytecode subdirectory: ${frontendAbiDir}`
+	);
+}
+
+// Function to copy the ABI files to the frontend directory
+function copyAbiFilesToFrontend() {
+	const abiFiles = fs.readdirSync(abiOutputDir);
+
+	abiFiles.forEach((file) => {
+		const srcPath = path.join(abiOutputDir, file);
+		const destPath = path.join(frontendAbiDir, file);
+
+		if (fs.lstatSync(srcPath).isFile()) {
+			fs.copyFileSync(srcPath, destPath);
+			console.log(`Copied ${file} to frontend ABI directory`);
+		}
+	});
+}
+
+// Function to copy the bytecode files to the frontend directory under the ABI folder
+function copyBytecodeFilesToFrontend() {
+	const bytecodeFiles = fs.readdirSync(bytecodeOutputDir);
+
+	bytecodeFiles.forEach((file) => {
+		const srcPath = path.join(bytecodeOutputDir, file);
+		const destPath = path.join(frontendBytecodeDir, file);
+
+		if (fs.lstatSync(srcPath).isFile()) {
+			fs.copyFileSync(srcPath, destPath);
+			console.log(`Copied ${file} to frontend bytecode directory`);
+		}
+	});
+}
+
+function encodeFunctionData(functionSignature: string, input: any): string {
+	const iface = new ethers.utils.Interface([`function ${functionSignature}`]);
+	return iface.encodeFunctionData(functionSignature.split("(")[0], [input]);
 }
 
 // Function to recursively extract ABIs and bytecodes from artifacts
@@ -174,11 +301,6 @@ async function main(): Promise<DeployedContracts> {
 	};
 
 	const rpcUrl: string = getRpcUrl();
-	const donation = "0x5247514Ee8139f849057721d932701A83679F107";
-	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
-	const researchFundingWallet = "0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe";
 	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 	const addresses: DeployedContracts = {};
 
@@ -197,6 +319,11 @@ async function main(): Promise<DeployedContracts> {
 	};
 
 	// Deploy contracts
+	await deployAndVerify(
+		"Donation",
+		[researchFundingWallet, admin, usdc],
+		"donation"
+	);
 	await deployAndVerify("Po", ["https://baseURI.example/", admin], "po");
 	await deployAndVerify(
 		"PoToSciExchange",
@@ -238,7 +365,7 @@ async function main(): Promise<DeployedContracts> {
 		usdc: usdc,
 		sci: sci,
 		swapAddress: "0x3Cc223D3A738eA81125689355F8C16A56768dF70",
-		donation: donation,
+		donation: addresses.donation,
 		po: addresses.po,
 		poToSciExchange: addresses.poToSciExchange,
 		staking: addresses.staking,
@@ -250,6 +377,8 @@ async function main(): Promise<DeployedContracts> {
 
 	setupAbiAndBytecodeDirs();
 	extractAbisAndBytecodes(artifactsDir);
+	copyAbiFilesToFrontend();
+	copyBytecodeFilesToFrontend();
 
 	const transactions = [
 		{
@@ -358,9 +487,16 @@ async function main(): Promise<DeployedContracts> {
 }
 
 main()
-	.then((result) => {
+	.then((deployedContracts) => {
 		console.log("Deployment completed. Updated Object:");
-		console.log(result);
+		console.log(deployedContracts);
+		generateFrontendAddressesFile(
+			usdc,
+			sci,
+			admin,
+			researchFundingWallet,
+			deployedContracts
+		);
 		process.exit(0);
 	})
 	.catch((error) => {

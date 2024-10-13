@@ -5,7 +5,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorParams {
-    function setGovParams(bytes32 param, uint256 data) external;
+    function setGovernanceParameter(bytes32 param, uint256 data) external;
 }
 
 contract ParameterChange is ReentrancyGuard, AccessControl {
@@ -82,7 +82,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      * @notice The GOVERNOR_ROLE is required to execute this function.
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        IGovernorParams(gov).setGovParams(param, data);
+        IGovernorParams(gov).setGovernanceParameter(param, data);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
 
     }

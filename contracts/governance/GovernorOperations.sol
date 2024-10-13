@@ -29,6 +29,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
     error InvalidInput();
+    error InvalidGovernanceParameter();
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
@@ -56,6 +57,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 totalVotes;
         bool executable;
         bool quadraticVoting;
+    }
+
+    struct GovernanceParameters {
+        uint256 proposalLifetime;
+        uint256 quorum;
+        uint256 voteLockTime;
+        uint256 proposeLockTime;
+        uint256 voteChangeTime;
+        uint256 voteChangeCutOff;
+        uint256 opThreshold;
+        uint256 maxVotingStreak;
     }
 
     struct UserVoteData {
@@ -87,6 +99,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _index;
+    GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint256) private votingStreak;
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
@@ -137,7 +150,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address indexed action
     );
 
-    event SetGovParam(bytes32 param, uint256 data);
+    event SetGovernanceParameter(bytes32 param, uint256 data);
 
     event SetNewGovExecAddress(
         address indexed user,
@@ -269,32 +282,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function setGovParams(bytes32 param, uint256 data) external onlyExecutor {
-        //the duration of the proposal
-        if (param == "proposalLifetime") proposalLifetime = data;
+    function setGovernanceParameter(bytes32 param, uint256 data) external onlyExecutor {
+        if (param == "proposalLifetime")
+            governanceParams.proposalLifetime = data;
+        else if (param == "quorum") governanceParams.quorum = data;
+        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        else if (param == "proposeLockTime")
+            governanceParams.proposeLockTime = data;
+        else if (param == "voteChangeTime")
+            governanceParams.voteChangeTime = data;
+        else if (param == "voteChangeCutOff")
+            governanceParams.voteChangeCutOff = data;
+        else if (param == "opThreshold") governanceParams.opThreshold = data;
+        else if (param == "maxVotingStreak")
+            governanceParams.maxVotingStreak = data;
+        else revert InvalidGovernanceParameter();
 
-        //provide a percentage of the total supply
-        if (param == "quorum") quorum = data;
-
-        //the lock time of your tokens after voting
-        if (param == "voteLockTime") voteLockTime = data;
-
-        //the lock time of your tokens and ability to propose after proposing
-        if (param == "proposeLockTime") proposeLockTime = data;
-
-        //the time for a user to change their vote after their initial vote
-        if (param == "voteChangeTime") voteChangeTime = data;
-
-        //the time before the end of the proposal that users can change their votes
-        if (param == "voteChangeCutOff") voteChangeCutOff = data;
-
-        //the number of tokens the user must have staked to propose
-        if (param == "opThreshold") opThreshold = data;
-
-        //the max voting streak indirectly affecting the number of PO tokens users can receive
-        if (param == "maxVotingStreak") maxVotingStreak = data;
-
-        emit SetGovParam(param, data);
+        emit SetGovernanceParameter(param, data);
     }
 
     /**
@@ -515,7 +519,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function getGovernanceParameters()
         public
         view
-        returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+        returns (
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256
+        )
     {
         return (
             proposalLifetime,
@@ -524,7 +537,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             proposeLockTime,
             voteChangeTime,
             voteChangeCutOff,
-            opThreshold
+            opThreshold,
+            maxVotingStreak
         );
     }
 
