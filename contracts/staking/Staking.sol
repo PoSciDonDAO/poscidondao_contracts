@@ -92,7 +92,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     );
     event DelegateAdded(address indexed delegate);
     event DelegateRemoved(address indexed delegate);
-    event DelegateThresholdSet();
+    event DelegateThresholdUpdated();
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event Locked(address indexed user, address indexed asset, uint256 amount);
     event SetGovOps(address indexed user, address indexed newAddress);
@@ -124,7 +124,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         }
         admin = admin_;
         sci = IERC20(sci_);
-        delegateThreshold = 100e18;
+        delegateThreshold = 50000e18;
         delegates[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -161,7 +161,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delegateThreshold = newThreshold;
-        emit DelegateThresholdSet();
+        emit DelegateThresholdUpdated();
     }
 
     /**

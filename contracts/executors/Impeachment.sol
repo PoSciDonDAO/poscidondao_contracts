@@ -6,18 +6,20 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorRoleRevoke {
     function revokeDueDiligenceRole(address[] memory members) external;
+
+    function checkDueDiligenceRole(address member) external returns (bool);
 }
 
 contract Impeachment is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
+    error AddressHasNotDDRole();
 
-    address[] public targetWallets;
+    address[] internal targetWallets;
     address public governorResearch;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     event Impeached(address[] impeached);
-
 
     constructor(
         address[] memory targetWallets_,
@@ -28,11 +30,25 @@ contract Impeachment is ReentrancyGuard, AccessControl {
             if (targetWallets_[i] == address(0)) {
                 revert CannotBeZeroAddress();
             }
+            if (
+                !IGovernorRoleRevoke(governorResearch).checkDueDiligenceRole(
+                    targetWallets_[i]
+                )
+            ) {
+                revert AddressHasNotDDRole();
+            }
         }
         targetWallets = targetWallets_;
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor);
+    }
+
+    /**
+     * @dev Returns all elected wallets
+     */
+    function getAllImpeachedWallets() public view returns (address[] memory) {
+        return targetWallets;
     }
 
     /**

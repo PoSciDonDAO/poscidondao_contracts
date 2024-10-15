@@ -35,8 +35,8 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
 export const getRpcUrl = () => {
   ${
 		hardhatArguments.network === "baseMainnet"
-			? "return `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`"
-			: "return `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+			? "return `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+			: "return `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`"
   };
 };
 
@@ -261,7 +261,7 @@ async function main(): Promise<DeployedContracts> {
 	if (!hardhatArguments.network) throw new Error("Please pass --network");
 
 	const getRpcUrl = (): string => {
-		return `https://base-sepolia.g.alchemy.com/v2/${process.env.ALCHEMY_KEY}`;
+		return `https://base-sepolia.g.alchemy.com/v2/`;
 	};
 
 	const rpcUrl: string = getRpcUrl();
@@ -399,6 +399,14 @@ async function main(): Promise<DeployedContracts> {
 			data: encodeFunctionData(
 				"setGovOps(address)",
 				addresses.governorOperations
+			),
+		},
+		{
+			to: addresses.staking,
+			value: "0",
+			data: encodeFunctionData(
+				"setGovRes(address)",
+				addresses.governorResearch
 			),
 		},
 	];

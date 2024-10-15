@@ -119,7 +119,18 @@ const transactions = [
 		contractMethod: null,
 		contractInputsValues: null,
 	},
+	{
+		to: stakingAddress,
+		value: "0",
+		data: encodeFunctionData(
+			"setGovRes(address)",
+			governorResearchAddress
+		),
+		contractMethod: null,
+		contractInputsValues: null,
+	}
 ];
+
 
 // Create the Safe batch transaction object
 const safeBatchTransaction = {

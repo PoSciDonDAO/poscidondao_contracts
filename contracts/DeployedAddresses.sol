@@ -4,20 +4,20 @@
 
   library DeployedAddresses {
       uint constant chainId = 84532;
-string constant providerUrl = "https://base-sepolia.g.alchemy.com/v2/IYZvhXNynra2wquZWInoxxDm-DNzZCrL";
+string constant providerUrl = "https://base-sepolia.g.alchemy.com/v2/";
 string constant explorerLink = "https://sepolia.basescan.org";
 address constant admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 address constant researchFundingWallet = 0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF;
 address constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
 address constant sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311;
 address constant swapAddress = 0x3Cc223D3A738eA81125689355F8C16A56768dF70;
-address constant donation = 0xFB9Bef3fcFFa83941AB4E04b22aFEf50e9B25C3B;
-address constant po = 0x7aD861A8655752e2c4E0a30c705d2a24Cb41a6B1;
-address constant poToSciExchange = 0x462b4bBB3bd8bB6d994182dC629ccF76dC3e808e;
-address constant staking = 0x767E4EA59357FF00b59AeEb66Ed79f77ae789B5e;
-address constant governorOperations = 0x5616ea385d2e1CA6089FA53551B2C8927b66Dd1E;
-address constant governorResearch = 0x88F96f955f8DaB6404BE2e59928E1396C5D7271A;
-address constant governorExecutor = 0x63F5d2AFF5F9eCDA93fcCf718883342E3d6906E4;
-address constant governorGuard = 0x0C27d256aaA61bAB4b16882999B8B59bdd729E4f;
+address constant donation = 0x85aE4aD282C2fCb2e4609E2a34779d0D4f87Ec6B;
+address constant po = 0xaE78e406636a01B36562eA3701ec1DB2E6bf9De0;
+address constant poToSciExchange = 0x57a517497A3807922898B7B1Cf463F504002BFfc;
+address constant staking = 0xc7f93736FFbed765A26498C1E57E039AE4Ed8c0f;
+address constant governorOperations = 0x09Aa40d24663557Dab89aa2d9cdB10F4004dFC25;
+address constant governorResearch = 0xA37b75E888045D0cF88E7B5dEA39467088f9f172;
+address constant governorExecutor = 0x185D0b5c56a1f976E17Bd6Eb404B319b40B51f01;
+address constant governorGuard = 0x14a23A16ABc65Dec00a0134fc6453e53c441C6E4;
   }
   

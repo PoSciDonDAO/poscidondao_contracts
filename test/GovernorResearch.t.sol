@@ -180,7 +180,7 @@ contract GovernorResearchTest is Test {
         assertEq(proposal.startBlockNum, block.number);
         assertEq(
             proposal.endTimestamp,
-            block.timestamp + govRes.proposalLifetime()
+            block.timestamp + govRes.getGovernanceParameters().proposalLifetime
         );
         assertEq(
             uint(proposal.status),
@@ -207,7 +207,7 @@ contract GovernorResearchTest is Test {
 
         (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
 
-        assertEq(voteLockEnd, (block.timestamp + govRes.voteLockTime()));
+        assertEq(voteLockEnd, (block.timestamp + govRes.getGovernanceParameters().voteLockTime));
         vm.stopPrank();
     }
 
@@ -220,7 +220,7 @@ contract GovernorResearchTest is Test {
 
         govRes.vote(id, true);
 
-        vm.warp(govRes.voteChangeTime() - 1);
+        vm.warp(govRes.getGovernanceParameters().voteChangeTime - 1);
 
         govRes.vote(id, false);
 
@@ -238,8 +238,8 @@ contract GovernorResearchTest is Test {
         govRes.propose("Info", address(transaction));
         vm.warp(
             block.timestamp +
-                govRes.proposalLifetime() -
-                govRes.voteChangeCutOff() +
+                govRes.getGovernanceParameters().proposalLifetime -
+                govRes.getGovernanceParameters().voteChangeCutOff +
                 1
         );
         govRes.vote(id, true);
@@ -260,7 +260,7 @@ contract GovernorResearchTest is Test {
 
         govRes.vote(id, true);
 
-        vm.warp(block.timestamp + govRes.voteChangeTime() + 1);
+        vm.warp(block.timestamp + govRes.getGovernanceParameters().voteChangeTime + 1);
 
         bytes4 selector = bytes4(keccak256("VoteChangeWindowExpired()"));
         vm.expectRevert(selector);
@@ -288,7 +288,7 @@ contract GovernorResearchTest is Test {
         govRes.propose("Info", address(transaction));
 
         vm.warp(block.timestamp + 4.1 weeks);
-        uint256 quorum = govRes.quorum();
+        uint256 quorum = govRes.getGovernanceParameters().quorum;
         bytes4 selector = bytes4(
             keccak256("QuorumNotReached(uint256,uint256,uint256)")
         );
@@ -303,7 +303,7 @@ contract GovernorResearchTest is Test {
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
-        uint256 proposalLifetime = govRes.proposalLifetime();
+        uint256 proposalLifetime = govRes.getGovernanceParameters().proposalLifetime;
         bytes4 selector = bytes4(
             keccak256("ProposalOngoing(uint256,uint256,uint256)")
         );
