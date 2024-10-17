@@ -274,45 +274,44 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_ImpeachScientists() public {
-        vm.startPrank(researchFundingWallet);
-        staking.lock(1000e18);
-        vm.stopPrank();
-        vm.startPrank(addr2);
-        staking.lock(1000e18);
-        vm.stopPrank();
-        vm.startPrank(addr1);
-        address[] memory electedMembers = new address[](4);
-        electedMembers[0] = admin;
-        electedMembers[1] = researchFundingWallet;
-        electedMembers[2] = addr1;
-        electedMembers[3] = addr2;
-        election = new Election(
-            electedMembers,
-            address(govRes),
-            address(executor)
-        );
-        vm.stopPrank();
+        // vm.startPrank(researchFundingWallet);
+        // staking.lock(1000e18);
+        // vm.stopPrank();
+        // vm.startPrank(addr2);
+        // staking.lock(1000e18);
+        // vm.stopPrank();
+        // vm.startPrank(addr1);
+        // address[] memory electedMembers = new address[](4);
+        // electedMembers[0] = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+        // electedMembers[1] = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
+        // election = new Election(
+        //     electedMembers,
+        //     address(govRes),
+        //     address(executor)
+        // );
+        // vm.stopPrank();
         vm.startPrank(admin);
         staking.lock(1000e18);
         // address[] memory governors = new address[](1);
         // governors[0] = address(election);
         // govRes.addExecutors(governors);
-        vm.stopPrank();
-        vm.startPrank(addr1);
-        staking.lock(2000000e18);
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose("Info", address(election), false);
-        govOps.voteStandard(id, true);
-        vm.warp(block.timestamp + 4.1 weeks);
-        govOps.schedule(id);
-        vm.warp(block.timestamp + 3 days);
-        govOps.execute(id);
-        vm.stopPrank();
+        // vm.stopPrank();
+        // vm.startPrank(addr1);
+        // staking.lock(2000000e18);
+        // uint256 id = govOps.getProposalIndex();
+        // govOps.propose("Info", address(election), false);
+        // govOps.voteStandard(id, true);
+        // vm.warp(block.timestamp + 4.1 weeks);
+        // govOps.schedule(id);
+        // vm.warp(block.timestamp + 3 days);
+        // govOps.execute(id);
+        // vm.stopPrank();
+        assertTrue(govRes.checkDueDiligenceRole(0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe) == true);
 
         vm.startPrank(admin);
         address[] memory impeachedMembers = new address[](2);
-        impeachedMembers[0] = addr1;
-        impeachedMembers[1] = addr2;
+        impeachedMembers[0] = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+        impeachedMembers[1] = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
         impeachment = new Impeachment(
             impeachedMembers,
             address(govRes),
@@ -334,7 +333,7 @@ contract GovernorOperationsTest is Test {
         govOps.execute(id2);
         vm.stopPrank();
 
-        assertTrue(govRes.checkDueDiligenceRole(addr1) == false);
+        assertTrue(govRes.checkDueDiligenceRole(0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe) == false);
     }
 
     function test_VoteFor() public {

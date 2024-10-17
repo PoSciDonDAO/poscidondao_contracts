@@ -36,7 +36,7 @@ contract Election is ReentrancyGuard, AccessControl {
                 revert CannotBeZeroAddress();
             }
             if (
-                IGovernorRoleGrant(governorResearch).checkDueDiligenceRole(
+                IGovernorRoleGrant(governorResearch_).checkDueDiligenceRole(
                     targetWallets_[i]
                 )
             ) {

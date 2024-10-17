@@ -31,7 +31,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
                 revert CannotBeZeroAddress();
             }
             if (
-                !IGovernorRoleRevoke(governorResearch).checkDueDiligenceRole(
+                !IGovernorRoleRevoke(governorResearch_).checkDueDiligenceRole(
                     targetWallets_[i]
                 )
             ) {
