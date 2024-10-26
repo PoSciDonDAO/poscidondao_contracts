@@ -5,6 +5,7 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 contract Transaction is ReentrancyGuard, AccessControl {
     using SafeERC20 for IERC20;
@@ -48,14 +49,14 @@ contract Transaction is ReentrancyGuard, AccessControl {
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         if (amountUsdc > 0) {
             _transferToken(
-                IERC20(usdc),
+                usdc,
                 fundingWallet,
                 targetWallet,
                 amountUsdc
             );
         }
         if (amountSci > 0) {
-            _transferToken(IERC20(sci), fundingWallet, targetWallet, amountSci);
+            _transferToken(sci, fundingWallet, targetWallet, amountSci);
         }
     }
 
@@ -67,14 +68,13 @@ contract Transaction is ReentrancyGuard, AccessControl {
      * @param amount The amount of tokens to transfer
      */
     function _transferToken(
-        IERC20 token,
+        address token,
         address from,
         address to,
         uint256 amount
     ) internal {
         if (amount > 0) {
-            bool success = token.transferFrom(from, to, amount);
-            require(success, "Token transfer failed");
+            IERC20(token).safeTransferFrom(from, to, amount);
         }
     }
 }

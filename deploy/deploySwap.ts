@@ -1,11 +1,12 @@
-import { ethers, hardhatArguments, run } from "hardhat";
-import { getEnv, sleep } from "./utils";
+import { ethers, hardhatArguments } from "hardhat";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 dotenv.config();
 
 async function main() {
 	console.log(`Running deploy script for the Swap contract`);
-	// load wallet private key from env file
+
 	const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
 	if (!PRIVATE_KEY)
@@ -20,10 +21,11 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const membersWhitelist = [
+		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
 		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
 		"0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488",
 		"0xD784862aaA7848Be9C0dcA50958Da932969ef41d",
@@ -54,12 +56,13 @@ async function main() {
 		"0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e",
 		"0x083BcEEb941941e15a8a2870D5a4922b5f07Cc81",
 		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
-		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C", //nft scouser
-  ];
-  
-	const constructorArguments = [treasuryWallet, sci, usdc, membersWhitelist];
+		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
+	];
+
+	const constructorArguments = [admin, sci, usdc, membersWhitelist];
 
 	const Contract = await ethers.getContractFactory("Swap");
+
 	// Estimate contract deployment fee
 	const estimatedGas = await ethers.provider.estimateGas(
 		Contract.getDeployTransaction(...constructorArguments)
@@ -77,15 +80,229 @@ async function main() {
 		)} ETH`
 	);
 
+	// Deploy the Swap contract
 	const contract = await Contract.deploy(...constructorArguments);
-	console.log("Deployed Contract Address:", contract.address);
-	// console.log("Verifying contract in 2 minutes...");
-	// await sleep(120000 * 1);
-	// await run("verify:verify", {
-	//   address: contract.address,
-	//   constructorArguments: [...constructorArguments],
-	// });
-	// console.log(`${contract.address} has been verified`);
+	await contract.deployed();
+
+	console.log("Deployed Swap Contract Address:", contract.address);
+
+	// Writing the deployed address into a Solidity file
+	generateSolidityAddressFile({
+		swapAddress: contract.address,
+	});
+
+	// Generate the frontend address file
+	generateFrontendAddressesFile(usdc, sci, admin, contract.address);
+
+	// Extract ABIs and bytecode for frontend and backend
+	setupAbiAndBytecodeDirs();
+	extractAbisAndBytecodes(artifactsDir);
+	copyAbiFilesToFrontend();
+	copyBytecodeFilesToFrontend();
+
+	console.log(contract.address);
+}
+
+// Function to generate the Solidity file containing deployed addresses
+function generateSolidityAddressFile(deployedContracts: {
+	[key: string]: string;
+}): void {
+	const outputPath = path.join(
+		__dirname,
+		"../contracts/DeployedSwapAddresses.sol"
+	);
+	const solidityFileContent = `
+  // SPDX-License-Identifier: UNLICENSED
+  pragma solidity ^0.8.19;
+
+  library DeployedSwapAddresses {
+      address constant swapAddress = ${deployedContracts.swapAddress};
+  }
+  `;
+
+	if (fs.existsSync(outputPath)) {
+		fs.unlinkSync(outputPath);
+	}
+	fs.writeFileSync(outputPath, solidityFileContent);
+	console.log(
+		`DeployedSwapAddresses.sol has been generated at ${outputPath}`
+	);
+}
+
+// Function to generate the frontend address file
+function generateFrontendAddressesFile(
+	usdc: string,
+	sci: string,
+	admin: string,
+	swapAddress: string
+): void {
+	// Define the path to the frontend file
+	const frontendDirPath = path.join(
+		"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils"
+	);
+	const frontendAddressesFilePath = path.join(
+		frontendDirPath,
+		"serverConfig.ts"
+	);
+
+	// Check if the directory exists; if not, create it
+	if (!fs.existsSync(frontendDirPath)) {
+		fs.mkdirSync(frontendDirPath, { recursive: true });
+		console.log(`Created missing directory: ${frontendDirPath}`);
+	}
+
+	// Define the content of the serverConfig.ts file
+	const fileContent = `
+'use server';
+
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
+const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
+
+export const getRpcUrl = () => {
+  ${
+		hardhatArguments.network === "baseMainnet"
+			? "return `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+			: "return `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`"
+  };
+};
+
+export const getPrivateKey = () => {
+  return PRIVATE_KEY;
+};
+
+export const getNetworkInfo = () => {
+  const rpcUrl = getRpcUrl();
+  return {
+    chainId: ${hardhatArguments.network === "baseMainnet" ? 8453 : 84532},
+    providerUrl: \`\${rpcUrl}\`,
+    explorerLink: '${
+		hardhatArguments.network === "baseMainnet"
+			? "https://basescan.org/"
+			: "https://sepolia.basescan.org"
+	}',
+    admin: '${admin}',
+    usdc: '${usdc}',
+    sci: '${sci}',
+    swapAddress: '${swapAddress}',
+  };
+};
+`;
+
+	// If the file exists, remove it to replace with the new one
+	if (fs.existsSync(frontendAddressesFilePath)) {
+		fs.unlinkSync(frontendAddressesFilePath);
+		console.log(
+			`Existing file at ${frontendAddressesFilePath} has been deleted.`
+		);
+	}
+
+	// Write the new addresses to the file
+	fs.writeFileSync(frontendAddressesFilePath, fileContent, "utf8");
+	console.log(
+		`Swap contract addresses have been saved at ${frontendAddressesFilePath}`
+	);
+}
+
+// Directories for ABI and Bytecode
+const artifactsDir = path.join(__dirname, "../artifacts/contracts");
+const abiOutputDir = path.join(__dirname, "../abi");
+const bytecodeOutputDir = path.join(__dirname, "../abi/bytecode");
+
+// Frontend paths for ABI and bytecode
+const frontendAbiDir = path.join(
+	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/abi"
+);
+const frontendBytecodeDir = path.join(frontendAbiDir, "bytecode");
+
+// Setup directories for ABI and Bytecode
+function setupAbiAndBytecodeDirs() {
+	if (fs.existsSync(abiOutputDir)) {
+		fs.rmSync(abiOutputDir, { recursive: true });
+	}
+	fs.mkdirSync(abiOutputDir, { recursive: true });
+	fs.mkdirSync(bytecodeOutputDir, { recursive: true });
+
+	if (fs.existsSync(frontendAbiDir)) {
+		fs.rmSync(frontendAbiDir, { recursive: true });
+	}
+	fs.mkdirSync(frontendAbiDir, { recursive: true });
+	fs.mkdirSync(frontendBytecodeDir, { recursive: true });
+}
+
+function extractAbisAndBytecodes(dir: string) {
+	const files = fs.readdirSync(dir);
+	files.forEach((file) => {
+		const fullPath = path.join(dir, file);
+		const stat = fs.statSync(fullPath);
+		if (stat.isDirectory()) {
+			if (file.toLowerCase() === "interfaces") {
+				console.log(`Skipping interfaces directory: ${fullPath}`);
+				return;
+			}
+			extractAbisAndBytecodes(fullPath);
+		} else if (file.endsWith(".json")) {
+			const artifact = JSON.parse(fs.readFileSync(fullPath, "utf8"));
+			if (artifact.abi) {
+				const contractName =
+					artifact.contractName || path.basename(file, ".json");
+				const abiFileName = `${contractName}.json`;
+				const abiFilePath = path.join(abiOutputDir, abiFileName);
+				fs.writeFileSync(
+					abiFilePath,
+					JSON.stringify(artifact.abi, null, 2)
+				);
+				console.log(
+					`Extracted ABI for ${contractName} to ${abiFilePath}`
+				);
+			}
+			if (artifact.bytecode) {
+				const contractName =
+					artifact.contractName || path.basename(file, ".json");
+				const bytecodeFileName = `${contractName}.bytecode.json`;
+				const bytecodeFilePath = path.join(
+					bytecodeOutputDir,
+					bytecodeFileName
+				);
+				fs.writeFileSync(
+					bytecodeFilePath,
+					JSON.stringify({ bytecode: artifact.bytecode }, null, 2)
+				);
+				console.log(
+					`Extracted bytecode for ${contractName} to ${bytecodeFilePath}`
+				);
+			}
+		}
+	});
+}
+
+// Copy ABI files to frontend directory
+function copyAbiFilesToFrontend() {
+	const abiFiles = fs.readdirSync(abiOutputDir).filter((file) => {
+		const fullPath = path.join(abiOutputDir, file);
+		return fs.lstatSync(fullPath).isFile(); // Ensure it's a file
+	});
+
+	abiFiles.forEach((file) => {
+		const srcPath = path.join(abiOutputDir, file);
+		const destPath = path.join(frontendAbiDir, file);
+		fs.copyFileSync(srcPath, destPath);
+		console.log(`Copied ABI ${file} to frontend directory`);
+	});
+}
+
+// Copy bytecode files to frontend directory
+function copyBytecodeFilesToFrontend() {
+	const bytecodeFiles = fs.readdirSync(bytecodeOutputDir).filter((file) => {
+		const fullPath = path.join(bytecodeOutputDir, file);
+		return fs.lstatSync(fullPath).isFile(); // Ensure it's a file
+	});
+
+	bytecodeFiles.forEach((file) => {
+		const srcPath = path.join(bytecodeOutputDir, file);
+		const destPath = path.join(frontendBytecodeDir, file);
+		fs.copyFileSync(srcPath, destPath);
+		console.log(`Copied bytecode ${file} to frontend directory`);
+	});
 }
 
 main()

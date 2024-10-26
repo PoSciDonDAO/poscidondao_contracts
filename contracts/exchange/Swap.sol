@@ -28,7 +28,8 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
  */
 contract Swap is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
-
+    error CannotSwapAgain();
+    error CannotSwapMoreThanOneEther();
     error NotWhitelisted();
     error SaleExpired();
     error SoldOut();
@@ -37,6 +38,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     address public usdc;
     address public treasuryWallet;
 
+    uint256 public usdcLimit;
     uint256 public rateUsdc;
     uint256 public rateEth;
     uint256 public sciSwapCap;
@@ -48,9 +50,15 @@ contract Swap is AccessControl, ReentrancyGuard {
     bool public whitelistActive = true;
 
     mapping(address => bool) public whitelist;
+    mapping(address => bool) public hasSwapped;
 
-    event SetNewTreasuryWallet(address indexed user, address indexed newAddress);
-    event Swapped(address indexed user, address indexed asset, uint256 amount, uint256 amountSci);
+    event SetNewAdmin(address indexed user, address indexed newAddress);
+    event Swapped(
+        address indexed user,
+        address indexed asset,
+        uint256 amount,
+        uint256 amountSci
+    );
 
     modifier notExpired() {
         if (block.timestamp > deploymentTime + end) revert SaleExpired();
@@ -82,7 +90,8 @@ contract Swap is AccessControl, ReentrancyGuard {
         usdc = usdc_;
 
         rateUsdc = 2100;
-        rateEth = 14762;
+        rateEth = 12225;
+        usdcLimit = 2600e6;
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
 
         deploymentTime = block.timestamp;
@@ -96,21 +105,12 @@ contract Swap is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice sets the treasury wallet address
-     */
-    function setTreasuryWallet(address newTreasuryWallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address oldTreasuryWallet = treasuryWallet;
-        treasuryWallet = newTreasuryWallet;
-        _grantRole(DEFAULT_ADMIN_ROLE, newTreasuryWallet);
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldTreasuryWallet);
-        emit SetNewTreasuryWallet(oldTreasuryWallet, newTreasuryWallet);
-    }
-
-    /**
      * @notice adds a member to the whitelist
      * @param members the address of the member that signed up for the whitelist
      */
-    function addMembersToWhitelist(address[] memory members) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addMembersToWhitelist(
+        address[] memory members
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < members.length; i++) {
             whitelist[members[i]] = true;
         }
@@ -120,7 +120,9 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice removes a member from the whitelist
      * @param members the address of the member to be removed from the whitelist
      */
-    function removeMembersFromWhitelist(address[] memory members) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removeMembersFromWhitelist(
+        address[] memory members
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < members.length; i++) {
             whitelist[members[i]] = false;
         }
@@ -145,7 +147,9 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Sets the swap rate for USDC.
      * @param newUsdcRate The new swap rate for USDC in terms of SCI tokens.
      */
-    function setRateUsdc(uint256 newUsdcRate) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setRateUsdc(
+        uint256 newUsdcRate
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         rateUsdc = newUsdcRate;
     }
 
@@ -153,7 +157,9 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Sets the swap rate for ETH.
      * @param newEthRate The new swap rate for ETH in terms of SCI tokens.
      */
-    function setRateEth(uint256 newEthRate) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setRateEth(
+        uint256 newEthRate
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         rateEth = newEthRate;
     }
 
@@ -161,7 +167,9 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Sets the maximum cap for SCI tokens that can be swapped.
      * @param newSciSwapCap The new cap, expressed as a percentage of the total SCI supply.
      */
-    function setSciSwapCap(uint256 newSciSwapCap) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSciSwapCap(
+        uint256 newSciSwapCap
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * newSciSwapCap;
     }
 
@@ -169,13 +177,24 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Handles the swap of USDC for SCI tokens.
      * @param amount The amount of USDC to swap.
      */
-    function swapUsdc(uint256 amount) external nonReentrant notExpired whitelisted {
+    function swapUsdc(
+        uint256 amount
+    ) external nonReentrant notExpired whitelisted {
+        if (amount > 2600e6) revert CannotSwapMoreThanOneEther();
+        if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = ((amount * 10000) / rateUsdc) * 1e12;
-        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap) revert SoldOut();
+
+        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+            revert SoldOut();
+
         IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amount);
 
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
+
         totSciSwapped += sciAmount;
+
+        hasSwapped[msg.sender] = true;
+
         emit Swapped(msg.sender, address(usdc), amount, sciAmount);
     }
 
@@ -184,13 +203,20 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @dev This function is payable and accepts ETH directly.
      */
     function swapEth() external payable nonReentrant notExpired whitelisted {
+        if (msg.value > 1 ether) revert CannotSwapMoreThanOneEther();
+        if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = (msg.value * rateEth);
-        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap) revert SoldOut();
+        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+            revert SoldOut();
+
         (bool sent, ) = treasuryWallet.call{value: msg.value}("");
         require(sent);
 
         IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
+
         totSciSwapped += sciAmount;
+
+        hasSwapped[msg.sender] = true;
         emit Swapped(msg.sender, address(0), msg.value, sciAmount);
     }
 }
