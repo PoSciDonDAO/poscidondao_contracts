@@ -58,8 +58,9 @@ async function main() {
 		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
 		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
 	];
-
-	const constructorArguments = [admin, sci, usdc, membersWhitelist];
+	const currentEtherPrice = 2514;
+	
+	const constructorArguments = [admin, sci, usdc, membersWhitelist, currentEtherPrice];
 
 	const Contract = await ethers.getContractFactory("Swap");
 
@@ -109,14 +110,14 @@ function generateSolidityAddressFile(deployedContracts: {
 }): void {
 	const outputPath = path.join(
 		__dirname,
-		"../contracts/DeployedSwapAddresses.sol"
+		"../contracts/DeployedSwapAddress.sol"
 	);
 	const solidityFileContent = `
   // SPDX-License-Identifier: UNLICENSED
   pragma solidity ^0.8.19;
 
-  library DeployedSwapAddresses {
-      address constant swapAddress = ${deployedContracts.swapAddress};
+  library DeployedSwapAddress {
+      address constant swap = ${deployedContracts.swapAddress};
   }
   `;
 
@@ -125,7 +126,7 @@ function generateSolidityAddressFile(deployedContracts: {
 	}
 	fs.writeFileSync(outputPath, solidityFileContent);
 	console.log(
-		`DeployedSwapAddresses.sol has been generated at ${outputPath}`
+		`DeployedSwapAddress.sol has been generated at ${outputPath}`
 	);
 }
 

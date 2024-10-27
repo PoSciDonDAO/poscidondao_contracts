@@ -306,7 +306,11 @@ contract GovernorOperationsTest is Test {
         // vm.warp(block.timestamp + 3 days);
         // govOps.execute(id);
         // vm.stopPrank();
-        assertTrue(govRes.checkDueDiligenceRole(0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe) == true);
+        assertTrue(
+            govRes.checkDueDiligenceRole(
+                0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe
+            ) == true
+        );
 
         vm.startPrank(admin);
         address[] memory impeachedMembers = new address[](2);
@@ -333,7 +337,11 @@ contract GovernorOperationsTest is Test {
         govOps.execute(id2);
         vm.stopPrank();
 
-        assertTrue(govRes.checkDueDiligenceRole(0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe) == false);
+        assertTrue(
+            govRes.checkDueDiligenceRole(
+                0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe
+            ) == false
+        );
     }
 
     function test_VoteFor() public {

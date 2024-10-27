@@ -38,9 +38,9 @@ contract Swap is AccessControl, ReentrancyGuard {
     address public usdc;
     address public treasuryWallet;
 
-    uint256 public usdcLimit;
-    uint256 public rateUsdc;
-    uint256 public rateEth;
+    uint256 public currentEtherPrice;
+    uint256 public priceInUsdc;
+    uint256 public ethToSciConversionRate;
     uint256 public sciSwapCap;
     uint256 public totSciSwapped;
     uint256 public deploymentTime;
@@ -61,7 +61,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     );
 
     modifier notExpired() {
-        if (block.timestamp > deploymentTime + end) revert SaleExpired();
+        if (block.timestamp > end) revert SaleExpired();
         _;
     }
 
@@ -83,15 +83,16 @@ contract Swap is AccessControl, ReentrancyGuard {
         address treasuryWallet_,
         address sci_,
         address usdc_,
-        address[] memory membersWhitelist_
+        address[] memory membersWhitelist_,
+        uint256 currentEtherPrice_
     ) {
         treasuryWallet = treasuryWallet_;
         sci = sci_;
         usdc = usdc_;
 
-        rateUsdc = 2100;
-        rateEth = 12225;
-        usdcLimit = 2600e6;
+        currentEtherPrice = currentEtherPrice_;
+        priceInUsdc = 2100;
+        ethToSciConversionRate = currentEtherPrice * 10000 / priceInUsdc;
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
 
         deploymentTime = block.timestamp;
@@ -147,20 +148,20 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Sets the swap rate for USDC.
      * @param newUsdcRate The new swap rate for USDC in terms of SCI tokens.
      */
-    function setRateUsdc(
+    function setpriceInUsdc(
         uint256 newUsdcRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        rateUsdc = newUsdcRate;
+        priceInUsdc = newUsdcRate;
     }
 
     /**
      * @notice Sets the swap rate for ETH.
-     * @param newEthRate The new swap rate for ETH in terms of SCI tokens.
+     * @param newEthToSciConversionRate The new swap rate for ETH in terms of SCI tokens.
      */
-    function setRateEth(
-        uint256 newEthRate
+    function setEthToSciConversionRate(
+        uint256 newEthToSciConversionRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        rateEth = newEthRate;
+        ethToSciConversionRate = newEthToSciConversionRate;
     }
 
     /**
@@ -180,9 +181,9 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapUsdc(
         uint256 amount
     ) external nonReentrant notExpired whitelisted {
-        if (amount > 2600e6) revert CannotSwapMoreThanOneEther();
+        if (amount > currentEtherPrice) revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
-        uint256 sciAmount = ((amount * 10000) / rateUsdc) * 1e12;
+        uint256 sciAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
         if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
@@ -205,7 +206,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapEth() external payable nonReentrant notExpired whitelisted {
         if (msg.value > 1 ether) revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
-        uint256 sciAmount = (msg.value * rateEth);
+        uint256 sciAmount = (msg.value * ethToSciConversionRate);
         if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
 
