@@ -36,7 +36,7 @@ contract Swap is AccessControl, ReentrancyGuard {
 
     address private sci;
     address public usdc;
-    address public treasuryWallet;
+    address public admin;
 
     uint256 public currentEtherPrice;
     uint256 public priceInUsdc;
@@ -74,19 +74,19 @@ contract Swap is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Initializes contract with addresses of tokens and treasury, initial swap rates, and whitelisted members.
-     * @param treasuryWallet_ The address of the treasury wallet where funds will be collected.
+     * @param admin_ The address of the treasury wallet where funds will be collected.
      * @param sci_ Address of the SCI token being swapped.
      * @param usdc_ Address of the USDC token acceptable for swaps.
      * @param membersWhitelist_ The list of addresses to be added to the whitelist upon deployment.
      */
     constructor(
-        address treasuryWallet_,
+        address admin_,
         address sci_,
         address usdc_,
         address[] memory membersWhitelist_,
         uint256 currentEtherPrice_
     ) {
-        treasuryWallet = treasuryWallet_;
+        admin = admin_;
         sci = sci_;
         usdc = usdc_;
 
@@ -98,7 +98,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         deploymentTime = block.timestamp;
         end = block.timestamp + 3 days;
 
-        _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
         for (uint256 i = 0; i < membersWhitelist_.length; i++) {
             whitelist[membersWhitelist_[i]] = true;
@@ -181,16 +181,16 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapUsdc(
         uint256 amount
     ) external nonReentrant notExpired whitelisted {
-        if (amount > currentEtherPrice) revert CannotSwapMoreThanOneEther();
+        if (amount > currentEtherPrice * 1e6) revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
         if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
 
-        IERC20(usdc).safeTransferFrom(msg.sender, treasuryWallet, amount);
+        IERC20(usdc).safeTransferFrom(msg.sender, admin, amount);
 
-        IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
+        IERC20(sci).safeTransferFrom(admin, msg.sender, sciAmount);
 
         totSciSwapped += sciAmount;
 
@@ -210,10 +210,10 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
 
-        (bool sent, ) = treasuryWallet.call{value: msg.value}("");
+        (bool sent, ) = admin.call{value: msg.value}("");
         require(sent);
 
-        IERC20(sci).safeTransferFrom(treasuryWallet, msg.sender, sciAmount);
+        IERC20(sci).safeTransferFrom(admin, msg.sender, sciAmount);
 
         totSciSwapped += sciAmount;
 
