@@ -5,12 +5,16 @@ import path from "path";
 dotenv.config();
 
 async function main() {
-	console.log(`Running deploy script for the Swap contract`);
+	console.log(
+		`Running deploy script for the VoucherToTokenConversion contract`
+	);
 
 	const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
 	if (!PRIVATE_KEY)
-		throw "⛔️ Private key not detected! Add it to the .env file!";
+		throw new Error(
+			"⛔️ Private key not detected! Add it to the .env file!"
+		);
 
 	const [deployer] = await ethers.getSigners();
 
@@ -21,55 +25,20 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+    const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+    const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
-	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const voucherToSciConversion = "";
-	const membersWhitelist = [
+    const voucherSci = "0x4DF145c2923fa6B2a6841DeF6Ee5ACa033C7b1A2";
+    const swapAddress = "0x07cBe6be3F045A51048B0C30f607A2F80352aeBa";
+	const membersWhitelist: string[] = [
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
-		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
-		"0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488",
-		"0xD784862aaA7848Be9C0dcA50958Da932969ef41d",
-		"0xFF77ABCA900514BE62374b3F86bacEa033365088",
-		"0xD2f8B7A8BA93eA9e14f7bc421a70118da8508E9b",
-		"0xd8C98B84755056d193837a5e5b7814c8f6b10590",
-		"0x51d93270eA1aD2ad0506c3BE61523823400E114C",
-		"0x8b672551D687256BFaB5e447550200Eb625891De",
-		"0x9bd74d27c123ff1ac9fe82132f45662865a51c43",
-		"0x0F22D9e9421C02E60fFF8823e3d0Ccc4780F5750",
-		"0xe4c4E389ffF80E18C63df4691a16ec575781Ca0A",
-		"0x3aBCDd4b604385659E34b186d5c0aDB9FFE0403C",
-		"0x74da8f4b8a459dad4b7327f2efab2516d140a7ab",
-		"0x2E3fe68Bee7922e94EEfc643b1F04E71C6294E93",
-		"0xc3d7F06db7E0863DbBa355BaC003344887EEe455",
-		"0x39E39b63ac98b15407aBC057155d0fc296C11FE4",
-		"0x7DDAfD8EDEaf1182BBF7983c4D778C046a17D9f1",
-		"0x23208D88Ea974cc4AA639E84D2b1074D4fb41ac9",
-		"0x62B9c3eDef0aDBE15224c8a3f8824DBDEB334e9f",
-		"0xFeEf239AE6D6361729fcB8b4Ea60647344d87FEE",
-		"0x256ecFb23cF21af9F9E33745c77127892956a687",
-		"0x507b0AB4d904A38Dd8a9852239020A5718157EF6",
-		"0xAEa5981C8B3D66118523549a9331908136a3e648",
-		"0x82Dd06dDC43A4cC7f4eF68833D026C858524C2a9",
-		"0xb42a22ec528810aE816482914824e47F4dc3F094",
-		"0xe1966f09BD13e92a5aCb18C486cE4c696347A25c",
-		"0x1c033d7cb3f57d6772438f95dF8068080Ef23dc9",
-		"0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e",
-		"0x083BcEEb941941e15a8a2870D5a4922b5f07Cc81",
-		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
-		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
-	];
-	const currentEtherPrice = 2514;
-
-	const constructorArguments = [
-		admin,
-		sci,
-		usdc,
-		membersWhitelist,
-		currentEtherPrice,
 	];
 
-	const Contract = await ethers.getContractFactory("Swap");
+	const constructorArguments = [admin, sci, voucherSci, membersWhitelist];
+
+	const Contract = await ethers.getContractFactory(
+		"VoucherToSciConversion"
+	);
 
 	// Estimate contract deployment fee
 	const estimatedGas = await ethers.provider.estimateGas(
@@ -88,22 +57,29 @@ async function main() {
 		)} ETH`
 	);
 
-	// Deploy the Swap contract
+	// Deploy the VoucherToTokenConversion contract
 	const contract = await Contract.deploy(...constructorArguments);
 	await contract.deployed();
 
-	console.log("Deployed Swap Contract Address:", contract.address);
-
-	// Writing the deployed address into a Solidity file
-	generateSolidityAddressFile(
-		{
-			swapAddress: contract.address,
-		},
-		voucherToSciConversion
+	console.log(
+		"Deployed VoucherToTokenConversion Contract Address:",
+		contract.address
 	);
 
-	// Generate the frontend address file
-	generateFrontendAddressesFile(usdc, sci, admin, contract.address, voucherToSciConversion);
+	// Writing the deployed address into a Solidity file
+	generateSolidityAddressFile({
+		voucherToSciConversionAddress: contract.address,
+	}, swapAddress, voucherSci, sci );
+
+
+    generateFrontendAddressesFile(
+        usdc,
+		sci,
+		voucherSci,
+		admin,
+		swapAddress,
+		contract.address
+	);
 
 	// Extract ABIs and bytecode for frontend and backend
 	setupAbiAndBytecodeDirs();
@@ -115,12 +91,9 @@ async function main() {
 }
 
 // Function to generate the Solidity file containing deployed addresses
-function generateSolidityAddressFile(
-	deployedContracts: {
-		[key: string]: string;
-	},
-	voucherToSciConversion: string
-): void {
+function generateSolidityAddressFile(deployedContracts: {
+	voucherToSciConversionAddress: string;
+}, swapAddress: string, voucher: string, sci: string): void {
 	const outputPath = path.join(
 		__dirname,
 		"../contracts/DeployedPresaleAddresses.sol"
@@ -130,8 +103,10 @@ function generateSolidityAddressFile(
   pragma solidity ^0.8.19;
 
   library DeployedPresaleAddresses {
-      address constant swap = ${deployedContracts.swapAddress};
-	  address constant voucherToSciConversion = ${voucherToSciConversion};
+      address constant sci = ${sci};
+      address constant voucher = ${voucher};
+      address constant swap = ${swapAddress};
+      address constant voucherToSciConversion = ${deployedContracts.voucherToSciConversionAddress};
   }
   `;
 
@@ -144,13 +119,13 @@ function generateSolidityAddressFile(
 
 // Function to generate the frontend address file
 function generateFrontendAddressesFile(
-	usdc: string,
+    usdc: string,
 	sci: string,
+	voucherSci: string,
 	admin: string,
 	swapAddress: string,
-	voucherToSciConversion: string
+	voucherToSciConversionAddress: string
 ): void {
-	// Define the path to the frontend file
 	const frontendDirPath = path.join(
 		"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils"
 	);
@@ -159,13 +134,11 @@ function generateFrontendAddressesFile(
 		"serverConfig.ts"
 	);
 
-	// Check if the directory exists; if not, create it
 	if (!fs.existsSync(frontendDirPath)) {
 		fs.mkdirSync(frontendDirPath, { recursive: true });
 		console.log(`Created missing directory: ${frontendDirPath}`);
 	}
 
-	// Define the content of the serverConfig.ts file
 	const fileContent = `
 'use server';
 
@@ -196,14 +169,14 @@ export const getNetworkInfo = () => {
 	}',
     admin: '${admin}',
     usdc: '${usdc}',
+    voucherSci: '${voucherSci}',
     sci: '${sci}',
-    swap: '${swapAddress}',
-	voucherToSciConversion: ${voucherToSciConversion}
+    swapAddress: '${swapAddress}',
+    voucherToSciConversionAddress: '${voucherToSciConversionAddress}'
   };
 };
 `;
 
-	// If the file exists, remove it to replace with the new one
 	if (fs.existsSync(frontendAddressesFilePath)) {
 		fs.unlinkSync(frontendAddressesFilePath);
 		console.log(
@@ -211,19 +184,16 @@ export const getNetworkInfo = () => {
 		);
 	}
 
-	// Write the new addresses to the file
 	fs.writeFileSync(frontendAddressesFilePath, fileContent, "utf8");
 	console.log(
 		`Swap contract addresses have been saved at ${frontendAddressesFilePath}`
 	);
 }
 
-// Directories for ABI and Bytecode
 const artifactsDir = path.join(__dirname, "../artifacts/contracts");
 const abiOutputDir = path.join(__dirname, "../abi");
 const bytecodeOutputDir = path.join(__dirname, "../abi/bytecode");
 
-// Frontend paths for ABI and bytecode
 const frontendAbiDir = path.join(
 	"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/abi"
 );
@@ -290,11 +260,10 @@ function extractAbisAndBytecodes(dir: string) {
 	});
 }
 
-// Copy ABI files to frontend directory
 function copyAbiFilesToFrontend() {
 	const abiFiles = fs.readdirSync(abiOutputDir).filter((file) => {
 		const fullPath = path.join(abiOutputDir, file);
-		return fs.lstatSync(fullPath).isFile(); // Ensure it's a file
+		return fs.lstatSync(fullPath).isFile();
 	});
 
 	abiFiles.forEach((file) => {
@@ -305,11 +274,10 @@ function copyAbiFilesToFrontend() {
 	});
 }
 
-// Copy bytecode files to frontend directory
 function copyBytecodeFilesToFrontend() {
 	const bytecodeFiles = fs.readdirSync(bytecodeOutputDir).filter((file) => {
 		const fullPath = path.join(bytecodeOutputDir, file);
-		return fs.lstatSync(fullPath).isFile(); // Ensure it's a file
+		return fs.lstatSync(fullPath).isFile();
 	});
 
 	bytecodeFiles.forEach((file) => {

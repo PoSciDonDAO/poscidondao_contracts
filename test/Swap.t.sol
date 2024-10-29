@@ -6,7 +6,7 @@ import "contracts/tokens/Sci.sol";
 import "contracts/exchange/Swap.sol";
 import "contracts/test/Usdc.sol";
 import "contracts/DeployedAddresses.sol";
-import "contracts/DeployedSwapAddress.sol";
+import "contracts/DeployedPresaleAddresses.sol";
 
 contract SwapTest is Test {
     Usdc usdc;
@@ -61,9 +61,9 @@ contract SwapTest is Test {
         usdc = Usdc(DeployedAddresses.usdc);
         vm.startPrank(admin);
         sci = Sci(DeployedAddresses.sci);
-        swap = Swap(DeployedSwapAddress.swap);
+        swap = Swap(DeployedPresaleAddresses.swap);
         // deal(address(sci), admin, 100000000e18);
-        sci.approve(DeployedSwapAddress.swap, 94550e18);
+        sci.approve(DeployedPresaleAddresses.swap, 94550e18);
         // address[] memory whitelist = new address[](2);
         // whitelist[0] = addr1;
         // whitelist[1] = addr2;

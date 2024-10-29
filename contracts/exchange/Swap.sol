@@ -52,7 +52,9 @@ contract Swap is AccessControl, ReentrancyGuard {
     mapping(address => bool) public whitelist;
     mapping(address => bool) public hasSwapped;
 
-    event SetNewAdmin(address indexed user, address indexed newAddress);
+    event MembersWhitelisted(address[] members);
+    event MembersUnwhitelisted(address[] members);
+
     event Swapped(
         address indexed user,
         address indexed asset,
@@ -92,11 +94,11 @@ contract Swap is AccessControl, ReentrancyGuard {
 
         currentEtherPrice = currentEtherPrice_;
         priceInUsdc = 2100;
-        ethToSciConversionRate = currentEtherPrice * 10000 / priceInUsdc;
+        ethToSciConversionRate = (currentEtherPrice * 10000) / priceInUsdc;
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
 
         deploymentTime = block.timestamp;
-        end = block.timestamp + 3 days;
+        end = deploymentTime + 3 days;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
@@ -115,6 +117,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         for (uint256 i = 0; i < members.length; i++) {
             whitelist[members[i]] = true;
         }
+        emit MembersWhitelisted(members);
     }
 
     /**
@@ -127,6 +130,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         for (uint256 i = 0; i < members.length; i++) {
             whitelist[members[i]] = false;
         }
+        emit MembersUnwhitelisted(members);
     }
 
     /**
@@ -181,7 +185,8 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapUsdc(
         uint256 amount
     ) external nonReentrant notExpired whitelisted {
-        if (amount > currentEtherPrice * 1e6) revert CannotSwapMoreThanOneEther();
+        if (amount > currentEtherPrice * 1e6)
+            revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
