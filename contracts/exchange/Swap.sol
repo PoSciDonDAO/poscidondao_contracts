@@ -4,7 +4,7 @@
  * Copyright (c) 2024, PoSciDonDAO Foundation.
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero
- * General Public License as published by the Free Software Foundation, either version 3 of the License, or
+ * General Public License (AGPL) as published by the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License along with this program. If not,
  * see <http://www.gnu.org/licenses/>.
  */
+
 pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
@@ -93,8 +94,8 @@ contract Swap is AccessControl, ReentrancyGuard {
         usdc = usdc_;
 
         currentEtherPrice = currentEtherPrice_;
-        priceInUsdc = 2100;
-        ethToSciConversionRate = (currentEtherPrice * 10000) / priceInUsdc;
+        priceInUsdc = 2115; //0.2115 USD per token
+        ethToSciConversionRate = (currentEtherPrice_ * 10000) / priceInUsdc;
         sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
 
         deploymentTime = block.timestamp;
@@ -190,7 +191,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
-        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+        if (totSciSwapped >= sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
 
         IERC20(usdc).safeTransferFrom(msg.sender, admin, amount);
@@ -212,7 +213,8 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (msg.value > 1 ether) revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 sciAmount = (msg.value * ethToSciConversionRate);
-        if (totSciSwapped > sciSwapCap || sciAmount > sciSwapCap)
+        
+        if (totSciSwapped >= sciSwapCap || sciAmount > sciSwapCap)
             revert SoldOut();
 
         (bool sent, ) = admin.call{value: msg.value}("");

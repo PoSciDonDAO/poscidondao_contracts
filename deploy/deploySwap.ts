@@ -24,7 +24,7 @@ async function main() {
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const voucherToSciConversion = "";
+	const voucherToSciConversion = "0x1A95800330Ff3FF0b091C82d7b2204279df4BE46";
 	const membersWhitelist = [
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
 		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
@@ -123,15 +123,14 @@ function generateSolidityAddressFile(
 ): void {
 	const outputPath = path.join(
 		__dirname,
-		"../contracts/DeployedPresaleAddresses.sol"
+		"../contracts/DeployedSwapAddress.sol"
 	);
 	const solidityFileContent = `
   // SPDX-License-Identifier: UNLICENSED
   pragma solidity ^0.8.19;
 
-  library DeployedPresaleAddresses {
+  library DeployedSwapAddress {
       address constant swap = ${deployedContracts.swapAddress};
-	  address constant voucherToSciConversion = ${voucherToSciConversion};
   }
   `;
 
@@ -198,7 +197,6 @@ export const getNetworkInfo = () => {
     usdc: '${usdc}',
     sci: '${sci}',
     swap: '${swapAddress}',
-	voucherToSciConversion: ${voucherToSciConversion}
   };
 };
 `;
