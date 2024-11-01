@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Copyright (c) 2024, PoSciDonDAO Foundation.
+ * Copyright (c) 2024, PoVoucherDonDAO Foundation.
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero
  * General Public License (AGPL) as published by the Free Software Foundation, either version 3 of the License, or
@@ -23,9 +23,9 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 /**
- * @title SCI Token Swap Contract
- * @dev Contract to exchange USDC, WETH, or ETH for SCI tokens at predefined rates.
- *      This contract handles the accounting of swapped tokens and enforces a cap on the maximum amount of SCI that can be swapped.
+ * @title Voucher Swap Contract
+ * @dev Contract to exchange USDC, or ETH for Vouchers (vSCI tokens) at predefined rates.
+ *      This contract handles the accounting of swapped tokens and enforces a cap on the maximum amount of vSCI that can be swapped.
  */
 contract Swap is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -35,18 +35,18 @@ contract Swap is AccessControl, ReentrancyGuard {
     error SaleExpired();
     error SoldOut();
 
-    address private sci;
+    address private voucher;
     address public usdc;
     address public admin;
 
     uint256 public currentEtherPrice;
     uint256 public priceInUsdc;
-    uint256 public ethToSciConversionRate;
-    uint256 public sciSwapCap;
-    uint256 public totSciSwapped;
+    uint256 public ethToVoucherConversionRate;
+    uint256 public voucherSwapCap;
+    uint256 public totVoucherSwapped;
     uint256 public deploymentTime;
     uint256 public end;
-    uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
+    uint256 public constant TOTAL_SUPPLY_VOUCHERS = 18910000e18;
 
     bool public whitelistActive = true;
 
@@ -60,7 +60,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         address indexed user,
         address indexed asset,
         uint256 amount,
-        uint256 amountSci
+        uint256 amountVoucher
     );
 
     modifier notExpired() {
@@ -78,25 +78,25 @@ contract Swap is AccessControl, ReentrancyGuard {
     /**
      * @dev Initializes contract with addresses of tokens and treasury, initial swap rates, and whitelisted members.
      * @param admin_ The address of the treasury wallet where funds will be collected.
-     * @param sci_ Address of the SCI token being swapped.
+     * @param voucher_ Address of the SCI token being swapped.
      * @param usdc_ Address of the USDC token acceptable for swaps.
      * @param membersWhitelist_ The list of addresses to be added to the whitelist upon deployment.
      */
     constructor(
         address admin_,
-        address sci_,
+        address voucher_,
         address usdc_,
         address[] memory membersWhitelist_,
         uint256 currentEtherPrice_
     ) {
         admin = admin_;
-        sci = sci_;
+        voucher = voucher_;
         usdc = usdc_;
 
         currentEtherPrice = currentEtherPrice_;
         priceInUsdc = 2115; //0.2115 USD per token
-        ethToSciConversionRate = (currentEtherPrice_ * 10000) / priceInUsdc;
-        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * 50;
+        ethToVoucherConversionRate = (currentEtherPrice_ * 10000) / priceInUsdc;
+        voucherSwapCap = (TOTAL_SUPPLY_VOUCHERS / 10000) * 50;
 
         deploymentTime = block.timestamp;
         end = deploymentTime + 3 days;
@@ -161,22 +161,22 @@ contract Swap is AccessControl, ReentrancyGuard {
 
     /**
      * @notice Sets the swap rate for ETH.
-     * @param newEthToSciConversionRate The new swap rate for ETH in terms of SCI tokens.
+     * @param newEthToVoucherConversionRate The new swap rate for ETH in terms of SCI tokens.
      */
-    function setEthToSciConversionRate(
-        uint256 newEthToSciConversionRate
+    function setEthToVoucherConversionRate(
+        uint256 newEthToVoucherConversionRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        ethToSciConversionRate = newEthToSciConversionRate;
+        ethToVoucherConversionRate = newEthToVoucherConversionRate;
     }
 
     /**
      * @notice Sets the maximum cap for SCI tokens that can be swapped.
-     * @param newSciSwapCap The new cap, expressed as a percentage of the total SCI supply.
+     * @param newVoucherSwapCap The new cap, expressed as a percentage of the total SCI supply.
      */
-    function setSciSwapCap(
-        uint256 newSciSwapCap
+    function setVoucherSwapCap(
+        uint256 newVoucherSwapCap
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        sciSwapCap = (TOTAL_SUPPLY_SCI / 10000) * newSciSwapCap;
+        voucherSwapCap = (TOTAL_SUPPLY_VOUCHERS / 10000) * newVoucherSwapCap;
     }
 
     /**
@@ -189,20 +189,20 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (amount > currentEtherPrice * 1e6)
             revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
-        uint256 sciAmount = ((amount * 10000) / priceInUsdc) * 1e12;
+        uint256 voucherAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
-        if (totSciSwapped >= sciSwapCap || sciAmount > sciSwapCap)
+        if (totVoucherSwapped >= voucherSwapCap || voucherAmount > voucherSwapCap)
             revert SoldOut();
 
         IERC20(usdc).safeTransferFrom(msg.sender, admin, amount);
 
-        IERC20(sci).safeTransferFrom(admin, msg.sender, sciAmount);
+        IERC20(voucher).safeTransferFrom(admin, msg.sender, voucherAmount);
 
-        totSciSwapped += sciAmount;
+        totVoucherSwapped += voucherAmount;
 
         hasSwapped[msg.sender] = true;
 
-        emit Swapped(msg.sender, address(usdc), amount, sciAmount);
+        emit Swapped(msg.sender, address(usdc), amount, voucherAmount);
     }
 
     /**
@@ -212,19 +212,19 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapEth() external payable nonReentrant notExpired whitelisted {
         if (msg.value > 1 ether) revert CannotSwapMoreThanOneEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
-        uint256 sciAmount = (msg.value * ethToSciConversionRate);
-        
-        if (totSciSwapped >= sciSwapCap || sciAmount > sciSwapCap)
+        uint256 voucherAmount = (msg.value * ethToVoucherConversionRate);
+
+        if (totVoucherSwapped >= voucherSwapCap || voucherAmount > voucherSwapCap)
             revert SoldOut();
 
         (bool sent, ) = admin.call{value: msg.value}("");
         require(sent);
 
-        IERC20(sci).safeTransferFrom(admin, msg.sender, sciAmount);
+        IERC20(voucher).safeTransferFrom(admin, msg.sender, voucherAmount);
 
-        totSciSwapped += sciAmount;
+        totVoucherSwapped += voucherAmount;
 
         hasSwapped[msg.sender] = true;
-        emit Swapped(msg.sender, address(0), msg.value, sciAmount);
+        emit Swapped(msg.sender, address(0), msg.value, voucherAmount);
     }
 }

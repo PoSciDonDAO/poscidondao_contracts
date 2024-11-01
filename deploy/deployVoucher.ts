@@ -20,10 +20,10 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
-	const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const initialMintAmount = 18910000;
 
-	const constructorArguments = [treasuryWallet, initialMintAmount];
+	const constructorArguments = [admin, initialMintAmount];
 
 	const Contract = await ethers.getContractFactory("Voucher");
 	// Estimate contract deployment fee

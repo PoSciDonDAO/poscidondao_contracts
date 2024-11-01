@@ -22,9 +22,8 @@ async function main() {
 	}
 
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const voucher = "0x26f7AEc9010e058CA0E60911f37A08c2bdddB052";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const voucherToSciConversion = "0x1A95800330Ff3FF0b091C82d7b2204279df4BE46";
 	const membersWhitelist = [
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
 		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
@@ -63,7 +62,7 @@ async function main() {
 
 	const constructorArguments = [
 		admin,
-		sci,
+		voucher,
 		usdc,
 		membersWhitelist,
 		currentEtherPrice,
@@ -94,18 +93,12 @@ async function main() {
 
 	console.log("Deployed Swap Contract Address:", contract.address);
 
-	// Writing the deployed address into a Solidity file
-	generateSolidityAddressFile(
-		{
-			swapAddress: contract.address,
-		},
-		voucherToSciConversion
-	);
+	generateSolidityAddressFile({
+		swapAddress: contract.address,
+	});
 
-	// Generate the frontend address file
-	generateFrontendAddressesFile(usdc, sci, admin, contract.address, voucherToSciConversion);
+	generateFrontendAddressesFile(usdc, voucher, admin, contract.address);
 
-	// Extract ABIs and bytecode for frontend and backend
 	setupAbiAndBytecodeDirs();
 	extractAbisAndBytecodes(artifactsDir);
 	copyAbiFilesToFrontend();
@@ -115,12 +108,9 @@ async function main() {
 }
 
 // Function to generate the Solidity file containing deployed addresses
-function generateSolidityAddressFile(
-	deployedContracts: {
-		[key: string]: string;
-	},
-	voucherToSciConversion: string
-): void {
+function generateSolidityAddressFile(deployedContracts: {
+	[key: string]: string;
+}): void {
 	const outputPath = path.join(
 		__dirname,
 		"../contracts/DeployedSwapAddress.sol"
@@ -144,10 +134,9 @@ function generateSolidityAddressFile(
 // Function to generate the frontend address file
 function generateFrontendAddressesFile(
 	usdc: string,
-	sci: string,
+	voucher: string,
 	admin: string,
-	swapAddress: string,
-	voucherToSciConversion: string
+	swapAddress: string
 ): void {
 	// Define the path to the frontend file
 	const frontendDirPath = path.join(
@@ -195,8 +184,8 @@ export const getNetworkInfo = () => {
 	}',
     admin: '${admin}',
     usdc: '${usdc}',
-    sci: '${sci}',
-    swap: '${swapAddress}',
+    voucher: '${voucher}',
+    swapAddress: '${swapAddress}',
   };
 };
 `;
