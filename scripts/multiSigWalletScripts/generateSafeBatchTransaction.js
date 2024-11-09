@@ -30,7 +30,7 @@ const deployedContracts = parseSolidityAddresses(deployedAddressesPath);
 const governorExecutorAddress = deployedContracts.governorExecutor;
 const governorGuardAddress = deployedContracts.governorGuard;
 const governorOperationsAddress = deployedContracts.governorOperations;
-const stakingAddress = deployedContracts.staking;
+const stakingAddress = deployedContracts.sciManager;
 const governorResearchAddress = deployedContracts.governorResearch;
 const poAddress = deployedContracts.po;
 
@@ -138,9 +138,9 @@ const safeBatchTransaction = {
 	chainId: "84532",
 	createdAt: Date.now(),
 	meta: {
-		name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Contracts",
+		name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
 		description:
-			"Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and Staking contracts.",
+			"Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
 		txBuilderVersion: "1.17.0",
 		createdFromSafeAddress: "0x96f67a852f8D3Bc05464C4F91F97aACE060e247A",
 		createdFromOwnerAddress: "",

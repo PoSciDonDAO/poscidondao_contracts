@@ -68,7 +68,7 @@ contract SwapTest is Test {
         uint256 oldBalanceAddr1 = sci.balanceOf(addr1);
 
         uint256 amount = 1 ether;
-        uint256 expectedSciAmount = amount * swap.ethToSciConversionRate();
+        uint256 expectedSciAmount = amount * swap.ethToVoucherConversionRate();
 
         vm.startPrank(addr1);
         swap.swapEth{value: amount}();

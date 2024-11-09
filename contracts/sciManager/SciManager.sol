@@ -4,12 +4,12 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IStaking} from "contracts/interfaces/IStaking.sol";
+import {ISciManager} from "contracts/interfaces/ISciManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-contract Staking is IStaking, AccessControl, ReentrancyGuard {
+contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     ///*** ERRORS ***///
@@ -58,7 +58,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     address public govOpsContract;
     address public govResContract;
     IGovernorExecution govExec;
-    uint256 private totStaked;
+    uint256 private totLocked;
     uint256 private totDelegated;
     uint256 public delegateThreshold;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
@@ -165,7 +165,7 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Adds an address to the delegate whitelist if tokens have been staked
+     * @dev Adds an address to the delegate whitelist if tokens have been locked
      * @param newDelegate Address to be added to the whitelist
      */
     function addDelegate(address newDelegate) external onlyExecutor {
@@ -283,8 +283,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         //Retrieve SCI tokens from user wallet but user needs to approve transfer first
         IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
 
-        //add to total staked amount
-        totStaked += amount;
+        //add to total locked amount
+        totLocked += amount;
 
         //Adds amount of deposited SCI tokens
         users[msg.sender].lockedSci += amount;
@@ -328,8 +328,8 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
         //return SCI tokens
         IERC20(sci).safeTransfer(msg.sender, amount);
 
-        //deduct amount from total staked
-        totStaked -= amount;
+        //deduct amount from total locked
+        totLocked -= amount;
 
         //remove amount from deposited amount
         users[msg.sender].lockedSci -= amount;
@@ -414,10 +414,10 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the total amount of staked SCI tokens
+     * @dev returns the total amount of locked SCI tokens
      */
-    function getTotalStaked() external view returns (uint256) {
-        return totStaked;
+    function getTotalLockedSci() external view returns (uint256) {
+        return totLocked;
     }
 
     /**
@@ -428,9 +428,9 @@ contract Staking is IStaking, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the amount of staked SCI tokens of a given user
+     * @dev returns the amount of locked SCI tokens of a given user
      */
-    function getStakedSci(address user) external view returns (uint256) {
+    function getLockedSci(address user) external view returns (uint256) {
         return users[user].lockedSci;
     }
 

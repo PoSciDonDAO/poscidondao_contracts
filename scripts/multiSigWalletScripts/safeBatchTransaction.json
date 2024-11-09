@@ -1,55 +1,55 @@
 {
   "version": "1.0",
   "chainId": 84532,
-  "createdAt": 1729006556244,
+  "createdAt": 1731187146608,
   "meta": {
-    "name": "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Contracts",
-    "description": "Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and Staking contracts.",
+    "name": "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
+    "description": "Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
     "txBuilderVersion": "1.17.0",
     "createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
     "createdFromOwnerAddress": ""
   },
   "transactions": [
     {
-      "to": "0xc7f93736FFbed765A26498C1E57E039AE4Ed8c0f",
+      "to": "0xfB77C12E418719124A4A10eDb96966d85d76f148",
       "value": "0",
-      "data": "0x861228a2000000000000000000000000185d0b5c56a1f976e17bd6eb404b319b40b51f01"
+      "data": "0x861228a2000000000000000000000000b938c3144ce544d480b2753146cb7a48e003bca4"
     },
     {
-      "to": "0xA37b75E888045D0cF88E7B5dEA39467088f9f172",
+      "to": "0xc29C4d5A99512b02e84Bc7485B02DBB34F829AF3",
       "value": "0",
-      "data": "0x861228a2000000000000000000000000185d0b5c56a1f976e17bd6eb404b319b40b51f01"
+      "data": "0x861228a2000000000000000000000000b938c3144ce544d480b2753146cb7a48e003bca4"
     },
     {
-      "to": "0x09Aa40d24663557Dab89aa2d9cdB10F4004dFC25",
+      "to": "0x73d712813e4067828eB3266B00d790805A92F0A9",
       "value": "0",
-      "data": "0x861228a2000000000000000000000000185d0b5c56a1f976e17bd6eb404b319b40b51f01"
+      "data": "0x861228a2000000000000000000000000b938c3144ce544d480b2753146cb7a48e003bca4"
     },
     {
-      "to": "0x09Aa40d24663557Dab89aa2d9cdB10F4004dFC25",
+      "to": "0x73d712813e4067828eB3266B00d790805A92F0A9",
       "value": "0",
-      "data": "0x613248b700000000000000000000000014a23a16abc65dec00a0134fc6453e53c441c6e4"
+      "data": "0x613248b7000000000000000000000000c63649bcb1e9c099575c917c33e0a5199e1d7ad4"
     },
     {
-      "to": "0xA37b75E888045D0cF88E7B5dEA39467088f9f172",
+      "to": "0xc29C4d5A99512b02e84Bc7485B02DBB34F829AF3",
       "value": "0",
-      "data": "0x613248b700000000000000000000000014a23a16abc65dec00a0134fc6453e53c441c6e4"
+      "data": "0x613248b7000000000000000000000000c63649bcb1e9c099575c917c33e0a5199e1d7ad4"
     },
     {
-      "to": "0xaE78e406636a01B36562eA3701ec1DB2E6bf9De0",
+      "to": "0x139F3fb6E187bED5A855F76D8db4f78CE7ce60c9",
       "value": "0",
-      "data": "0xc1cc275e00000000000000000000000009aa40d24663557dab89aa2d9cdb10f4004dfc25"
+      "data": "0xc1cc275e00000000000000000000000073d712813e4067828eb3266b00d790805a92f0a9"
     },
     {
-      "to": "0xc7f93736FFbed765A26498C1E57E039AE4Ed8c0f",
+      "to": "0xfB77C12E418719124A4A10eDb96966d85d76f148",
       "value": "0",
-      "data": "0xc1cc275e00000000000000000000000009aa40d24663557dab89aa2d9cdb10f4004dfc25"
+      "data": "0xc1cc275e00000000000000000000000073d712813e4067828eb3266b00d790805a92f0a9"
     },
     {
-      "to": "0xc7f93736FFbed765A26498C1E57E039AE4Ed8c0f",
+      "to": "0xfB77C12E418719124A4A10eDb96966d85d76f148",
       "value": "0",
-      "data": "0x0a5db715000000000000000000000000a37b75e888045d0cf88e7b5dea39467088f9f172"
+      "data": "0x0a5db715000000000000000000000000c29c4d5a99512b02e84bc7485b02dbb34f829af3"
     }
   ],
-  "checksum": "0xa5dc4fabbac0760d0b88d8417d15b3d1f08050d82d67975e0a916607e1eb2985"
+  "checksum": "0x121a12d60bc9129a16ec4065bc10d52fb3e103c25ceddaa571b1eb6c72d1e572"
 }

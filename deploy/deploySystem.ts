@@ -62,7 +62,7 @@ export const getNetworkInfo = () => {
     donation: '${deployedContracts.donation}',
     po: '${deployedContracts.po}',
     poToSciExchange: '${deployedContracts.poToSciExchange}',
-    staking: '${deployedContracts.staking}',
+    sciManager: '${deployedContracts.sciManager}',
     governorOperations: '${deployedContracts.governorOperations}',
     governorResearch: '${deployedContracts.governorResearch}',
     governorExecutor: '${deployedContracts.governorExecutor}',
@@ -294,15 +294,15 @@ async function main(): Promise<DeployedContracts> {
 		[admin, sci, addresses.po],
 		"poToSciExchange"
 	);
-	await deployAndVerify("Staking", [admin, sci], "staking");
+	await deployAndVerify("SciManager", [admin, sci], "sciManager");
 	await deployAndVerify(
 		"GovernorOperations",
-		[addresses.staking, admin, addresses.po, signer],
+		[addresses.sciManager, admin, addresses.po, signer],
 		"governorOperations"
 	);
 	await deployAndVerify(
 		"GovernorResearch",
-		[addresses.staking, admin, researchFundingWallet],
+		[addresses.sciManager, admin, researchFundingWallet],
 		"governorResearch"
 	);
 	await deployAndVerify(
@@ -328,11 +328,10 @@ async function main(): Promise<DeployedContracts> {
 		researchFundingWallet: researchFundingWallet,
 		usdc: usdc,
 		sci: sci,
-		swapAddress: "0x3Cc223D3A738eA81125689355F8C16A56768dF70",
 		donation: addresses.donation,
 		po: addresses.po,
 		poToSciExchange: addresses.poToSciExchange,
-		staking: addresses.staking,
+		sciManager: addresses.sciManager,
 		governorOperations: addresses.governorOperations,
 		governorResearch: addresses.governorResearch,
 		governorExecutor: addresses.governorExecutor,
@@ -346,7 +345,7 @@ async function main(): Promise<DeployedContracts> {
 
 	const transactions = [
 		{
-			to: addresses.staking,
+			to: addresses.sciManager,
 			value: "0",
 			data: encodeFunctionData(
 				"setGovExec(address)",
@@ -394,7 +393,7 @@ async function main(): Promise<DeployedContracts> {
 			),
 		},
 		{
-			to: addresses.staking,
+			to: addresses.sciManager,
 			value: "0",
 			data: encodeFunctionData(
 				"setGovOps(address)",
@@ -402,7 +401,7 @@ async function main(): Promise<DeployedContracts> {
 			),
 		},
 		{
-			to: addresses.staking,
+			to: addresses.sciManager,
 			value: "0",
 			data: encodeFunctionData(
 				"setGovRes(address)",
@@ -416,9 +415,9 @@ async function main(): Promise<DeployedContracts> {
 		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
 		createdAt: Date.now(),
 		meta: {
-			name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Staking, Research, and PO Contracts",
+			name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
 			description:
-				"Batch transaction to set the GovernorExecutor address across Staking, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and Staking contracts.",
+				"Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
 			txBuilderVersion: "1.17.0",
 			createdFromSafeAddress: admin,
 			createdFromOwnerAddress: "",

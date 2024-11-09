@@ -44,8 +44,8 @@ contract Donation is AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the staking contract address
-     * @param usdcAddress the address of the staking contract
+     * @dev sets the sciManager contract address
+     * @param usdcAddress the address of the sciManager contract
      */
     function setUsdcAddress(
         address usdcAddress

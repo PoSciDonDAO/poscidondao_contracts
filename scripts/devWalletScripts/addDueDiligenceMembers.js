@@ -34,7 +34,7 @@ async function main() {
 		wallet
 	);
 
-	// Call the function, 1000 SCI tokens need to be staked
+	// Call the function, 1000 SCI tokens need to be locked
 	try {
 		for (let i = 0; i < newDueDiligenceMembers.length; i++) {
 			const tx1 = await contractGovRes.grantDueDiligenceRole(

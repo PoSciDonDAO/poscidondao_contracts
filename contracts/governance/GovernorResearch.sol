@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-import "./../interfaces/IStaking.sol";
+import "./../interfaces/ISciManager.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
@@ -59,7 +59,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     IGovernorGuard private govGuard;
 
     ///*** KEY ADDRESSES ***///
-    address public stakingAddress;
+    address public sciManagerAddress;
     address public admin;
     address public researchFundingWallet;
 
@@ -150,7 +150,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         ) {
             revert CannotBeZeroAddress();
         }
-        stakingAddress = staking_;
+        sciManagerAddress = staking_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
 
@@ -198,9 +198,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function grantDueDiligenceRole(
         address[] memory members
     ) external onlyExecutor {
-        IStaking staking = IStaking(stakingAddress);
+        ISciManager sciManager = ISciManager(sciManagerAddress);
         for (uint256 i = 0; i < members.length; i++) {
-            _validateStakingRequirements(staking, members[i]);
+            _validateLockingRequirements(sciManager, members[i]);
             _grantRole(DUE_DILIGENCE_ROLE, members[i]);
         }
     }
@@ -250,12 +250,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the staking address
+     * @dev sets the sciManager address
      */
     function setStakingAddress(
         address newStakingAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        stakingAddress = newStakingAddress;
+        sciManagerAddress = newStakingAddress;
         emit StakingUpdated(msg.sender, newStakingAddress);
     }
 
@@ -304,8 +304,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             executable = true;
         }
 
-        IStaking staking = IStaking(stakingAddress);
-        _validateStakingRequirements(staking, msg.sender);
+        ISciManager sciManager = ISciManager(sciManagerAddress);
+        _validateLockingRequirements(sciManager, msg.sender);
 
         uint256 currentIndex = _storeProposal(info, action, executable);
 
@@ -326,9 +326,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         _votingChecks(id, msg.sender);
 
-        IStaking staking = IStaking(stakingAddress);
+        ISciManager sciManager = ISciManager(sciManagerAddress);
 
-        _validateStakingRequirements(staking, msg.sender);
+        _validateLockingRequirements(sciManager, msg.sender);
 
         _recordVote(id, support);
     }
@@ -623,7 +623,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             voteData.initialVoteTimestamp = block.timestamp;
         }
 
-        IStaking(stakingAddress).voted(
+        ISciManager(sciManagerAddress).voted(
             msg.sender,
             block.timestamp + governanceParams.voteLockTime
         );
@@ -632,18 +632,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Validates if the proposer meets the staking requirements for proposing research.
-     * @param staking The staking contract interface used to check the staked SCI.
+     * @dev Validates if the proposer meets the sciManager requirements for proposing research.
+     * @param sciManager The contract interface used to check the number of locked SCI.
      * @param member The address of the member initiating an action.
      *
-     * @notice This function reverts with InsufficientBalance if the staked SCI is below the threshold.
-     * The staked SCI amount and required threshold are provided in the revert message.
+     * @notice This function reverts with InsufficientBalance if the locked SCI is below the threshold.
+     * The locked SCI amount and required threshold are provided in the revert message.
      */
-    function _validateStakingRequirements(
-        IStaking staking,
+    function _validateLockingRequirements(
+        ISciManager sciManager,
         address member
     ) internal view {
-        uint256 stakedSci = staking.getStakedSci(member);
+        uint256 stakedSci = sciManager.getLockedSci(member);
         if (stakedSci < governanceParams.ddThreshold) {
             revert InsufficientBalance(stakedSci, governanceParams.ddThreshold);
         }

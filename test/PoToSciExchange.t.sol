@@ -6,14 +6,14 @@ import "contracts/governance/GovernorOperations.sol";
 import "contracts/tokens/Po.sol";
 import "contracts/test/Usdc.sol";
 import "contracts/tokens/Sci.sol";
-import "contracts/staking/Staking.sol";
+import "contracts/sciManager/SciManager.sol";
 import "contracts/exchange/PoToSciExchange.sol";
 
 contract PoToSciExchangeTest is Test {
     GovernorOperations public govOps;
     Po public po;
     Usdc public usdc;
-    Staking public staking;
+    SciManager public sciManager;
     Sci public sci;
     PoToSciExchange public ex;
 
@@ -40,10 +40,10 @@ contract PoToSciExchangeTest is Test {
         sci = new Sci(admin, 18910000);
 
         po = new Po("", admin);
-        staking = new Staking(admin, address(sci));
+        sciManager = new SciManager(admin, address(sci));
 
         govOps = new GovernorOperations(
-            address(staking),
+            address(sciManager),
             admin,
             address(po),
             signer
@@ -53,7 +53,7 @@ contract PoToSciExchangeTest is Test {
 
         govOps.setPoToken(address(po));
         
-        staking.setGovOps(address(govOps));
+        sciManager.setGovOps(address(govOps));
         po.setGovOps(address(govOps));
         vm.stopPrank();
 
@@ -68,15 +68,15 @@ contract PoToSciExchangeTest is Test {
         deal(address(sci), addr1, 100000000e18);
         deal(addr1, 10000 ether);
         sci.approve(address(govOps), 10000e18);
-        sci.approve(address(staking), 10000000000000000e18);
-        staking.lock(10000e18);
+        sci.approve(address(sciManager), 10000000000000000e18);
+        sciManager.lock(10000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         deal(address(sci), addr2, 5000e18);
         deal(addr2, 10000 ether);
         sci.approve(address(govOps), 10000e18);
-        sci.approve(address(staking), 10000000000000000e18);
+        sci.approve(address(sciManager), 10000000000000000e18);
         po.setApprovalForAll(address(ex), true);
         vm.stopPrank();
     }
@@ -90,14 +90,14 @@ contract PoToSciExchangeTest is Test {
 
     function test_ExchangePoForSci() public {
         vm.startPrank(addr1);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), false);
 
         vm.stopPrank();
         vm.startPrank(addr2);
 
-        staking.lock(5000e18);
+        sciManager.lock(5000e18);
 
         govOps.voteStandard(id, true);
         assertEq(po.balanceOf(addr2, 0), 1);
@@ -114,13 +114,13 @@ contract PoToSciExchangeTest is Test {
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(0), false);
         vm.stopPrank();
 
         vm.startPrank(addr2);
-        staking.lock(5000e18);
+        sciManager.lock(5000e18);
         govOps.voteStandard(id, true);
 
         ex.exchangePoForSci(1);

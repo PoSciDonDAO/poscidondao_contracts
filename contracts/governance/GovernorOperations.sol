@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "./../interfaces/IPo.sol";
-import "./../interfaces/IStaking.sol";
+import "./../interfaces/ISciManager.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
@@ -15,7 +15,7 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 /**
  * @title GovernorOperations
  * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
- * It integrates with external contracts for staking validation, participation and proposal execution.
+ * It integrates with external contracts for sciManager validation, participation and proposal execution.
  */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
     using ECDSA for bytes32;
@@ -126,36 +126,46 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
-    event Canceled(uint256 indexed id, address indexed user, bool indexed rejected);
+    event Canceled(
+        uint256 indexed id,
+        address indexed user,
+        bool indexed rejected
+    );
     event Completed(uint256 indexed id, address indexed user);
     event Executed(
         uint256 indexed id,
         address indexed user,
         address indexed action
     );
-
     event GovExecUpdated(address indexed user, address indexed newAddress);
-
     event GovGuardUpdated(address indexed user, address indexed newAddress);
-    
     event ParameterUpdated(bytes32 indexed param, uint256 data);
-
     event Proposed(
         uint256 indexed id,
         address indexed user,
-        address indexed action
+        string info,
+        uint256 startBlockNum,
+        uint256 endTimestamp,
+        ProposalStatus indexed status,
+        address action,
+        uint256 votesFor,
+        uint256 votesAgainst,
+        uint256 totalVotes,
+        bool executable,
+        bool quadraticVoting
     );
-
     event PoUpdated(address indexed user, address po);
-    event StakingUpdated(address indexed user, address indexed newAddress);
-
     event SignerUpdated(address indexed newAddress);
-    event Scheduled(uint256 indexed id, address indexed user);
+    event Scheduled(uint256 indexed id, address indexed user);    
+    event StakingUpdated(address indexed user, address indexed newAddress);
     event Voted(
         uint256 indexed id,
         address indexed user,
         bool indexed support,
-        uint256 amount
+        uint256 amount,
+        uint256 votesFor,
+        uint256 votesAgainst,
+        uint256 totalVotes
     );
 
     constructor(
@@ -204,7 +214,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the staking address
+     * @dev sets the sciManager address
      */
     function setStakingAddress(
         address newStakingAddress
@@ -300,19 +310,32 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             executable = true;
         }
 
-        IStaking staking = IStaking(stakingAddress);
+        ISciManager sciManager = ISciManager(stakingAddress);
 
-        _validateStakingRequirements(staking, msg.sender);
+        _validateLockingRequirements(sciManager, msg.sender);
 
         uint256 currentIndex = _storeProposal(
             info,
             action,
             quadraticVoting,
             executable,
-            staking
+            sciManager
         );
 
-        emit Proposed(currentIndex, msg.sender, action);
+        emit Proposed(
+            currentIndex,
+            msg.sender,
+            proposals[currentIndex].info,
+            proposals[currentIndex].startBlockNum,
+            proposals[currentIndex].endTimestamp,
+            proposals[currentIndex].status,
+            proposals[currentIndex].action,
+            proposals[currentIndex].votesFor,
+            proposals[currentIndex].votesAgainst,
+            proposals[currentIndex].totalVotes,
+            proposals[currentIndex].executable,
+            proposals[currentIndex].quadraticVoting
+        );
 
         return currentIndex;
     }
@@ -328,7 +351,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
 
-        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
+        uint256 votingRights = ISciManager(stakingAddress).getLatestUserRights(
             msg.sender
         );
 
@@ -344,7 +367,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _votingChecks(id, msg.sender);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
-        uint256 votingRights = IStaking(stakingAddress).getLatestUserRights(
+        uint256 votingRights = ISciManager(stakingAddress).getLatestUserRights(
             msg.sender
         );
 
@@ -423,8 +446,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Completed;
 
-        emit Completed(id, msg.sender);
-    }
+        emit Completed(id, msg.sender);    }
 
     /**
      * @dev cancels the proposal
@@ -746,52 +768,60 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             voteData.initialVoteTimestamp = block.timestamp;
         }
 
-        IStaking(stakingAddress).voted(
+        ISciManager(stakingAddress).voted(
             msg.sender,
             block.timestamp + governanceParams.voteLockTime
         );
 
-        emit Voted(id, msg.sender, support, actualVotes);
+        emit Voted(
+            id,
+            msg.sender,
+            support,
+            actualVotes,
+            proposals[id].votesFor,
+            proposals[id].votesAgainst,
+            proposals[id].totalVotes
+        );
     }
 
     /**
-     * @dev Checks if the proposer satisfies the staking requirements for proposal submission.
-     * @param staking The staking contract interface to check staked amounts.
+     * @dev Checks if the proposer satisfies the sciManager requirements for proposal submission.
+     * @param sciManager The sciManager contract interface to check locked amounts.
      * @param proposer Address of the user making the proposal.
      *
-     * @notice Reverts with InsufficientBalance if the staked amount is below the required threshold.
+     * @notice Reverts with InsufficientBalance if the locked amount is below the required threshold.
      * Reverts with ProposeLock if the proposer's tokens are locked due to a recent proposal.
      */
-    function _validateStakingRequirements(
-        IStaking staking,
+    function _validateLockingRequirements(
+        ISciManager sciManager,
         address proposer
     ) internal view {
-        if (staking.getStakedSci(proposer) < governanceParams.opThreshold)
+        if (sciManager.getLockedSci(proposer) < governanceParams.opThreshold)
             revert InsufficientBalance(
-                staking.getStakedSci(proposer),
+                sciManager.getLockedSci(proposer),
                 governanceParams.opThreshold
             );
 
-        if (staking.getProposeLockEnd(proposer) > block.timestamp)
+        if (sciManager.getProposeLockEnd(proposer) > block.timestamp)
             revert ProposeLock();
     }
 
     /**
-     * @dev Stores a new operation proposal in the contract's state and updates staking.
+     * @dev Stores a new operation proposal in the contract's state and updates sciManager.
      * @param action contract address executing an action.
      * @param quadraticVoting Boolean indicating if quadratic voting is enabled for this proposal.
-     * @param staking The staking contract interface used for updating the proposer's status.
+     * @param sciManager The sciManager contract interface used for updating the proposer's status.
      * @return uint256 The _index where the new proposal is stored.
      *
      * @notice The function increments the operations proposal _index after storing.
-     * It also updates the staking contract to reflect the new proposal.
+     * It also updates the sciManager contract to reflect the new proposal.
      */
     function _storeProposal(
         string memory info,
         address action,
         bool quadraticVoting,
         bool executable,
-        IStaking staking
+        ISciManager sciManager
     ) internal returns (uint256) {
         Proposal memory proposal = Proposal(
             info,
@@ -809,7 +839,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 currentIndex = _index++;
         proposals[currentIndex] = proposal;
 
-        staking.proposed(
+        sciManager.proposed(
             msg.sender,
             block.timestamp + governanceParams.proposeLockTime
         );

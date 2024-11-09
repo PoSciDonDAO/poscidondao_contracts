@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
-interface IStaking {
+interface ISciManager {
     function free(uint256 amount) external;
 
     function getLatestUserRights(address user) external view returns (uint256);
 
     function getProposeLockEnd(address user) external view returns (uint256);
 
-    function getStakedSci(address user) external view returns (uint256);
+    function getLockedSci(address user) external view returns (uint256);
 
-    function getTotalStaked() external returns (uint256);
+    function getTotalLockedSci() external returns (uint256);
     
     function getUserRights(
         address user,

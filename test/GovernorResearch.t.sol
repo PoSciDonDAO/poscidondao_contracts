@@ -6,7 +6,7 @@ import "contracts/test/Usdc.sol";
 import "contracts/tokens/Sci.sol";
 import "contracts/tokens/Po.sol";
 import "contracts/exchange/PoToSciExchange.sol";
-import "contracts/staking/Staking.sol";
+import "contracts/sciManager/SciManager.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/governance/GovernorResearch.sol";
 import "contracts/executors/Transaction.sol";
@@ -22,7 +22,7 @@ contract GovernorResearchTest is Test {
     Sci sci;
     Po po;
     PoToSciExchange exchange;
-    Staking staking;
+    SciManager sciManager;
     GovernorOperations govOps;
     GovernorResearch govRes;
     GovernorExecutor executor;
@@ -53,16 +53,16 @@ contract GovernorResearchTest is Test {
 
         exchange = new PoToSciExchange(admin, address(sci), address(po));
 
-        staking = new Staking(admin, address(sci));
+        sciManager = new SciManager(admin, address(sci));
 
         govRes = new GovernorResearch(
-            address(staking),
+            address(sciManager),
             admin,
             researchFundingWallet
         );
 
         govOps = new GovernorOperations(
-            address(staking),
+            address(sciManager),
             admin,
             address(po),
             signer
@@ -92,8 +92,8 @@ contract GovernorResearchTest is Test {
             address(executor)
         );
 
-        staking.setGovRes(address(govRes));
-        staking.setGovOps(address(govOps));
+        sciManager.setGovRes(address(govRes));
+        sciManager.setGovOps(address(govOps));
         po.setGovOps(address(govOps));
         // govRes.setGovOps(address(govOps));
 
@@ -103,13 +103,13 @@ contract GovernorResearchTest is Test {
         deal(address(usdc), admin, 100000000e6);
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
-        sci.approve(address(staking), 1000000000000e18);
+        sci.approve(address(sciManager), 1000000000000e18);
         vm.stopPrank();
 
         vm.startPrank(researchFundingWallet);
         usdc.approve(address(govRes), 100000000000000e6);
         sci.approve(address(govRes), 100000000000000e18);
-        sci.approve(address(staking), 1000000000000e18);
+        sci.approve(address(sciManager), 1000000000000e18);
         sci.approve(address(transaction), 100000000000000e18);
         usdc.approve(address(transaction), 100000000000000e6);
         vm.stopPrank();
@@ -118,27 +118,27 @@ contract GovernorResearchTest is Test {
         deal(address(sci), addr1, 10000000000e18);
         deal(address(usdc), addr1, 10000e6);
         sci.approve(address(govRes), 1000000000000e18);
-        sci.approve(address(staking), 1000000000000e18);
-        staking.lock(2000e18);
+        sci.approve(address(sciManager), 1000000000000e18);
+        sciManager.lock(2000e18);
         vm.stopPrank();
 
         vm.startPrank(addr2);
         deal(address(sci), addr2, 10000000000e18);
         deal(address(usdc), addr2, 10000e6);
         sci.approve(address(govRes), 1000000000000e18);
-        sci.approve(address(staking), 1000000000000e18);
-        staking.lock(2000e18);
+        sci.approve(address(sciManager), 1000000000000e18);
+        sciManager.lock(2000e18);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         vm.stopPrank();
 
         vm.startPrank(researchFundingWallet);
-        staking.lock(1000e18);
+        sciManager.lock(1000e18);
         vm.stopPrank();
         vm.startPrank(addr2);
-        staking.lock(1000e18);
+        sciManager.lock(1000e18);
         vm.stopPrank();
         vm.startPrank(addr1);
         address[] memory electedMembers = new address[](4);
@@ -154,10 +154,10 @@ contract GovernorResearchTest is Test {
 
         vm.stopPrank();
         vm.startPrank(admin);
-        staking.lock(1000e18);
+        sciManager.lock(1000e18);
         vm.stopPrank();
         vm.startPrank(addr1);
-        staking.lock(2000000e18);
+        sciManager.lock(2000000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(election), false);
         govOps.voteStandard(id, true);
@@ -170,7 +170,7 @@ contract GovernorResearchTest is Test {
 
     function test_CreateResearchProposal() public {
         vm.startPrank(admin);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
@@ -196,7 +196,7 @@ contract GovernorResearchTest is Test {
 
     function test_VoteFor() public {
         vm.startPrank(addr1);
-        staking.lock(200e18);
+        sciManager.lock(200e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         govRes.vote(id, true);
@@ -205,7 +205,7 @@ contract GovernorResearchTest is Test {
         assertEq(proposal.votesFor, 1);
         assertEq(proposal.totalVotes, 1);
 
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr1);
+        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govRes.getGovernanceParameters().voteLockTime));
         vm.stopPrank();
@@ -213,7 +213,7 @@ contract GovernorResearchTest is Test {
 
     function test_SuccessfulVoteChangeWithinWindow() public {
         vm.startPrank(addr2);
-        staking.lock(10000e18);
+        sciManager.lock(10000e18);
 
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
@@ -233,7 +233,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteIfVoteChangeCutOffPassed() public {
         vm.startPrank(addr2);
-        staking.lock(10000e18);
+        sciManager.lock(10000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         vm.warp(
@@ -253,7 +253,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteIfVoteChangeWindowExpired() public {
         vm.startPrank(addr2);
-        staking.lock(10000e18);
+        sciManager.lock(10000e18);
         vm.warp(block.timestamp);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
@@ -272,7 +272,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteIfProposalInexistent() public {
         vm.startPrank(addr1);
-        staking.lock(1.8e23);
+        sciManager.lock(1.8e23);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         bytes4 selector = bytes4(keccak256("ProposalInexistent()"));
@@ -283,7 +283,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertIfQuorumNotReached() public {
         vm.startPrank(addr1);
-        staking.lock(180e18);
+        sciManager.lock(180e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
@@ -299,7 +299,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertIfProposalStillOngoing() public {
         vm.startPrank(addr1);
-        staking.lock(180e18);
+        sciManager.lock(180e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
@@ -321,7 +321,7 @@ contract GovernorResearchTest is Test {
 
     function test_ScheduleProposal() public {
         vm.startPrank(addr1);
-        staking.lock(120e18);
+        sciManager.lock(120e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         vm.stopPrank();
@@ -340,7 +340,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertVoteIfVotingIsScheduled() public {
         vm.startPrank(addr2);
-        // staking.lock(1.8e24);
+        // sciManager.lock(1.8e24);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         govRes.vote(id, true);
@@ -358,14 +358,14 @@ contract GovernorResearchTest is Test {
 
     function test_RevertFreeTokensWhenVotesLocked() public {
         vm.startPrank(addr1);
-        staking.lock(1200e18);
+        sciManager.lock(1200e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         vm.stopPrank();
         vm.startPrank(addr2);
         govRes.vote(id, true);
         vm.stopPrank();
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -373,27 +373,27 @@ contract GovernorResearchTest is Test {
             abi.encodeWithSelector(selector, voteLockEnd, block.timestamp)
         );
         vm.startPrank(addr2);
-        staking.free(1400e18);
+        sciManager.free(1400e18);
         vm.stopPrank();
     }
 
     function test_FreeTokensAterVotingAndAfterVoteLockEndPassed() public {
         vm.startPrank(addr1);
-        staking.lock(1200e18);
+        sciManager.lock(1200e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         vm.stopPrank();
         vm.startPrank(addr2);
         govRes.vote(id, true);
-        (, , , uint256 voteLockEnd, , ) = staking.users(addr2);
+        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr2);
         vm.warp(voteLockEnd);
-        staking.free(1200e18);
+        sciManager.free(1200e18);
         vm.stopPrank();
     }
 
     function test_ExecuteProposal() public {
         vm.startPrank(addr2);
-        staking.lock(1800e18);
+        sciManager.lock(1800e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         govRes.vote(id, true);
@@ -416,7 +416,7 @@ contract GovernorResearchTest is Test {
 
     function test_CompleteProposal() public {
         vm.startPrank(addr2);
-        staking.lock(1800e18);
+        sciManager.lock(1800e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(0));
         govRes.vote(id, true);
@@ -433,7 +433,7 @@ contract GovernorResearchTest is Test {
 
     function test_RevertExecutionIfIncorrectPhase() public {
         vm.startPrank(addr2);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(0));
         govRes.vote(id, true);
@@ -450,7 +450,7 @@ contract GovernorResearchTest is Test {
 
     function test_CancelMaliciousExecutableProposal() public {
         vm.startPrank(addr2);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         govRes.vote(id, true);
@@ -466,7 +466,7 @@ contract GovernorResearchTest is Test {
 
     function test_CancelMaliciousCompletableProposal() public {
         vm.startPrank(addr2);
-        staking.lock(2000e18);
+        sciManager.lock(2000e18);
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(0));
         govRes.vote(id, true);
@@ -482,12 +482,12 @@ contract GovernorResearchTest is Test {
 
     function test_CancelRejectedProposal() public {
         vm.startPrank(addr2);
-        staking.lock(10000e18);
+        sciManager.lock(10000e18);
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(transaction), false);
         vm.stopPrank();
         vm.startPrank(addr1);
-        staking.lock(10000e18);
+        sciManager.lock(10000e18);
         govOps.voteStandard(id, false);
         vm.warp(4.1 weeks);
         govOps.cancelRejected(id);

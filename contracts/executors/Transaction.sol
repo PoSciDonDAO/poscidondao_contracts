@@ -48,12 +48,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         if (amountUsdc > 0) {
-            _transferToken(
-                usdc,
-                fundingWallet,
-                targetWallet,
-                amountUsdc
-            );
+            _transferToken(usdc, fundingWallet, targetWallet, amountUsdc);
         }
         if (amountSci > 0) {
             _transferToken(sci, fundingWallet, targetWallet, amountSci);
@@ -73,8 +68,6 @@ contract Transaction is ReentrancyGuard, AccessControl {
         address to,
         uint256 amount
     ) internal {
-        if (amount > 0) {
-            IERC20(token).safeTransferFrom(from, to, amount);
-        }
+        IERC20(token).safeTransferFrom(from, to, amount);
     }
 }

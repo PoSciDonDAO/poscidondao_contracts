@@ -3,14 +3,14 @@ pragma solidity ^0.8.13;
 
 import "lib/forge-std/src/Test.sol";
 import "contracts/tokens/Sci.sol";
-import "contracts/staking/Staking.sol";
+import "contracts/sciManager/SciManager.sol";
 import "contracts/governance/GovernorOperations.sol";
 import "contracts/test/Usdc.sol";
 import "contracts/tokens/Po.sol";
 
 contract SciTest is Test {
     Sci public sci;
-    Staking public staking;
+    SciManager public sciManager;
     GovernorOperations public govOps;
     Usdc public usdc;
     Po public po;
