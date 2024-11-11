@@ -20,7 +20,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error ProposalNotPassed();
     error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
-    error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
+    error QuorumNotReached(uint256 id, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
@@ -34,7 +34,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address action;
         uint256 votesFor;
         uint256 votesAgainst;
-        uint256 totalVotes;
+        uint256 votesTotal;
         bool executable;
     }
 
@@ -104,13 +104,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
-    event Canceled(uint256 indexed id, address indexed user, bool indexed rejected);
-    event Completed(uint256 indexed id, address indexed user);
-    event Executed(
-        uint256 indexed id,
-        address indexed user,
-        address indexed action
-    );
     event GovExecUpdated(address indexed user, address indexed newAddress);
 
     event GovGuardUpdated(address indexed user, address indexed newAddress);
@@ -119,14 +112,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     event Proposed(
         uint256 indexed id,
         address indexed user,
-        address indexed action
+        string info,
+        uint256 startBlockNum,
+        uint256 endTimestamp,
+        bool executable
     );
 
-    event Scheduled(uint256 indexed id, address indexed user);
+    event SciManagerUpdated(address indexed user, address indexed newAddress);
+    event StatusUpdated(
+        uint256 indexed id,
+        address indexed user,
+        ProposalStatus indexed status,
+        address action
+    );
 
-    event StakingUpdated(address indexed user, address indexed newAddress);
-
-    event ResearchFundingUpdated(
+    event ResearchFundingWalletUpdated(
         address indexed user,
         address indexed SetNewResearchFundingWallet
     );
@@ -138,19 +138,26 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 amount
     );
 
+    event VotesUpdated(
+        uint256 indexed id,
+        uint256 votesFor,
+        uint256 votesAgainst,
+        uint256 votesTotal
+    );
+
     constructor(
-        address staking_,
+        address sciManager_,
         address admin_,
         address researchFundingWallet_
     ) {
         if (
-            staking_ == address(0) ||
+            sciManager_ == address(0) ||
             admin_ == address(0) ||
             researchFundingWallet_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
-        sciManagerAddress = staking_;
+        sciManagerAddress = sciManager_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
 
@@ -246,17 +253,17 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newresearchFundingWallet
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         researchFundingWallet = newresearchFundingWallet;
-        emit ResearchFundingUpdated(msg.sender, newresearchFundingWallet);
+        emit ResearchFundingWalletUpdated(msg.sender, newresearchFundingWallet);
     }
 
     /**
      * @dev sets the sciManager address
      */
-    function setStakingAddress(
-        address newStakingAddress
+    function setSciManagerAddress(
+        address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        sciManagerAddress = newStakingAddress;
-        emit StakingUpdated(msg.sender, newStakingAddress);
+        sciManagerAddress = newSciManagerAddress;
+        emit SciManagerUpdated(msg.sender, newSciManagerAddress);
     }
 
     /**
@@ -309,7 +316,28 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         uint256 currentIndex = _storeProposal(info, action, executable);
 
-        emit Proposed(currentIndex, msg.sender, action);
+        emit Proposed(
+            currentIndex,
+            msg.sender,
+            proposals[currentIndex].info,
+            proposals[currentIndex].startBlockNum,
+            proposals[currentIndex].endTimestamp,
+            proposals[currentIndex].executable
+        );
+
+        emit StatusUpdated(
+            currentIndex,
+            msg.sender,
+            proposals[currentIndex].status,
+            proposals[currentIndex].action
+        );
+
+        emit VotesUpdated(
+            currentIndex,
+            proposals[currentIndex].votesFor,
+            proposals[currentIndex].votesAgainst,
+            proposals[currentIndex].votesTotal
+        );
 
         return currentIndex;
     }
@@ -350,7 +378,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             }
             proposals[id].status = ProposalStatus.Scheduled;
 
-            emit Scheduled(id, msg.sender);
+            emit StatusUpdated(
+                id,
+                msg.sender,
+                proposals[id].status,
+                proposals[id].action
+            );
         }
     }
 
@@ -372,7 +405,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Executed;
 
-        emit Executed(id, address(govExec), proposals[id].action);
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
     }
 
     /**
@@ -393,7 +431,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Completed;
 
-        emit Completed(id, msg.sender);
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
     }
 
     /**
@@ -408,7 +451,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Canceled;
 
-        emit Canceled(id, msg.sender, false);
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
     }
 
     /**
@@ -425,7 +473,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (!schedulable) {
             proposals[id].status = ProposalStatus.Canceled;
 
-            emit Canceled(id, msg.sender, true);
+            emit StatusUpdated(
+                id,
+                msg.sender,
+                proposals[id].status,
+                proposals[id].action
+            );
         }
     }
 
@@ -452,7 +505,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      */
-    function getProposalInfo(
+    function getProposal(
         uint256 id
     ) external view returns (Proposal memory) {
         if (id > _index) revert ProposalInexistent();
@@ -467,7 +520,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 proposals[id].action,
                 proposals[id].votesFor,
                 proposals[id].votesAgainst,
-                proposals[id].totalVotes,
+                proposals[id].votesTotal,
                 proposals[id].executable
             );
     }
@@ -520,7 +573,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         bool isProposalActive = proposals[id].status == ProposalStatus.Active;
 
-        bool quorumReached = proposals[id].totalVotes >=
+        bool quorumReached = proposals[id].votesTotal >=
             governanceParams.quorum;
 
         bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
@@ -545,7 +598,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             if (!quorumReached) {
                 revert QuorumNotReached(
                     id,
-                    proposals[id].totalVotes,
+                    proposals[id].votesTotal,
                     governanceParams.quorum
                 );
             }
@@ -606,7 +659,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             } else {
                 proposals[id].votesAgainst -= VOTE;
             }
-            proposals[id].totalVotes -= VOTE;
+            proposals[id].votesTotal -= VOTE;
         }
 
         if (support) {
@@ -614,7 +667,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         } else {
             proposals[id].votesAgainst += VOTE;
         }
-        proposals[id].totalVotes += VOTE;
+        proposals[id].votesTotal += VOTE;
 
         voteData.voted = true;
         voteData.previousSupport = support;
@@ -629,6 +682,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         );
 
         emit Voted(id, msg.sender, support, VOTE);
+
+        emit VotesUpdated(
+            id,
+            proposals[id].votesFor,
+            proposals[id].votesAgainst,
+            proposals[id].votesTotal
+        );
     }
 
     /**
@@ -643,9 +703,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         ISciManager sciManager,
         address member
     ) internal view {
-        uint256 stakedSci = sciManager.getLockedSci(member);
-        if (stakedSci < governanceParams.ddThreshold) {
-            revert InsufficientBalance(stakedSci, governanceParams.ddThreshold);
+        uint256 lockedSci = sciManager.getLockedSci(member);
+        if (lockedSci < governanceParams.ddThreshold) {
+            revert InsufficientBalance(lockedSci, governanceParams.ddThreshold);
         }
     }
 

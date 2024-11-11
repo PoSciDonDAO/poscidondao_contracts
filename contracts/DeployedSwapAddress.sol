@@ -3,6 +3,6 @@
   pragma solidity ^0.8.19;
 
   library DeployedSwapAddress {
-      address constant swap = 0x6cD3C1592bcE69cFd4B64Ba3369C2D6592e1FC59;
+      address constant swap = 0x94e5C445724230BF5F59FAfab4a13724c0233c78;
   }
   

@@ -42,7 +42,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 proposalEndTimestamp
     );
     error ProposalNotPassed();
-    error QuorumNotReached(uint256 id, uint256 totalVotes, uint256 quorum);
+    error QuorumNotReached(uint256 id, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
 
     ///*** STRUCTS ***///
@@ -54,7 +54,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address action;
         uint256 votesFor;
         uint256 votesAgainst;
-        uint256 totalVotes;
+        uint256 votesTotal;
         bool executable;
         bool quadraticVoting;
     }
@@ -83,7 +83,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     IGovernorGuard private govGuard;
 
     ///*** KEY ADDRESSES ***///
-    address public stakingAddress;
+    address public sciManagerAddress;
     address public admin;
     address private signer;
 
@@ -126,17 +126,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
-    event Canceled(
-        uint256 indexed id,
-        address indexed user,
-        bool indexed rejected
-    );
-    event Completed(uint256 indexed id, address indexed user);
-    event Executed(
-        uint256 indexed id,
-        address indexed user,
-        address indexed action
-    );
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -146,43 +135,48 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         string info,
         uint256 startBlockNum,
         uint256 endTimestamp,
-        ProposalStatus indexed status,
-        address action,
-        uint256 votesFor,
-        uint256 votesAgainst,
-        uint256 totalVotes,
         bool executable,
         bool quadraticVoting
     );
     event PoUpdated(address indexed user, address po);
     event SignerUpdated(address indexed newAddress);
-    event Scheduled(uint256 indexed id, address indexed user);    
-    event StakingUpdated(address indexed user, address indexed newAddress);
+    event SciManagerUpdated(address indexed user, address indexed newAddress);
+    event StatusUpdated(
+        uint256 indexed id,
+        address indexed user,
+        ProposalStatus indexed status,
+        address action
+    );
+
     event Voted(
         uint256 indexed id,
         address indexed user,
         bool indexed support,
-        uint256 amount,
+        uint256 amount
+    );
+
+    event VotesUpdated(
+        uint256 indexed id,
         uint256 votesFor,
         uint256 votesAgainst,
-        uint256 totalVotes
+        uint256 votesTotal
     );
 
     constructor(
-        address staking_,
+        address sciManager_,
         address admin_,
         address po_,
         address signer_
     ) {
         if (
-            staking_ == address(0) ||
+            sciManager_ == address(0) ||
             admin_ == address(0) ||
             po_ == address(0) ||
             signer_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
-        stakingAddress = staking_;
+        sciManagerAddress = sciManager_;
         admin = admin_;
         po = IPo(po_);
         signer = signer_;
@@ -216,11 +210,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev sets the sciManager address
      */
-    function setStakingAddress(
-        address newStakingAddress
+    function setsciManagerAddress(
+        address newsciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        stakingAddress = newStakingAddress;
-        emit StakingUpdated(msg.sender, newStakingAddress);
+        sciManagerAddress = newsciManagerAddress;
+        emit SciManagerUpdated(msg.sender, newsciManagerAddress);
     }
 
     /**
@@ -310,7 +304,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             executable = true;
         }
 
-        ISciManager sciManager = ISciManager(stakingAddress);
+        ISciManager sciManager = ISciManager(sciManagerAddress);
 
         _validateLockingRequirements(sciManager, msg.sender);
 
@@ -328,13 +322,22 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             proposals[currentIndex].info,
             proposals[currentIndex].startBlockNum,
             proposals[currentIndex].endTimestamp,
-            proposals[currentIndex].status,
-            proposals[currentIndex].action,
-            proposals[currentIndex].votesFor,
-            proposals[currentIndex].votesAgainst,
-            proposals[currentIndex].totalVotes,
             proposals[currentIndex].executable,
             proposals[currentIndex].quadraticVoting
+        );
+
+        emit StatusUpdated(
+            currentIndex,
+            msg.sender,
+            proposals[currentIndex].status,
+            proposals[currentIndex].action
+        );
+
+        emit VotesUpdated(
+            currentIndex,
+            proposals[currentIndex].votesFor,
+            proposals[currentIndex].votesAgainst,
+            proposals[currentIndex].votesTotal
         );
 
         return currentIndex;
@@ -351,9 +354,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
 
-        uint256 votingRights = ISciManager(stakingAddress).getLatestUserRights(
-            msg.sender
-        );
+        uint256 votingRights = ISciManager(sciManagerAddress)
+            .getLatestUserRights(msg.sender);
 
         _recordVote(id, support, votingRights);
     }
@@ -367,9 +369,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _votingChecks(id, msg.sender);
         _uniquenessCheck(id, msg.sender, isUnique, signature);
 
-        uint256 votingRights = ISciManager(stakingAddress).getLatestUserRights(
-            msg.sender
-        );
+        uint256 votingRights = ISciManager(sciManagerAddress)
+            .getLatestUserRights(msg.sender);
 
         uint256 actualVotes = Math.sqrt(votingRights / 10 ** 18) * 10 ** 18;
 
@@ -398,7 +399,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
             proposals[id].status = ProposalStatus.Scheduled;
 
-            emit Scheduled(id, msg.sender);
+            emit StatusUpdated(
+                id,
+                msg.sender,
+                proposals[id].status,
+                proposals[id].action
+            );
         }
     }
 
@@ -427,7 +433,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Executed;
 
-        emit Executed(id, msg.sender, proposals[id].action);
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
     }
 
     /**
@@ -446,21 +457,34 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Completed;
 
-        emit Completed(id, msg.sender);    }
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
+    }
 
     /**
      * @dev cancels the proposal
      * @param id the _index of the proposal of interest
      */
     function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
-        if (proposals[id].status == ProposalStatus.Executed)
-            revert IncorrectPhase(proposals[id].status);
+        if (
+            proposals[id].status == ProposalStatus.Executed ||
+            proposals[id].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(proposals[id].status);
 
         if (proposals[id].executable) govExec.cancel(proposals[id].action);
 
         proposals[id].status = ProposalStatus.Canceled;
 
-        emit Canceled(id, msg.sender, false);
+        emit StatusUpdated(
+            id,
+            msg.sender,
+            proposals[id].status,
+            proposals[id].action
+        );
     }
 
     /**
@@ -475,7 +499,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (!schedulable) {
             proposals[id].status = ProposalStatus.Canceled;
 
-            emit Canceled(id, msg.sender, true);
+            emit StatusUpdated(
+                id,
+                msg.sender,
+                proposals[id].status,
+                proposals[id].action
+            );
         } else {
             revert ProposalCannotBeCanceled();
         }
@@ -544,7 +573,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      */
-    function getProposalInfo(
+    function getProposal(
         uint256 id
     ) external view returns (Proposal memory) {
         if (id > _index) revert ProposalInexistent();
@@ -559,7 +588,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 proposals[id].action,
                 proposals[id].votesFor,
                 proposals[id].votesAgainst,
-                proposals[id].totalVotes,
+                proposals[id].votesTotal,
                 proposals[id].executable,
                 proposals[id].quadraticVoting
             );
@@ -587,8 +616,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool isProposalActive = proposals[id].status == ProposalStatus.Active;
 
         bool quorumReached = proposals[id].quadraticVoting
-            ? proposals[id].totalVotes >= sqrtQuorum
-            : proposals[id].totalVotes >= governanceParams.quorum;
+            ? proposals[id].votesTotal >= sqrtQuorum
+            : proposals[id].votesTotal >= governanceParams.quorum;
 
         bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
             proposals[id].votesAgainst;
@@ -612,7 +641,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (!quorumReached) {
                 revert QuorumNotReached(
                     id,
-                    proposals[id].totalVotes,
+                    proposals[id].votesTotal,
                     proposals[id].quadraticVoting
                         ? sqrtQuorum
                         : governanceParams.quorum
@@ -738,7 +767,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             } else {
                 proposals[id].votesAgainst -= voteData.previousVoteAmount;
             }
-            proposals[id].totalVotes -= voteData.previousVoteAmount;
+            proposals[id].votesTotal -= voteData.previousVoteAmount;
         }
 
         if (support) {
@@ -746,7 +775,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         } else {
             proposals[id].votesAgainst += actualVotes;
         }
-        proposals[id].totalVotes += actualVotes;
+        proposals[id].votesTotal += actualVotes;
 
         if (!voteData.voted) {
             if (id > 0 && userVoteData[msg.sender][id - 1].voted) {
@@ -768,19 +797,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             voteData.initialVoteTimestamp = block.timestamp;
         }
 
-        ISciManager(stakingAddress).voted(
+        ISciManager(sciManagerAddress).voted(
             msg.sender,
             block.timestamp + governanceParams.voteLockTime
         );
 
-        emit Voted(
+        emit Voted(id, msg.sender, support, actualVotes);
+
+        emit VotesUpdated(
             id,
-            msg.sender,
-            support,
-            actualVotes,
             proposals[id].votesFor,
             proposals[id].votesAgainst,
-            proposals[id].totalVotes
+            proposals[id].votesTotal
         );
     }
 

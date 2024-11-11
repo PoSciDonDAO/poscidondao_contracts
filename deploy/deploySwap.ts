@@ -25,6 +25,7 @@ async function main() {
 	const voucher = "0x26f7AEc9010e058CA0E60911f37A08c2bdddB052";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	const membersWhitelist = [
+		"0x2cAa8A69F17b415B4De7e3bD9878767221791828",
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
 		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
 		"0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488",
@@ -58,7 +59,7 @@ async function main() {
 		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
 		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
 	];
-	const currentEtherPrice = 2514;
+	const currentEtherPrice = 3155;
 
 	const constructorArguments = [
 		admin,
