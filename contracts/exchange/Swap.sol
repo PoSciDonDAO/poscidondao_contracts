@@ -35,7 +35,7 @@ contract Swap is AccessControl, ReentrancyGuard {
     error SaleExpired();
     error SoldOut();
 
-    address private voucher;
+    address public voucher;
     address public usdc;
     address public admin;
 

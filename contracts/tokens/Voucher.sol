@@ -35,7 +35,7 @@ contract Voucher is ERC20Burnable, AccessControl {
     constructor(
         address treasuryWallet_,
         uint256 initialMintAmount_
-    ) ERC20("SCI Vouchers", "vSCI") {
+    ) ERC20("Vouchers", "vSCI") {
         if (treasuryWallet_ == address(0)) {
             revert CannotBeZeroAddress();
         }

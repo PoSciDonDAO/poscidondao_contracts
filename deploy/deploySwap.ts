@@ -22,8 +22,9 @@ async function main() {
 	}
 
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const voucher = "0x26f7AEc9010e058CA0E60911f37A08c2bdddB052";
+	const voucher = "0x25Abb0438a8bf5702e0F109036Cec98a27592F85";
 	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+	
 	const membersWhitelist = [
 		"0x2cAa8A69F17b415B4De7e3bD9878767221791828",
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
