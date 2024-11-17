@@ -91,7 +91,7 @@ export default {
 			polygonAmoy: process.env.POLYGONSCAN_API_KEY,
 			optimismMainnet: process.env.OPTIMISMSCAN_API_KEY,
 			optimismTestnet: process.env.OPTIMISMSCAN_API_KEY,
-			baseMainnet: process.env.BASESCAN_API_KEY,
+			base: process.env.BASESCAN_API_KEY,
 			baseSepolia: process.env.BASESCAN_API_KEY
 		},
 	},

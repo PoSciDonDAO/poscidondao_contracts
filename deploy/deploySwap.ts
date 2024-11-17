@@ -21,9 +21,19 @@ async function main() {
 		throw new Error("please pass --network");
 	}
 
+	const isMainnet =
+		hardhatArguments.network === "baseMainnet" ||
+		hardhatArguments.network === "base";
+
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-	const voucher = "0x25Abb0438a8bf5702e0F109036Cec98a27592F85";
-	const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+	const voucher = isMainnet
+		? "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a"
+		: "0x25Abb0438a8bf5702e0F109036Cec98a27592F85";
+	const usdc = isMainnet
+		? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+		: "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+	
+	const currentEtherPrice = 3155;
 	
 	const membersWhitelist = [
 		"0x2cAa8A69F17b415B4De7e3bD9878767221791828",
@@ -60,7 +70,6 @@ async function main() {
 		"0xe5E3aa6188Bd53Cf05d54bB808c0F69B3E658087",
 		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
 	];
-	const currentEtherPrice = 3155;
 
 	const constructorArguments = [
 		admin,
@@ -97,7 +106,7 @@ async function main() {
 
 	generateSolidityAddressFile({
 		swapAddress: contract.address,
-	});
+	}, voucher);
 
 	generateFrontendAddressesFile(usdc, voucher, admin, contract.address);
 
@@ -112,7 +121,7 @@ async function main() {
 // Function to generate the Solidity file containing deployed addresses
 function generateSolidityAddressFile(deployedContracts: {
 	[key: string]: string;
-}): void {
+}, voucher: string): void {
 	const outputPath = path.join(
 		__dirname,
 		"../contracts/DeployedSwapAddress.sol"
@@ -123,6 +132,7 @@ function generateSolidityAddressFile(deployedContracts: {
 
   library DeployedSwapAddress {
       address constant swap = ${deployedContracts.swapAddress};
+	  address constant voucher = ${voucher} 
   }
   `;
 
@@ -159,7 +169,7 @@ function generateFrontendAddressesFile(
 	const fileContent = `
 'use server';
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
+const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
 
 export const getRpcUrl = () => {

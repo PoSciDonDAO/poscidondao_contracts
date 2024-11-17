@@ -20,10 +20,10 @@ async function main() {
     throw new Error("please pass --network");
   }
   
-  const treasuryWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+  const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
   const initialMintAmount = 18910000;
 
-  const constructorArguments = [treasuryWallet, initialMintAmount];
+  const constructorArguments = [admin, initialMintAmount];
 
   const Contract = await ethers.getContractFactory("Sci");
   // Estimate contract deployment fee
@@ -43,8 +43,8 @@ async function main() {
 
   const contract = await Contract.deploy(...constructorArguments);
   console.log("Deployed Contract Address:", contract.address);
-  console.log("Verifying contract in 2 minutes...");
-  await sleep(120000 * 1);
+  console.log("Verifying contract in 3 minutes...");
+  await sleep(180000 * 1);
   await run("verify:verify", {
     address: contract.address,
     constructorArguments: [...constructorArguments],

@@ -8,6 +8,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 contract GovernorResearch is AccessControl, ReentrancyGuard {
+    
     ///*** ERRORS ***///
     error CannotBeZeroAddress();
     error CannotComplete();
@@ -115,15 +116,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         string info,
         uint256 startBlockNum,
         uint256 endTimestamp,
+        address action,
         bool executable
     );
 
     event SciManagerUpdated(address indexed user, address indexed newAddress);
     event StatusUpdated(
         uint256 indexed id,
-        address indexed user,
-        ProposalStatus indexed status,
-        address action
+        ProposalStatus indexed status
     );
 
     event ResearchFundingWalletUpdated(
@@ -322,14 +322,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             proposals[currentIndex].info,
             proposals[currentIndex].startBlockNum,
             proposals[currentIndex].endTimestamp,
+            proposals[currentIndex].action,
             proposals[currentIndex].executable
         );
 
         emit StatusUpdated(
             currentIndex,
-            msg.sender,
-            proposals[currentIndex].status,
-            proposals[currentIndex].action
+            proposals[currentIndex].status
         );
 
         emit VotesUpdated(
@@ -380,9 +379,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
             emit StatusUpdated(
                 id,
-                msg.sender,
-                proposals[id].status,
-                proposals[id].action
+                proposals[id].status
             );
         }
     }
@@ -407,9 +404,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -433,9 +428,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -453,9 +446,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -475,9 +466,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
             emit StatusUpdated(
                 id,
-                msg.sender,
-                proposals[id].status,
-                proposals[id].action
+                proposals[id].status
             );
         }
     }

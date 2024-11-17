@@ -28,16 +28,17 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 // ╚══════╝ ╚═════╝╚═╝
 
 /**
- * @title SCI
- * @dev Implementation of SCI, PoSciDonDAO's ERC20 Token.
+ * @dev Implementation of SCI, PoSciDonDAO's ERC20 Token. 
+ * Token address: 0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3
  */
 contract Sci is ERC20Burnable, AccessControl {
     error CannotBeZeroAddress();
 
     /**
-     * @dev Sets the values for {name} and {symbol} and initializes {treasuryWallet}
-     * with the token distribution amount.
-     * @param treasuryWallet_ address of the treasury wallet.
+     * @dev Initializes the token with the specified {name} and {symbol}, 
+     * and mints the initial token distribution to the {treasuryWallet}.
+     * @param treasuryWallet_ The address of the treasury wallet.
+     * @param initialMintAmount_ The initial number of tokens to mint.
      */
     constructor(
         address treasuryWallet_,

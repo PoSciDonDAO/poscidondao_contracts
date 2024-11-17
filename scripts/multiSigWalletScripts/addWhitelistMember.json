@@ -1,0 +1,20 @@
+{
+	"version": "1.0",
+	"chainId": 84532,
+	"createdAt": 1731441396597,
+	"meta": {
+		"name": "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
+		"description": "Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
+		"txBuilderVersion": "1.17.0",
+		"createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
+		"createdFromOwnerAddress": ""
+	},
+	"transactions": [
+		{
+			"to": "0x1fe674619E51510599C0981Ab205909b2640d3f8",
+			"value": "0",
+			"data": "0x1be2a9fc0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000c7094705575ea000cc738a3400a87e00000"
+		}
+	],
+	"checksum": "0x8cbb7fcf2917a5b6710dae1041d0393d19cdf3f0b5beb75f1987e30fea547632"
+}

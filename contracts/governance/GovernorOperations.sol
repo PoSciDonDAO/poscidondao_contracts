@@ -33,7 +33,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
-    error ProposalCannotBeCanceled();
+    error ProposalNotCancelable();
+    error ProposalNotSchedulable();
     error ProposalLifetimePassed();
     error ProposeLock();
     error ProposalOngoing(
@@ -135,6 +136,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         string info,
         uint256 startBlockNum,
         uint256 endTimestamp,
+        address action,
         bool executable,
         bool quadraticVoting
     );
@@ -143,9 +145,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event SciManagerUpdated(address indexed user, address indexed newAddress);
     event StatusUpdated(
         uint256 indexed id,
-        address indexed user,
-        ProposalStatus indexed status,
-        address action
+        ProposalStatus indexed status
     );
 
     event Voted(
@@ -322,15 +322,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             proposals[currentIndex].info,
             proposals[currentIndex].startBlockNum,
             proposals[currentIndex].endTimestamp,
+            proposals[currentIndex].action,
             proposals[currentIndex].executable,
             proposals[currentIndex].quadraticVoting
         );
 
         emit StatusUpdated(
             currentIndex,
-            msg.sender,
-            proposals[currentIndex].status,
-            proposals[currentIndex].action
+            proposals[currentIndex].status
         );
 
         emit VotesUpdated(
@@ -401,17 +400,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             emit StatusUpdated(
                 id,
-                msg.sender,
-                proposals[id].status,
-                proposals[id].action
+                proposals[id].status
             );
+        } else {
+            revert ProposalNotSchedulable();
         }
     }
 
-    /**
-     * @dev executes the proposal using a token or coin - Operation's crew's choice
-     * @param id the _index of the proposal of interest
-     */
     /**
      * @dev Executes a scheduled proposal by temporarily assigning the EXECUTOR_ROLE to the target action,
      * executing the action, and then removing the role. Reverts if conditions for execution are not met.
@@ -435,9 +430,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -459,9 +452,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -481,9 +472,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         emit StatusUpdated(
             id,
-            msg.sender,
-            proposals[id].status,
-            proposals[id].action
+            proposals[id].status
         );
     }
 
@@ -501,12 +490,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             emit StatusUpdated(
                 id,
-                msg.sender,
-                proposals[id].status,
-                proposals[id].action
+                proposals[id].status
             );
         } else {
-            revert ProposalCannotBeCanceled();
+            revert ProposalNotCancelable();
         }
     }
 

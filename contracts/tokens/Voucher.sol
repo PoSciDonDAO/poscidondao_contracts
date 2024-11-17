@@ -21,21 +21,23 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20B
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 /**
- * @title Vouchers representing SCI
+ * @title Voucher (vSCI)
  * @dev Implementation of vSCI.
+ * Address: 0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a
  */
 contract Voucher is ERC20Burnable, AccessControl {
     error CannotBeZeroAddress();
 
     /**
-     * @dev Sets the values for {name} and {symbol} and initializes {treasuryWallet}
-     * with the token distribution amount.
-     * @param treasuryWallet_ address of the treasury wallet.
+     * @dev Initializes the token with the specified {name} and {symbol}, 
+     * and mints the initial token distribution to the {treasuryWallet}.
+     * @param treasuryWallet_ The address of the treasury wallet.
+     * @param initialMintAmount_ The initial number of tokens to mint.
      */
     constructor(
         address treasuryWallet_,
         uint256 initialMintAmount_
-    ) ERC20("Vouchers", "vSCI") {
+    ) ERC20("Voucher", "vSCI") {
         if (treasuryWallet_ == address(0)) {
             revert CannotBeZeroAddress();
         }
