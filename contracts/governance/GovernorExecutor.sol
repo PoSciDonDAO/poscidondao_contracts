@@ -21,11 +21,13 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
 
     mapping(address => uint256) public scheduledTime;
 
-    event SetNewAdmin(address indexed user, address indexed newAddress);
-    event SetNewGovernor(address indexed user, address indexed newGovernor);
-    event RemovedGovernor(address indexed user, address removedGovernor);
-    event SetNewDelay(uint256 oldDelay, uint256 newDelay);
+    event Canceled(address indexed action);
+    event DelayUpdated(uint256 newDelay);
     event Executed(address indexed action);
+    event GovernorAdded(address indexed user, address indexed newGovernor);
+    event GovernorRemoved(address indexed user, address indexed formerGovernor);
+    event Scheduled(address indexed action);
+
 
     constructor(
         address admin_,
@@ -51,6 +53,15 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Update delay time
+     * @param newDelay the updated time between proposal scheduling and execution
+     */
+    function updateDelay(uint56 newDelay) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        delay = newDelay;
+        emit DelayUpdated(newDelay);
+    }
+
+    /**
      * @dev Adds a new governor to the list.
      * @param newGovernor The address to be added as a new governor.
      */
@@ -61,7 +72,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert GovernorAlreadyExists(newGovernor);
 
         _grantRole(GOVERNOR_ROLE, newGovernor);
-        emit SetNewGovernor(msg.sender, newGovernor);
+
+        emit GovernorAdded(msg.sender, newGovernor);
     }
 
     /**
@@ -75,7 +87,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert GovernorAlreadyExists(formerGovernor);
 
         _grantRole(GOVERNOR_ROLE, formerGovernor);
-        emit SetNewGovernor(msg.sender, formerGovernor);
+
+        emit GovernorRemoved(msg.sender, formerGovernor);
     }
 
     /**
@@ -89,6 +102,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert AlreadyScheduled(action);
         }
         scheduledTime[action] = block.timestamp + delay;
+        emit Scheduled(action);
     }
 
     /**
@@ -102,6 +116,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert NotScheduled(action);
         }
         scheduledTime[action] = 0;
+
+        emit Canceled(action);
     }
 
     /**
