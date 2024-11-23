@@ -458,7 +458,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 id
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         if (id >= _index) revert ProposalInexistent();
-
+        if (
+            proposals[id].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(proposals[id].status);
+        
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {

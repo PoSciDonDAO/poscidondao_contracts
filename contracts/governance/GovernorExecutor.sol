@@ -25,6 +25,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     event SetNewGovernor(address indexed user, address indexed newGovernor);
     event RemovedGovernor(address indexed user, address removedGovernor);
     event SetNewDelay(uint256 oldDelay, uint256 newDelay);
+    event Executed(address indexed action);
 
     constructor(
         address admin_,
@@ -128,5 +129,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         scheduledTime[action] = 0;
 
         _revokeRole(EXECUTOR_ROLE, action);
+        
+        emit Executed(action);
     }
 }

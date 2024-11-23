@@ -29,7 +29,7 @@ function generateFrontendAddressesFile(
 	const fileContent = `
 'use server';
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
+const ALCHEMY_KEY = process.env.ALCHEMY_KEY_PROTOCOL ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
 
 export const getRpcUrl = () => {

@@ -482,6 +482,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function cancelRejected(uint256 id) external nonReentrant {
         if (id >= _index) revert ProposalInexistent();
+        if (
+            proposals[id].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(proposals[id].status);
 
         bool schedulable = _proposalSchedulingChecks(id, false);
 
