@@ -22,8 +22,7 @@ async function main() {
 	}
 
 	const isMainnet =
-		hardhatArguments.network === "baseMainnet" ||
-		hardhatArguments.network === "base";
+		hardhatArguments.network === "baseMainnet";
 
 	const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 	const voucher = isMainnet
@@ -33,9 +32,11 @@ async function main() {
 		? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 		: "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	
-	const currentEtherPrice = 3155;
+	const currentEtherPrice = 3400;
 	
 	const membersWhitelist = [
+		"0xcD1BCDB51BcDe6771f26F6D7334BD4382F3becA8",
+		"0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe",
 		"0xEcCF63e6577D8C75184c3Bd368c28e030eFf531A",
 		"0x2cAa8A69F17b415B4De7e3bD9878767221791828",
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
@@ -132,7 +133,7 @@ function generateSolidityAddressFile(deployedContracts: {
 
   library DeployedSwapAddress {
       address constant swap = ${deployedContracts.swapAddress};
-	  address constant voucher = ${voucher} 
+	  address constant voucher = ${voucher}; 
   }
   `;
 
@@ -191,7 +192,7 @@ export const getNetworkInfo = () => {
     providerUrl: \`\${rpcUrl}\`,
     explorerLink: '${
 		hardhatArguments.network === "baseMainnet"
-			? "https://basescan.org/"
+			? "https://basescan.org"
 			: "https://sepolia.basescan.org"
 	}',
     admin: '${admin}',

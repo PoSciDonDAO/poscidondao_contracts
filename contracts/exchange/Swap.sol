@@ -30,7 +30,7 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
 contract Swap is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
     error CannotSwapAgain();
-    error CannotSwapMoreThanOneEther();
+    error CannotSwapMoreThanHalfEther();
     error NotWhitelisted();
     error SaleExpired();
     error SoldOut();
@@ -40,6 +40,8 @@ contract Swap is AccessControl, ReentrancyGuard {
     address public admin;
 
     uint256 public currentEtherPrice;
+    uint256 public usdcLimit;
+    uint256 public ethLimit;
     uint256 public priceInUsdc;
     uint256 public ethToVoucherConversionRate;
     uint256 public voucherSwapCap;
@@ -94,8 +96,10 @@ contract Swap is AccessControl, ReentrancyGuard {
         usdc = usdc_;
 
         currentEtherPrice = currentEtherPrice_;
-        priceInUsdc = 2115; //0.2115 USD per token
-        ethToVoucherConversionRate = (currentEtherPrice_ * 10000) / priceInUsdc;
+        priceInUsdc = 2115283; //0.2115283 USD per token
+        usdcLimit = currentEtherPrice / 2 * 1e6;
+        ethLimit = 0.5 ether; 
+        ethToVoucherConversionRate = (currentEtherPrice_ * 1e7) / priceInUsdc;
         voucherSwapCap = (TOTAL_SUPPLY_VOUCHERS / 10000) * 50;
 
         deploymentTime = block.timestamp;
@@ -150,10 +154,29 @@ contract Swap is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @notice Sets the swap limit for USDC.
+     * @param newUsdcLimit The new limit in USDC
+     */
+    function setUsdcLimit(
+        uint256 newUsdcLimit
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        usdcLimit = newUsdcLimit;
+    }
+
+    /**
+     * @notice Sets the swap limit for ETH.
+     * @param newEthLimit The new limit in ETH.
+     */
+    function setEthLimit(
+        uint256 newEthLimit
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        priceInUsdc = newEthLimit;
+    }
+    /**
      * @notice Sets the swap rate for USDC.
      * @param newUsdcRate The new swap rate for USDC in terms of SCI tokens.
      */
-    function setpriceInUsdc(
+    function setPriceInUsdc(
         uint256 newUsdcRate
     ) public onlyRole(DEFAULT_ADMIN_ROLE) {
         priceInUsdc = newUsdcRate;
@@ -186,8 +209,8 @@ contract Swap is AccessControl, ReentrancyGuard {
     function swapUsdc(
         uint256 amount
     ) external nonReentrant notExpired whitelisted {
-        if (amount > currentEtherPrice * 1e6)
-            revert CannotSwapMoreThanOneEther();
+        if (amount > usdcLimit)
+            revert CannotSwapMoreThanHalfEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 voucherAmount = ((amount * 10000) / priceInUsdc) * 1e12;
 
@@ -210,7 +233,7 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @dev This function is payable and accepts ETH directly.
      */
     function swapEth() external payable nonReentrant notExpired whitelisted {
-        if (msg.value > 1 ether) revert CannotSwapMoreThanOneEther();
+        if (msg.value > ethLimit) revert CannotSwapMoreThanHalfEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
         uint256 voucherAmount = (msg.value * ethToVoucherConversionRate);
 
