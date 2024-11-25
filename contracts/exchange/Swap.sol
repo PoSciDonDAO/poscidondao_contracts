@@ -212,7 +212,7 @@ contract Swap is AccessControl, ReentrancyGuard {
         if (amount > usdcLimit)
             revert CannotSwapMoreThanHalfEther();
         if (hasSwapped[msg.sender]) revert CannotSwapAgain();
-        uint256 voucherAmount = ((amount * 10000) / priceInUsdc) * 1e12;
+        uint256 voucherAmount = ((amount * 10000000) / priceInUsdc) * 1e12;
 
         if (totVoucherSwapped >= voucherSwapCap || voucherAmount > voucherSwapCap)
             revert SoldOut();
