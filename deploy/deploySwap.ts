@@ -32,7 +32,7 @@ async function main() {
 		? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 		: "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 	
-	const currentEtherPrice = 3400;
+	const currentEtherPrice = 3500;
 	
 	const membersWhitelist = [
 		"0xcD1BCDB51BcDe6771f26F6D7334BD4382F3becA8",

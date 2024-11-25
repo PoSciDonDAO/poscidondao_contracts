@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 /**
- * Copyright (c) 2024, PoVoucherDonDAO Foundation.
+ * Copyright (c) 2024, PoSciDonDAO Foundation.
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero
  * General Public License (AGPL) as published by the Free Software Foundation, either version 3 of the License, or
@@ -149,7 +149,7 @@ contract Swap is AccessControl, ReentrancyGuard {
      * @notice Sets the swap end timestamp.
      * @param endTimestamp The new end timestamp for the swap.
      */
-    function setEnd(uint256 endTimestamp) public {
+    function setEnd(uint256 endTimestamp) public onlyRole(DEFAULT_ADMIN_ROLE) {
         end = endTimestamp;
     }
 
