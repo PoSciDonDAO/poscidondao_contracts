@@ -437,9 +437,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param id the _index of the proposal of interest
      */
     function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
-        if (proposals[id].status == ProposalStatus.Executed)
-            revert IncorrectPhase(proposals[id].status);
-
+        if (
+            proposals[id].status == ProposalStatus.Executed ||
+            proposals[id].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(proposals[id].status);
+        
         if (proposals[id].executable) govExec.cancel(proposals[id].action);
 
         proposals[id].status = ProposalStatus.Canceled;

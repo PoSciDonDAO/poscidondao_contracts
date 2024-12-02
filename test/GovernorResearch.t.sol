@@ -174,7 +174,7 @@ contract GovernorResearchTest is Test {
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
 
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
 
         assertEq(proposal.info, "Info");
         assertEq(proposal.startBlockNum, block.number);
@@ -189,7 +189,7 @@ contract GovernorResearchTest is Test {
         assertEq(proposal.action, address(transaction));
         assertEq(proposal.votesFor, 0);
         assertEq(proposal.votesAgainst, 0);
-        assertEq(proposal.totalVotes, 0);
+        assertEq(proposal.votesTotal, 0);
         assertEq(proposal.executable, true);
         vm.stopPrank();
     }
@@ -200,10 +200,10 @@ contract GovernorResearchTest is Test {
         uint256 id = govRes.getProposalIndex();
         govRes.propose("Info", address(transaction));
         govRes.vote(id, true);
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
 
         assertEq(proposal.votesFor, 1);
-        assertEq(proposal.totalVotes, 1);
+        assertEq(proposal.votesTotal, 1);
 
         (, , , uint256 voteLockEnd, , ) = sciManager.users(addr1);
 
@@ -331,7 +331,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(addr1);
         vm.warp(block.timestamp + 4.1 weeks);
         govRes.schedule(id);
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
         assertTrue(
             proposal.status == GovernorResearch.ProposalStatus.Scheduled
         );
@@ -404,7 +404,7 @@ contract GovernorResearchTest is Test {
         govRes.schedule(id);
         vm.warp(block.timestamp + 3 days);
         govRes.execute(id);
-        GovernorResearch.Proposal memory proposal2 = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal2 = govRes.getProposal(id);
 
         assertTrue(
             proposal2.status == GovernorResearch.ProposalStatus.Executed
@@ -423,7 +423,7 @@ contract GovernorResearchTest is Test {
         vm.warp(block.timestamp + 4.1 weeks);
         govRes.schedule(id);
         govRes.complete(id);
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
 
         assertTrue(
             proposal.status == GovernorResearch.ProposalStatus.Completed
@@ -459,7 +459,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(admin);
         guard.cancelRes(id);
         vm.stopPrank();
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
         assertTrue(proposal.status == GovernorResearch.ProposalStatus.Canceled);
         vm.stopPrank();
     }
@@ -475,7 +475,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(admin);
         guard.cancelRes(id);
         vm.stopPrank();
-        GovernorResearch.Proposal memory proposal = govRes.getProposalInfo(id);
+        GovernorResearch.Proposal memory proposal = govRes.getProposal(id);
         assertTrue(proposal.status == GovernorResearch.ProposalStatus.Canceled);
         vm.stopPrank();
     }
@@ -491,7 +491,7 @@ contract GovernorResearchTest is Test {
         govOps.voteStandard(id, false);
         vm.warp(4.1 weeks);
         govOps.cancelRejected(id);
-        GovernorOperations.Proposal memory proposal = govOps.getProposalInfo(
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(
             id
         );
         assertTrue(

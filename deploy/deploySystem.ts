@@ -31,6 +31,8 @@ function generateFrontendAddressesFile(
 
 const ALCHEMY_KEY = process.env.ALCHEMY_KEY_PROTOCOL ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
+const graphApiGovOps = process.env.GRAPH_API_GOVOPS ?? '';
+const graphApiGovRes = process.env.GRAPH_API_GOVRES ?? '';
 
 export const getRpcUrl = () => {
   ${
@@ -39,6 +41,14 @@ export const getRpcUrl = () => {
 			: "return `https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_KEY}`"
   };
 };
+
+export const getGraphGovOpsApi = () => {
+  return \`\https://gateway.thegraph.com/api/\${graphApiGovOps}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
+}
+
+export const getGraphGovResApi = () => {
+  return \`\https://gateway.thegraph.com/api/\${graphApiGovRes}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
+}
 
 export const getPrivateKey = () => {
   return PRIVATE_KEY;
@@ -261,7 +271,9 @@ async function main(): Promise<DeployedContracts> {
 	if (!hardhatArguments.network) throw new Error("Please pass --network");
 
 	const getRpcUrl = (): string => {
-		return `https://base-sepolia.g.alchemy.com/v2/`;
+		return hardhatArguments.network === "baseMainnet"
+			? `https://base-mainnet.g.alchemy.com/v2/`
+			: `https://base-sepolia.g.alchemy.com/v2/`;
 	};
 
 	const rpcUrl: string = getRpcUrl();

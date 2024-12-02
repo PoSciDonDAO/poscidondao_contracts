@@ -5,9 +5,7 @@ import path from "path";
 dotenv.config();
 
 async function main() {
-	console.log(
-		`Running deploy script for the VoucherToTokenConversion contract`
-	);
+	console.log(`Running deploy script for the Convert contract`);
 
 	const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
@@ -24,21 +22,37 @@ async function main() {
 	if (!hardhatArguments.network) {
 		throw new Error("please pass --network");
 	}
-
-    const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-    const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-	const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
-    const voucherSci = "0x4DF145c2923fa6B2a6841DeF6Ee5ACa033C7b1A2";
-    const swapAddress = "0x07cBe6be3F045A51048B0C30f607A2F80352aeBa";
+	const isMainnet = hardhatArguments.network === "baseMainnet";
+	const admin = "0x96f67a852f8D3Bc05464C4F91F97aACE060e247A";
+	const sci = isMainnet
+		? "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3"
+		: "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+	const voucher = isMainnet
+		? "0xc1709720bE448D8c0C829D3Ab1A4D661E94f327a"
+		: "0x25Abb0438a8bf5702e0F109036Cec98a27592F85";
 	const membersWhitelist: string[] = [
 		"0x690BF2dB31D39EE0a88fcaC89117b66a588E865a",
+		"0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99",
+		"0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488",
+		"0xD2f8B7A8BA93eA9e14f7bc421a70118da8508E9b",
+		"0xd8C98B84755056d193837a5e5b7814c8f6b10590",
+		"0x0F22D9e9421C02E60fFF8823e3d0Ccc4780F5750",
+		"0x3aBCDd4b604385659E34b186d5c0aDB9FFE0403C",
+		"0x74da8f4b8a459dad4b7327f2efab2516d140a7ab",
+		"0x39E39b63ac98b15407aBC057155d0fc296C11FE4",
+		"0x23208D88Ea974cc4AA639E84D2b1074D4fb41ac9",
+		"0x256ecFb23cF21af9F9E33745c77127892956a687",
+		"0x82Dd06dDC43A4cC7f4eF68833D026C858524C2a9",
+		"0xb42a22ec528810aE816482914824e47F4dc3F094",
+		"0xe1966f09BD13e92a5aCb18C486cE4c696347A25c",
+		"0x1c033d7cb3f57d6772438f95dF8068080Ef23dc9",
+		"0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e",
+		"0x1a1c7aB8C4824d4219dc475932b3B8150E04a79C",
 	];
 
-	const constructorArguments = [admin, sci, voucherSci, membersWhitelist];
+	const constructorArguments = [admin, sci, voucher, membersWhitelist];
 
-	const Contract = await ethers.getContractFactory(
-		"VoucherToSciConversion"
-	);
+	const Contract = await ethers.getContractFactory("Convert");
 
 	// Estimate contract deployment fee
 	const estimatedGas = await ethers.provider.estimateGas(
@@ -61,25 +75,18 @@ async function main() {
 	const contract = await Contract.deploy(...constructorArguments);
 	await contract.deployed();
 
-	console.log(
-		"Deployed VoucherToTokenConversion Contract Address:",
-		contract.address
-	);
+	console.log("Deployed Convert Contract Address:", contract.address);
 
-	// Writing the deployed address into a Solidity file
-	generateSolidityAddressFile({
-		voucherToSciConversionAddress: contract.address,
-	}, swapAddress, voucherSci, sci );
-
-
-    generateFrontendAddressesFile(
-        usdc,
+	generateSolidityAddressFile(
+		{
+			convert: contract.address,
+		},
+		voucher,
 		sci,
-		voucherSci,
-		admin,
-		swapAddress,
-		contract.address
+		admin
 	);
+
+	generateFrontendAddressesFile(sci, voucher, admin, contract.address);
 
 	// Extract ABIs and bytecode for frontend and backend
 	setupAbiAndBytecodeDirs();
@@ -91,22 +98,27 @@ async function main() {
 }
 
 // Function to generate the Solidity file containing deployed addresses
-function generateSolidityAddressFile(deployedContracts: {
-	voucherToSciConversionAddress: string;
-}, swapAddress: string, voucher: string, sci: string): void {
+function generateSolidityAddressFile(
+	deployedContracts: {
+		convert: string;
+	},
+	voucher: string,
+	sci: string,
+	admin: string
+): void {
 	const outputPath = path.join(
 		__dirname,
-		"../contracts/DeployedPresaleAddresses.sol"
+		"../contracts/DeployedConversionAddresses.sol"
 	);
 	const solidityFileContent = `
   // SPDX-License-Identifier: UNLICENSED
   pragma solidity ^0.8.19;
 
-  library DeployedPresaleAddresses {
+  library DeployedConversionAddresses {
+	  address constant admin = ${admin};
       address constant sci = ${sci};
       address constant voucher = ${voucher};
-      address constant swap = ${swapAddress};
-      address constant voucherToSciConversion = ${deployedContracts.voucherToSciConversionAddress};
+      address constant convert = ${deployedContracts.convert};
   }
   `;
 
@@ -119,12 +131,10 @@ function generateSolidityAddressFile(deployedContracts: {
 
 // Function to generate the frontend address file
 function generateFrontendAddressesFile(
-    usdc: string,
 	sci: string,
-	voucherSci: string,
+	voucher: string,
 	admin: string,
-	swapAddress: string,
-	voucherToSciConversionAddress: string
+	convert: string
 ): void {
 	const frontendDirPath = path.join(
 		"/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils"
@@ -142,7 +152,7 @@ function generateFrontendAddressesFile(
 	const fileContent = `
 'use server';
 
-const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY ?? '';
+const ALCHEMY_KEY = process.env.ALCHEMY_KEY ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
 
 export const getRpcUrl = () => {
@@ -168,11 +178,9 @@ export const getNetworkInfo = () => {
 			: "https://sepolia.basescan.org"
 	}',
     admin: '${admin}',
-    usdc: '${usdc}',
-    voucherSci: '${voucherSci}',
+    voucher: '${voucher}',
     sci: '${sci}',
-    swapAddress: '${swapAddress}',
-    voucherToSciConversionAddress: '${voucherToSciConversionAddress}'
+    convert: '${convert}'
   };
 };
 `;

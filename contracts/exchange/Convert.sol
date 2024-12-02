@@ -26,13 +26,13 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
  * @dev Contract to exchange USDC, WETH, or ETH for SCI tokens at predefined rates.
  *      This contract handles the accounting of swapped tokens and enforces a cap on the maximum voucherAmount of SCI that can be swapped.
  */
-contract VoucherToSciConversion is AccessControl, ReentrancyGuard {
+contract Convert is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     error NotWhitelisted();
 
     address private sci;
-    address public voucherSci;
+    address public voucher;
     address public admin;
 
     mapping(address => bool) public whitelist;
@@ -55,23 +55,23 @@ contract VoucherToSciConversion is AccessControl, ReentrancyGuard {
      * @dev Initializes contract with addresses of tokens and treasury, initial swap rates, and whitelisted members.
      * @param admin_ The address of the treasury wallet where funds will be collected.
      * @param sci_ Address of the SCI token being swapped.
-     * @param voucherSci_ Address of the USDC token acceptable for swaps.
-     * @param membersWhitelist_ The list of addresses to be added to the whitelist upon deployment.
+     * @param voucher_ Address of the USDC token acceptable for swaps.
+     * @param whitelist_ The list of addresses to be added to the whitelist upon deployment.
      */
     constructor(
         address admin_,
         address sci_,
-        address voucherSci_,
-        address[] memory membersWhitelist_
+        address voucher_,
+        address[] memory whitelist_
     ) {
         admin = admin_;
         sci = sci_;
-        voucherSci = voucherSci_;
+        voucher = voucher_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
-        for (uint256 i = 0; i < membersWhitelist_.length; i++) {
-            whitelist[membersWhitelist_[i]] = true;
+        for (uint256 i = 0; i < whitelist_.length; i++) {
+            whitelist[whitelist_[i]] = true;
         }
     }
 
@@ -105,10 +105,10 @@ contract VoucherToSciConversion is AccessControl, ReentrancyGuard {
      * @notice Handles the conversion of voucher SCI for 'real' SCI tokens.
      */
     function convert() external nonReentrant whitelisted {
-        uint256 voucherAmount = IERC20(voucherSci).balanceOf(msg.sender);
+        uint256 voucherAmount = IERC20(voucher).balanceOf(msg.sender);
         uint256 sciAmount = voucherAmount;
 
-        IERC20(voucherSci).safeTransferFrom(msg.sender, admin, voucherAmount);
+        IERC20(voucher).safeTransferFrom(msg.sender, admin, voucherAmount);
 
         IERC20(sci).safeTransferFrom(admin, msg.sender, sciAmount);
 
