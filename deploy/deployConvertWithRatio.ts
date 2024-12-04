@@ -44,23 +44,8 @@ async function main() {
 		"0x82Dd06dDC43A4cC7f4eF68833D026C858524C2a9",
 		"0xb42a22ec528810aE816482914824e47F4dc3F094",
 		"0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e",
+		"0xEcCF63e6577D8C75184c3Bd368c28e030eFf531A",
 	];
-
-	// const limits = [
-	// 	5000,
-	// 	8272.87274582, // "0xb101a90f179d8eE815BDb0c8315d4C28f8FA5b99"
-	// 	8272.8752485, // "0xF7dd52707034696eFd21AcbDAbA4e3dE555BD488"
-	// 	8272.87400588, // "0xD2f8B7A8BA93eA9e14f7bc421a70118da8508E9b"
-	// 	8272.87425714, // "0xd8C98B84755056d193837a5e5b7814c8f6b10590"
-	// 	8272.87378437, // "0x3aBCDd4b604385659E34b186d5c0aDB9FFE0403C"
-	// 	8272.87518775, // "0x74da8f4b8a459dad4b7327f2efab2516d140a7ab"
-	// 	8272.87304549, // "0x39E39b63ac98b15407aBC057155d0fc296C11FE4"
-	// 	8273,          // "0x23208D88Ea974cc4AA639E84D2b1074D4fb41ac9"
-	// 	5956.4418169, // "0x256ecFb23cF21af9F9E33745c77127892956a687"
-	// 	8272.87481014, // "0x82Dd06dDC43A4cC7f4eF68833D026C858524C2a9"
-	// 	8272.87580817, // "0xb42a22ec528810aE816482914824e47F4dc3F094"
-	// 	4351.46863023, // "0x91fd6Ceb1D67385cAeD16FE0bA06A1ABC5E1312e"
-	// ];
 
 	const constructorArguments = [
 		admin,
@@ -69,7 +54,7 @@ async function main() {
 		membersWhitelist
 	];
 
-	const Contract = await ethers.getContractFactory("Convert");
+	const Contract = await ethers.getContractFactory("ConvertWithRatio");
 
 	// Estimate contract deployment fee
 	const estimatedGas = await ethers.provider.estimateGas(
@@ -92,7 +77,10 @@ async function main() {
 	const contract = await Contract.deploy(...constructorArguments);
 	await contract.deployed();
 
-	console.log("Deployed Convert Contract Address:", contract.address);
+	console.log(
+		"Deployed ConvertWithLimit Contract Address:",
+		contract.address
+	);
 
 	generateSolidityAddressFile(
 		{
