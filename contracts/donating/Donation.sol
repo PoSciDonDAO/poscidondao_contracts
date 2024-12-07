@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "./../interfaces/IDon.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {ERC1155} from "../../lib/openzeppelin-contracts/contracts/token/ERC1155/ERC1155.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+/**
+ * @title Donation
+ * @dev Facilitates the secure handling of donations within the system.
+ * Enables tracking and processing of contributions in a controlled manner.
+ */
 contract Donation is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -16,9 +23,10 @@ contract Donation is AccessControl, ReentrancyGuard {
     uint256 public donationThresholdUsdc;
     uint256 public donationThresholdEth;
 
+    IDon private don;
+    address public usdc;
     address public donationWallet;
     address public treasuryWallet;
-    address public usdc;
 
     event Donated(
         address indexed user,
@@ -29,7 +37,8 @@ contract Donation is AccessControl, ReentrancyGuard {
     constructor(
         address donationWallet_,
         address treasuryWallet_,
-        address usdc_
+        address usdc_,
+        address don_
     ) {
         donationFraction = 95;
         donationThresholdUsdc = 1e6;
@@ -39,6 +48,7 @@ contract Donation is AccessControl, ReentrancyGuard {
         treasuryWallet = treasuryWallet_;
         _setupRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         usdc = usdc_;
+        don = IDon(don_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -67,7 +77,8 @@ contract Donation is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the donated amount that will go to the donation wallet and treasury
+     * @dev sets the donated amount that will go to the donation wallet and treasury.
+     * @param percentage the percentage of the donation.
      */
     function setDonationFraction(
         uint256 percentage
@@ -80,18 +91,17 @@ contract Donation is AccessControl, ReentrancyGuard {
      * @dev sends ETH donations to the donation & treasury wallet
      */
     function donateEth() external payable nonReentrant {
-        //check if the donation Threshold has been reached
         if (msg.value < donationThresholdEth) revert InsufficientDonation();
 
         uint256 amountDonation = (msg.value / 100) * donationFraction;
         uint256 amountTreasury = (msg.value / 100) * (100 - donationFraction);
 
-        //transfer Eth to donation wallet if successful
         (bool sentDonation, ) = donationWallet.call{value: amountDonation}("");
         (bool sentTreasury, ) = treasuryWallet.call{value: amountTreasury}("");
         require(sentDonation && sentTreasury);
 
-        //emit event
+        don.mint(msg.sender, 1);
+
         emit Donated(msg.sender, address(0), msg.value);
     }
 
@@ -100,13 +110,11 @@ contract Donation is AccessControl, ReentrancyGuard {
      * @param usdcAmount the amount of donated USDC
      */
     function donateUsdc(uint256 usdcAmount) external nonReentrant {
-        //check if the donation Threshold has been reached
         if (usdcAmount < donationThresholdUsdc) revert InsufficientDonation();
 
         uint256 amountDonation = (usdcAmount / 100) * donationFraction;
         uint256 amountTreasury = (usdcAmount / 100) * (100 - donationFraction);
 
-        //pull usdc from wallet to donation wallet
         IERC20(usdc).safeTransferFrom(
             msg.sender,
             donationWallet,
@@ -117,8 +125,9 @@ contract Donation is AccessControl, ReentrancyGuard {
             treasuryWallet,
             amountTreasury
         );
+        
+        don.mint(msg.sender, 1);
 
-        //emit event
         emit Donated(msg.sender, address(usdc), usdcAmount);
     }
 }

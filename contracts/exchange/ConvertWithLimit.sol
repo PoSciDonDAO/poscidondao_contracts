@@ -102,10 +102,16 @@ contract ConvertWithLimit is AccessControl, ReentrancyGuard {
      * @notice Handles the conversion of voucher SCI for 'real' SCI tokens.
      */
     function convertWithLimit() external nonReentrant whitelisted {
-        if(converted[msg.sender]) revert AlreadyConverted();
-        IERC20(voucher).safeTransferFrom(msg.sender, admin, conversionLimits[msg.sender]);
-        IERC20(sci).safeTransferFrom(admin, msg.sender, conversionLimits[msg.sender]);
+        if (converted[msg.sender]) revert AlreadyConverted();
+
+        uint256 voucherAmount = IERC20(voucher).balanceOf(msg.sender);
+        uint256 limit = conversionLimits[msg.sender];
+        uint256 amountToConvert = voucherAmount > limit ? limit : voucherAmount;
+
+        IERC20(voucher).safeTransferFrom(msg.sender, admin, amountToConvert);
+        IERC20(sci).safeTransferFrom(admin, msg.sender, amountToConvert);
+
         converted[msg.sender] = true;
-        emit Converted(msg.sender, conversionLimits[msg.sender], conversionLimits[msg.sender]);
+        emit Converted(msg.sender, amountToConvert, amountToConvert);
     }
 }

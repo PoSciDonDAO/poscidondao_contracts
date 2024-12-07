@@ -7,6 +7,11 @@ import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+/**
+ * @title GovernorResearch
+ * @dev Implements DAO governance functionalities strictly for Due Diligence Crew members including proposing, voting, and on-chain executing of proposals specifically for the funding of research.
+ * It integrates with external contracts for sciManager validation, participation and proposal execution.
+ */
 contract GovernorResearch is AccessControl, ReentrancyGuard {
     
     ///*** ERRORS ***///
@@ -106,10 +111,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
-
+    event Elected(address indexed elected);
+    event Impeached(address indexed impeached);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
-
     event Proposed(
         uint256 indexed id,
         address indexed user,
@@ -119,25 +124,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address action,
         bool executable
     );
-
     event SciManagerUpdated(address indexed user, address indexed newAddress);
     event StatusUpdated(
         uint256 indexed id,
         ProposalStatus indexed status
     );
-
     event ResearchFundingWalletUpdated(
         address indexed user,
         address indexed SetNewResearchFundingWallet
     );
-
     event Voted(
         uint256 indexed id,
         address indexed user,
         bool indexed support,
         uint256 amount
     );
-
     event VotesUpdated(
         uint256 indexed id,
         uint256 votesFor,
@@ -209,6 +210,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         for (uint256 i = 0; i < members.length; i++) {
             _validateLockingRequirements(sciManager, members[i]);
             _grantRole(DUE_DILIGENCE_ROLE, members[i]);
+            emit Elected(members[i]);
         }
     }
 
@@ -221,6 +223,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyExecutor {
         for (uint256 i = 0; i < members.length; i++) {
             _revokeRole(DUE_DILIGENCE_ROLE, members[i]);
+            emit Impeached(members[i]);
         }
     }
 
@@ -230,7 +233,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function checkDueDiligenceRole(
         address member
-    ) external view returns (bool) {
+    ) public view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -247,7 +250,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the donation wallet address
+     * @dev sets the research funding wallet address
      */
     function setResearchFundingWallet(
         address newresearchFundingWallet
@@ -646,7 +649,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function _recordVote(uint id, bool support) internal {
         UserVoteData storage voteData = userVoteData[msg.sender][id];
 
-        // Deduct previous votes if the user has already voted
         if (voteData.voted) {
             if (voteData.previousSupport) {
                 proposals[id].votesFor -= VOTE;
@@ -689,9 +691,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Validates if the proposer meets the sciManager requirements for proposing research.
      * @param sciManager The contract interface used to check the number of locked SCI.
      * @param member The address of the member initiating an action.
-     *
-     * @notice This function reverts with InsufficientBalance if the locked SCI is below the threshold.
-     * The locked SCI amount and required threshold are provided in the revert message.
      */
     function _validateLockingRequirements(
         ISciManager sciManager,
@@ -708,10 +707,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param info ipfs file link
      * @param action the contract address executing the proposal
      * @return uint256 The index of the newly stored research proposal.
-     *
-     * @notice The function increments the _index after storing the proposal.
-     * The proposal is stored with an Active status and initialized voting counters.
-     * The function returns the index at which the new proposal is stored.
      */
     function _storeProposal(
         string memory info,

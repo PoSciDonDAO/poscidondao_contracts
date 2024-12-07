@@ -7,6 +7,10 @@ interface IGovernorCancel {
     function cancel(uint256 id) external;
 }
 
+/**
+ * @title GovernorGuard
+ * @dev Allows admin to cancel malicious proposals
+ */
 contract GovernorGuard is AccessControl {
     address public admin;
     IGovernorCancel public govOps;
@@ -14,15 +18,21 @@ contract GovernorGuard is AccessControl {
 
     event SetNewAdmin(address indexed user, address indexed newAdmin);
 
+    error CannotBeZeroAddress();
     error ProposalAlreadyDropped(uint256 id);
 
     constructor(address admin_, address govOps_, address govRes_) {
-
+        if (
+            admin_ == address(0) ||
+            govOps_ == address(0) ||
+            govRes_ == address(0)
+        ) {
+            revert CannotBeZeroAddress();
+        }
         admin = admin_;
         govOps = IGovernorCancel(govOps_);
         govRes = IGovernorCancel(govRes_);
 
-        // Grant the initial admin role to the deployer
         _setupRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 

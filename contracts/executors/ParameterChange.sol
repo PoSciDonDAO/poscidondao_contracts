@@ -8,6 +8,10 @@ interface IGovernorParams {
     function setGovernanceParameter(bytes32 param, uint256 data) external;
 }
 
+/**
+ * @title ParameterChange
+ * @dev Handles execution of changes to governance parameters.
+ */
 contract ParameterChange is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
@@ -20,7 +24,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
-    event ParameterUpdated(bytes32 param, uint256 data);
+    event ActionExecuted(address indexed action, string indexed contractName);
 
     /**
      * @dev Constructor that initializes the ParameterChange contract.
@@ -91,7 +95,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorParams(gov).setGovernanceParameter(param, data);
-        emit ParameterUpdated(param, data);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
+        emit ActionExecuted(address(this), "ParameterChange");
     }
 }

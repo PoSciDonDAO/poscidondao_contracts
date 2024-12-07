@@ -4,15 +4,20 @@ pragma solidity ^0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
+/**
+ * @title GovernorExecutor
+ * @dev Handles execution of proposals.
+ */
 contract GovernorExecutor is AccessControl, ReentrancyGuard {
     error AlreadyScheduled(address action);
     error AddressIsNotGovernor();
     error CannotBeZero();
-    error NotScheduled(address action);
-    error TooEarly(uint256 currentTime, uint256 scheduledTime);
+    error CannotBeZeroAddress();
     error ExecutionFailed();
     error GovernorNotFound(address governor);
     error GovernorAlreadyExists(address governor);
+    error NotScheduled(address action);
+    error TooEarly(uint256 currentTime, uint256 scheduledTime);
 
     uint256 public delay;
     address public admin;
@@ -28,7 +33,6 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     event GovernorRemoved(address indexed user, address indexed formerGovernor);
     event Scheduled(address indexed action);
 
-
     constructor(
         address admin_,
         uint256 delay_,
@@ -37,10 +41,13 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     ) {
         if (
             admin_ == address(0) ||
-            delay_ == 0 ||
             govOps_ == address(0) ||
             govRes_ == address(0)
-        ) revert CannotBeZero();
+        ) revert CannotBeZeroAddress();
+
+        if(delay_ == 0) {
+            revert CannotBeZero();
+        }
 
         delay = delay_;
         admin = admin_;

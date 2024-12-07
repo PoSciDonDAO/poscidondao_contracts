@@ -5,30 +5,30 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 
 /**
- * @title Participation Token (PO)
+ * @title Donation Token (DON)
  * @dev A soulbound token contract for participation tokens. These tokens are mintable, burnable,
  * but not transferable, adhering to the soulbound token concept where tokens are permanently associated
  * with a wallet. Inherits ERC1155 for multi-token standard support and ERC1155Burnable for burn functionality.
  */
-contract Po is ERC1155Burnable, AccessControl {
+contract Don is ERC1155Burnable, AccessControl {
     error Frozen();
     error Unauthorized(address user);
 
-    address public treasuryWallet; 
-    address public govOpsAddress;
-    string public name = "Participation Token";
-    string public symbol = "PO";
-    bool internal frozenUri = false; 
-    bool internal frozenGovOps = false;
+    address public admin; 
+    address public donationAddress;
+    string public name = "Donation Token";
+    string public symbol = "DON";
+    bool internal frozenUri = false;
+    bool internal frozenDonation = true; 
     string private _uri;
-    uint256 private constant PARTICIPATION_TOKEN_ID = 0;
+    uint256 private constant DONATION_TOKEN_ID = 0;
     uint256 private _totalSupply;
 
     /**
      * @dev Modifier to restrict actions to the Governance Operations address.
      */
-    modifier onlyGov() {
-        if (msg.sender != govOpsAddress) revert Unauthorized(msg.sender);
+    modifier onlyDonation() {
+        if (msg.sender != donationAddress) revert Unauthorized(msg.sender);
         _;
     }
 
@@ -36,20 +36,20 @@ contract Po is ERC1155Burnable, AccessControl {
         string memory baseURI_,
         address treasuryWallet_
     ) ERC1155(baseURI_) {
-        treasuryWallet = treasuryWallet_;
+        admin = treasuryWallet_;
         _setURI(baseURI_);
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
     }
 
     /**
      * @dev Sets the governance operations address.
-     * @param newGovOpsAddress Address of the new governance operations.
+     * @param newDonationAddress Address of the new governance operations.
      */
-    function setGovOps(
-        address newGovOpsAddress
+    function setDonation(
+        address newDonationAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (frozenGovOps) revert Frozen();
-        govOpsAddress = newGovOpsAddress;
+        if (frozenDonation) revert Frozen();
+        donationAddress = newDonationAddress;
     }
 
     /**
@@ -69,8 +69,8 @@ contract Po is ERC1155Burnable, AccessControl {
     /**
      * @dev Freezes the governance operations address, preventing any further changes.
      */
-    function freezeGovOps() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        frozenGovOps = true;
+    function freezeDonation() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        frozenDonation = true;
     }
 
     /**
@@ -78,8 +78,8 @@ contract Po is ERC1155Burnable, AccessControl {
      * @param user Address of the user to mint tokens to.
      * @param amount the amount of tokens to be minted
      */
-    function mint(address user, uint256 amount) external onlyGov {
-        _mint(user, PARTICIPATION_TOKEN_ID, amount, "");
+    function mint(address user, uint256 amount) external onlyDonation {
+        _mint(user, DONATION_TOKEN_ID, amount, "");
         _totalSupply += amount;
     }
 
@@ -89,7 +89,7 @@ contract Po is ERC1155Burnable, AccessControl {
      */
     function mintBatchByAdmin(address[] memory users, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < users.length; i++) {
-            _mint(users[i], PARTICIPATION_TOKEN_ID, amount, "");
+            _mint(users[i], DONATION_TOKEN_ID, amount, "");
             _totalSupply += amount;
         }
     }
@@ -164,6 +164,6 @@ contract Po is ERC1155Burnable, AccessControl {
      * @return String representing the token URI.
      */
     function uri() public view returns (string memory) {
-        return string(abi.encodePacked(_uri, "/", PARTICIPATION_TOKEN_ID));
+        return string(abi.encodePacked(_uri, "/", DONATION_TOKEN_ID));
     }
 }

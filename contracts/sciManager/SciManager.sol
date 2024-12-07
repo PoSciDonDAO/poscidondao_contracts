@@ -9,6 +9,10 @@ import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+/**
+ * @title SciManager
+ * @dev Manages SCI token operations including locking and unlocking tokens and delegating voting power.
+ */
 contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 

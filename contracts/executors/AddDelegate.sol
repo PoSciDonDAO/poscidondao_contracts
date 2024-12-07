@@ -8,11 +8,17 @@ interface IGovernorAddDelegate {
     function addDelegate(address newDelegate) external;
 }
 
+/**
+ * @title AddDelegate
+ * @dev Handles the addition of delegates selected by the DAO.
+ */
 contract AddDelegate is ReentrancyGuard, AccessControl {
     address public targetWallet;
     address public sciManager;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+
+    event ActionExecuted(address indexed action, string indexed contractName);
 
     constructor(
         address targetWallet_,
@@ -31,5 +37,6 @@ contract AddDelegate is ReentrancyGuard, AccessControl {
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorAddDelegate(sciManager).addDelegate(targetWallet);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
+        emit ActionExecuted(address(this), "AddDelegate");
     }
 }

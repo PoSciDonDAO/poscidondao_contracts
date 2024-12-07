@@ -14,7 +14,7 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 /**
  * @title GovernorOperations
- * @dev Implements DAO governance functionalities including proposing, voting, and executing proposals.
+ * @dev Implements DAO governance functionalities including proposing, voting, and on-chain executing of proposals.
  * It integrates with external contracts for sciManager validation, participation and proposal execution.
  */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
@@ -209,16 +209,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the sciManager address
+     * @param newSciManagerAddress The address to be set as the sci manager contract
      */
     function setsciManagerAddress(
-        address newsciManagerAddress
+        address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        sciManagerAddress = newsciManagerAddress;
-        emit SciManagerUpdated(msg.sender, newsciManagerAddress);
+        sciManagerAddress = newSciManagerAddress;
+        emit SciManagerUpdated(msg.sender, newSciManagerAddress);
     }
 
     /**
      * @dev sets the GovernorExecution address
+     * @param newGovExecAddress The address to be set as the governor executor
      */
     function setGovExec(
         address newGovExecAddress
@@ -229,6 +231,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the GovernorGuard address
+     * @param newGovGuardAddress The address to be set as the governor guard
+
      */
     function setGovGuard(
         address newGovGuardAddress
@@ -240,6 +244,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the signer address
+     * @param newSigner The address to be set as the signer used to sign off-chain messages
      */
     function setSigner(
         address newSigner
@@ -250,6 +255,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev sets the PO token address and interface
+     * @param po_ the address of the PO token
      */
     function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         po = IPo(po_);
@@ -359,6 +365,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _recordVote(id, support, votingRights);
     }
 
+    /**
+     * @dev vote for an option of a given proposal
+     *      using the rights from the most recent snapshot
+     * @param id the _index of the proposal
+     * @param support user's choice to support a proposal or not
+     * @param isUnique The status of the uniqueness of the account casting the vote.
+     * @param signature The signature of the data related to the account's uniqueness.
+     */
     function voteQV(
         uint id,
         bool support,
@@ -408,8 +422,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Executes a scheduled proposal by temporarily assigning the EXECUTOR_ROLE to the target action,
-     * executing the action, and then removing the role. Reverts if conditions for execution are not met.
+     * @dev Executes a scheduled proposal
      * @param id The ID of the proposal to be executed.
      */
     function execute(uint256 id) external payable nonReentrant {
@@ -457,7 +470,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal
+     * @dev cancels the proposal by governor guard
      * @param id the _index of the proposal of interest
      */
     function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
@@ -477,7 +490,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal
+     * @dev cancels the proposal if rejected
      * @param id the _index of the proposal of interest
      */
     function cancelRejected(uint256 id) external nonReentrant {
@@ -653,8 +666,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param id The index of the proposal on which to vote.
      * @param isUnique The status of the uniqueness of the account casting the vote.
      * @param signature The signature of the data related to the account's uniqueness.
-     *
-     *
      */
     function _uniquenessCheck(
         uint256 id,
@@ -806,9 +817,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Checks if the proposer satisfies the sciManager requirements for proposal submission.
      * @param sciManager The sciManager contract interface to check locked amounts.
      * @param proposer Address of the user making the proposal.
-     *
-     * @notice Reverts with InsufficientBalance if the locked amount is below the required threshold.
-     * Reverts with ProposeLock if the proposer's tokens are locked due to a recent proposal.
      */
     function _validateLockingRequirements(
         ISciManager sciManager,
@@ -829,10 +837,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param action contract address executing an action.
      * @param quadraticVoting Boolean indicating if quadratic voting is enabled for this proposal.
      * @param sciManager The sciManager contract interface used for updating the proposer's status.
-     * @return uint256 The _index where the new proposal is stored.
-     *
-     * @notice The function increments the operations proposal _index after storing.
-     * It also updates the sciManager contract to reflect the new proposal.
      */
     function _storeProposal(
         string memory info,

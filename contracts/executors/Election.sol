@@ -6,10 +6,14 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorRoleGrant {
     function grantDueDiligenceRole(address[] memory members) external;
-
     function checkDueDiligenceRole(address member) external returns (bool);
 }
 
+/**
+ * @title Election
+ * @dev Facilitates the election of scientists that govern the research funding process. 
+ * Ensures secure role-based access control and protection against reentrancy attacks.
+ */
 contract Election is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error AddressAlreadyHasDDRole();
@@ -19,7 +23,7 @@ contract Election is ReentrancyGuard, AccessControl {
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
-    event Elected(address[] indexed elected);
+    event ActionExecuted(address indexed action, string indexed contractName);
 
     constructor(
         address[] memory targetWallets_,
@@ -63,7 +67,7 @@ contract Election is ReentrancyGuard, AccessControl {
         IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(
             targetWallets
         );
-        emit Elected(targetWallets);
+        emit ActionExecuted(address(this), "Election");
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
     }
 }

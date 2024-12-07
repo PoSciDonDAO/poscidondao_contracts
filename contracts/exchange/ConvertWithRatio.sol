@@ -34,10 +34,10 @@ contract ConvertWithRatio is AccessControl, ReentrancyGuard {
     address private sci;
     address public voucher;
     address public admin;
-    uint256 public conversionRate = 110321;
+    uint256 public conversionRate = 108057;
     //price of ETH given 1 ETH = 10500 vSCI = 3331,57
-    //price at pinksale start: 3675,45
-    //ratio: 1.10321
+    //price at pinksale start: ~3600
+    //ratio: 1.08057
     mapping(address => bool) public whitelist;
 
     event Converted(
