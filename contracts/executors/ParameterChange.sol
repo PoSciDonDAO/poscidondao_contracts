@@ -45,10 +45,10 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         gov = govAddress_;
         governorExecutor = governorExecutor_;
         param = _toBytes32(param_);
+        _checkValidParameter(param);
         humanReadableParam = param_;
         data = data_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
-        _checkValidParameter(param);
     }
 
     /**

@@ -16,6 +16,7 @@ import "contracts/executors/ParameterChange.sol";
 import "contracts/governance/GovernorExecutor.sol";
 import "contracts/governance/GovernorGuard.sol";
 import "forge-std/console2.sol";
+import "contracts/DeployedAddresses.sol";
 
 contract GovernorResearchTest is Test {
     Usdc usdc;
@@ -38,72 +39,60 @@ contract GovernorResearchTest is Test {
     address addr4 = vm.addr(4);
     address addr5 = vm.addr(5);
     address researchFundingWallet = vm.addr(6);
-    address admin = vm.addr(7);
+    address test = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+    address admin = DeployedAddresses.admin;
     address researchersWallet = vm.addr(8);
     address signer = vm.addr(9);
 
     function setUp() public {
-        usdc = new Usdc(10000000e18);
+        usdc = Usdc(DeployedAddresses.usdc);
 
         vm.startPrank(admin);
-
-        sci = new Sci(admin, 18910000);
-
-        po = new Po("https://mock-uri.io/", admin);
-
-        exchange = new PoToSciExchange(admin, address(sci), address(po));
-
-        sciManager = new SciManager(admin, address(sci));
-
-        govRes = new GovernorResearch(
-            address(sciManager),
-            admin,
-            researchFundingWallet
-        );
-
-        govOps = new GovernorOperations(
-            address(sciManager),
-            admin,
-            address(po),
-            signer
-        );
-
-        guard = new GovernorGuard(admin, address(govOps), address(govRes));
+        sci = Sci(DeployedAddresses.sci);
+        po = Po(DeployedAddresses.po);
+        exchange = PoToSciExchange(DeployedAddresses.poToSciExchange);
+        sciManager = SciManager(DeployedAddresses.sciManager);
+        govOps = GovernorOperations(DeployedAddresses.governorOperations);
+        govRes = GovernorResearch(DeployedAddresses.governorResearch);
 
         address[] memory governors = new address[](2);
         governors[0] = address(govOps);
         governors[1] = address(govRes);
-        executor = new GovernorExecutor(
-            admin,
-            2 days,
-            address(govOps),
-            address(govRes)
-        );
+
+        executor = GovernorExecutor(DeployedAddresses.governorExecutor);
+        guard = GovernorGuard(DeployedAddresses.governorGuard);
+
         govOps.setGovExec(address(executor));
         govRes.setGovExec(address(executor));
         govRes.setGovGuard(address(guard));
         govParams = new ParameterChange(address(govOps), address(executor), "quorum", 3);
 
         transaction = new Transaction(
-            researchersWallet,
             researchFundingWallet,
+            researchersWallet,
             10000e6,
             5000e18,
             address(executor)
         );
 
-        sciManager.setGovRes(address(govRes));
-        sciManager.setGovOps(address(govOps));
-        po.setGovOps(address(govOps));
-        // govRes.setGovOps(address(govOps));
-
-        deal(address(sci), researchFundingWallet, 10000000000e18);
-        deal(address(usdc), researchFundingWallet, 10000000e6);
-        deal(address(sci), admin, 10000000000e18);
-        deal(address(usdc), admin, 100000000e6);
-        usdc.approve(address(govRes), 100000000000000e6);
-        sci.approve(address(govRes), 100000000000000e18);
+        sci.approve(address(govOps), 100000000000000e18);
+        usdc.approve(address(govOps), 100000000000000e6);
+        sci.approve(address(executor), 100000000000000e18);
+        usdc.approve(address(executor), 100000000000000e6);
+        sci.approve(address(transaction), 100000000000000e18);
+        usdc.approve(address(transaction), 100000000000000e6);
         sci.approve(address(sciManager), 1000000000000e18);
+        deal(address(usdc), admin, 100000000e6);
+        deal(address(sci), admin, 10000000e18);
+
+        po.setGovOps(address(govOps));
+        sciManager.setGovOps(address(govOps));
+        sciManager.setGovRes(address(govRes));
+        govOps.setGovExec(address(executor));
+        govOps.setGovGuard(address(guard));
+        sciManager.setGovExec(address(executor));
+        govRes.setGovExec(address(executor));
+        govRes.setGovGuard(address(guard));
         vm.stopPrank();
 
         vm.startPrank(researchFundingWallet);
@@ -112,6 +101,8 @@ contract GovernorResearchTest is Test {
         sci.approve(address(sciManager), 1000000000000e18);
         sci.approve(address(transaction), 100000000000000e18);
         usdc.approve(address(transaction), 100000000000000e6);
+        deal(address(usdc), researchFundingWallet, 100000000e6);
+        deal(address(sci), researchFundingWallet, 10000000e18);
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -141,11 +132,9 @@ contract GovernorResearchTest is Test {
         sciManager.lock(1000e18);
         vm.stopPrank();
         vm.startPrank(addr1);
-        address[] memory electedMembers = new address[](4);
-        electedMembers[0] = admin;
-        electedMembers[1] = researchFundingWallet;
-        electedMembers[2] = addr1;
-        electedMembers[3] = addr2;
+        address[] memory electedMembers = new address[](2);
+        electedMembers[0] = addr1;
+        electedMembers[1] = addr2;
         election = new Election(
             electedMembers,
             address(govRes),
@@ -161,7 +150,7 @@ contract GovernorResearchTest is Test {
         uint256 id = govOps.getProposalIndex();
         govOps.propose("Info", address(election), false);
         govOps.voteStandard(id, true);
-        vm.warp(4.1 weeks);
+        vm.warp(block.timestamp + 4.1 weeks);
         govOps.schedule(id);
         vm.warp(block.timestamp + 3 days);
         govOps.execute(id);

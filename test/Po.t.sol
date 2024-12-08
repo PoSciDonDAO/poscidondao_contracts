@@ -113,7 +113,9 @@ contract PoTest is Test {
 
     function test_adminCanMintTokens() public {
         vm.startPrank(admin);
-        po.mintByAdmin(5);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+        po.mintBatchByAdmin(selectedMembers, 5);
         uint256 balance = po.balanceOf(admin, 0);
         assertEq(balance, 5);
         assertEq(po.totalSupply(), 5);
@@ -125,13 +127,17 @@ contract PoTest is Test {
         vm.expectRevert(
             "AccessControl: account 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
         );
-        po.mintByAdmin(5);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+        po.mintBatchByAdmin(selectedMembers, 5);
         vm.stopPrank();
     }
 
     function test_adminCanTransferTokens() public {
         vm.startPrank(admin);
-        po.mintByAdmin(5);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = admin;
+        po.mintBatchByAdmin(selectedMembers, 5);
         po.safeTransferFrom(admin, addr2, 0, 3, "");
         uint256 balance1 = po.balanceOf(admin, 0);
         uint256 balance2 = po.balanceOf(addr2, 0);
@@ -142,7 +148,9 @@ contract PoTest is Test {
 
     function test_NonadminCannotTransferTokens() public {
         vm.startPrank(admin);
-        po.mintByAdmin(5);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+        po.mintBatchByAdmin(selectedMembers, 5);
         vm.stopPrank();
 
         vm.startPrank(addr1);
@@ -153,9 +161,11 @@ contract PoTest is Test {
         vm.stopPrank();
     }
 
-    function test_adminCanBatchTransferTokens() public {
+    function test_AdminCanBatchTransferTokens() public {
         vm.startPrank(admin);
-        po.mintByAdmin(10);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = admin;
+        po.mintBatchByAdmin(selectedMembers, 10);
         uint256[] memory ids = new uint256[](1);
         uint256[] memory amounts = new uint256[](1);
         ids[0] = 0;
@@ -170,7 +180,9 @@ contract PoTest is Test {
 
     function test_NonadminCannotBatchTransferTokens() public {
         vm.startPrank(admin);
-        po.mintByAdmin(10);
+        address[] memory selectedMembers = new address[](1);
+        selectedMembers[0] = admin;
+        po.mintBatchByAdmin(selectedMembers, 10);
         vm.stopPrank();
 
         vm.startPrank(addr1);

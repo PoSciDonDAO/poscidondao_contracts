@@ -274,7 +274,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
-    function SetGovernanceParameter(
+    function setGovernanceParameter(
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
