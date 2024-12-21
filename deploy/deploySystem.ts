@@ -31,8 +31,7 @@ function generateFrontendAddressesFile(
 
 const ALCHEMY_KEY = process.env.ALCHEMY_KEY_PROTOCOL ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
-const graphApiGovOps = process.env.GRAPH_API_GOVOPS ?? '';
-const graphApiGovRes = process.env.GRAPH_API_GOVRES ?? '';
+const graphApi = process.env.GRAPH_API_KEY ?? '';
 
 export const getRpcUrl = () => {
   ${
@@ -43,11 +42,11 @@ export const getRpcUrl = () => {
 };
 
 export const getGraphGovOpsApi = () => {
-  return \`\https://gateway.thegraph.com/api/\${graphApiGovOps}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
+  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
 }
 
 export const getGraphGovResApi = () => {
-  return \`\https://gateway.thegraph.com/api/\${graphApiGovRes}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
+  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
 }
 
 export const getPrivateKey = () => {
@@ -69,6 +68,7 @@ export const getNetworkInfo = () => {
     usdc: '${usdc}',
     sci: '${sci}',
     swapAddress: '0x3Cc223D3A738eA81125689355F8C16A56768dF70',
+	don: '${deployedContracts.don}',
     donation: '${deployedContracts.donation}',
     po: '${deployedContracts.po}',
     poToSciExchange: '${deployedContracts.poToSciExchange}',
@@ -277,6 +277,7 @@ async function main(): Promise<DeployedContracts> {
 	};
 
 	const rpcUrl: string = getRpcUrl();
+	const uri = "https://baseURI.example/";
 	const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 	const addresses: DeployedContracts = {};
 
@@ -295,12 +296,13 @@ async function main(): Promise<DeployedContracts> {
 	};
 
 	// Deploy contracts
+	await deployAndVerify("Don", [uri, admin], "don");
 	await deployAndVerify(
 		"Donation",
-		[researchFundingWallet, admin, usdc],
+		[researchFundingWallet, admin, usdc, addresses.don],
 		"donation"
 	);
-	await deployAndVerify("Po", ["https://baseURI.example/", admin], "po");
+	await deployAndVerify("Po", [uri, admin], "po");
 	await deployAndVerify(
 		"PoToSciExchange",
 		[admin, sci, addresses.po],

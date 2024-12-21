@@ -30,9 +30,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InvalidInput();
     error InvalidGovernanceParameter();
-    error VoteChangeNotAllowedAfterCutOff();
-    error VoteChangeWindowExpired();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error NoTokensToClaim();
     error ProposalNotCancelable();
     error ProposalNotSchedulable();
     error ProposalLifetimePassed();
@@ -45,6 +44,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error ProposalNotPassed();
     error QuorumNotReached(uint256 id, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
+    error VoteChangeNotAllowedAfterCutOff();
+    error VoteChangeWindowExpired();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -76,6 +77,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 initialVoteTimestamp; // The timestamp of when the user first voted
         bool previousSupport; // Whether the user supported the last vote
         uint256 previousVoteAmount; // The amount of votes cast in the last vote
+        bool poClaimed; //Whether the user has claimed PO tokens for the vote on the proposal
+        uint256 votingStreakAtVote; // Streak value when the user voted
     }
 
     ///*** INTERFACES ***///
@@ -93,6 +96,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private proposals;
     mapping(address => uint256) private votingStreak;
+    mapping(address => uint256) public unclaimedTokens;
     mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
 
     ///*** ROLES ***///
@@ -119,7 +123,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
     modifier onlyExecutor() {
-        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender) || !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
         }
         _;
@@ -127,6 +131,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
+    event Claimed(address indexed claimer, uint256 poToClaim);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -182,7 +187,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         signer = signer_;
 
         governanceParams.opThreshold = 5000e18;
-        governanceParams.quorum = 567300e18; // 3% of circulating supply of 18.91 million SCI
+        governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
         governanceParams.proposalLifetime = 30 minutes;
         governanceParams.voteLockTime = 0; //normally 1 week
@@ -211,7 +216,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev sets the sciManager address
      * @param newSciManagerAddress The address to be set as the sci manager contract
      */
-    function setsciManagerAddress(
+    function setSciManagerAddress(
         address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         sciManagerAddress = newSciManagerAddress;
@@ -290,7 +295,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Proposes a change in DAO operations. At least one option needs to be proposed.
+     * @dev Proposes a change in DAO operations.
      * @param info IPFS hash of project proposal.
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
      * @return uint256 Index of the newly created proposal.
@@ -514,6 +519,43 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Allows a user to claim their accumulated unclaimed PO tokens earned through voting.
+     */
+    function claimPo() external {
+        uint256 totalPoToClaim = 0;
+
+        for (uint256 i = 0; i < _index; i++) {
+            UserVoteData storage voteData = userVoteData[msg.sender][i];
+
+            if (!voteData.voted || voteData.poClaimed) {
+                continue;
+            }
+
+            uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
+                10 ** 18;
+            bool quorumReached = proposals[i].quadraticVoting
+                ? proposals[i].votesTotal >= sqrtQuorum
+                : proposals[i].votesTotal >= governanceParams.quorum;
+
+            if (quorumReached) {
+                totalPoToClaim += voteData.votingStreakAtVote;
+
+                voteData.poClaimed = true;
+            }
+        }
+
+        if (totalPoToClaim == 0) {
+            revert NoTokensToClaim();
+        }
+
+        po.mint(msg.sender, totalPoToClaim);
+
+        emit Claimed(msg.sender, totalPoToClaim);
+    }
+
+
+
+    /**
      * @dev returns the PO token address
      */
     function getPoToken() external view returns (address) {
@@ -567,7 +609,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 userVoteData[user][id].voted,
                 userVoteData[user][id].initialVoteTimestamp,
                 userVoteData[user][id].previousSupport,
-                userVoteData[user][id].previousVoteAmount
+                userVoteData[user][id].previousVoteAmount,
+                userVoteData[user][id].poClaimed,
+                userVoteData[user][id].votingStreakAtVote
             );
     }
 
@@ -581,7 +625,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) external view returns (Proposal memory) {
         if (id > _index) revert ProposalInexistent();
 
-        // Return a struct with the proposal details
         return
             Proposal(
                 proposals[id].info,
@@ -787,7 +830,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             } else {
                 votingStreak[msg.sender] = 1;
             }
-            po.mint(msg.sender, votingStreak[msg.sender]);
+
+            voteData.votingStreakAtVote = votingStreak[msg.sender];
+
+            unclaimedTokens[msg.sender] += votingStreak[msg.sender];
         }
 
         voteData.voted = true;

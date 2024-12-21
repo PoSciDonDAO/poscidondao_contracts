@@ -102,7 +102,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
     modifier onlyExecutor() {
-        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender) || !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
         }
         _;

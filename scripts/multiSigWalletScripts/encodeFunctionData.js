@@ -7,8 +7,8 @@ const abi = ["function addMembersToWhitelist(address[])"];
 
 // The addresses you want to add to the whitelist
 const addressesToWhitelist = [
-	"0x2034988e8666ddb29a9a39348036cb13d1598aaa",
-	"0xf0ec7d1fbbf5ee3b82d1ea6e34d3c08f0fa21dfc",
+	"0xFB122889163C7246eac1B7e7d96747f64d20C258",
+	"0x6546C9e88cC16051e09014f8DFf11737A1977A50",
 ];
 
 // Create an instance of the Interface

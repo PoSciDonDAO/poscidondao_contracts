@@ -19,11 +19,9 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
     error AlreadyDelegated();
     error CannotBeZeroAddress();
-    error CannotBeTerminated();
     error CannotClaim();
     error CannotDelegateToAnotherDelegator();
     error CannotDelegateToContract();
-    error ContractsTerminated();
     error DelegateAlreadyAdded(address delegate);
     error DelegateNotAllowListed(address delegate);
     error IncorrectBlockNumber();
@@ -55,9 +53,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-    bool public terminated = false;
-    bool public terminatedOperations = false;
-    bool public terminatedResearchFunding = false;
+    bool public emergency = false;
     address public admin;
     address public govOpsContract;
     address public govResContract;
@@ -87,7 +83,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event BurnedForTermination(address owner, uint256 amount);
+    event AdminSet(address indexed user, address indexed newAddress);
     event Delegated(
         address indexed owner,
         address indexed oldDelegate,
@@ -97,13 +93,14 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     event DelegateAdded(address indexed delegate);
     event DelegateRemoved(address indexed delegate);
     event DelegateThresholdUpdated();
+    event EmergencySet(bool indexed emergency, uint256 timestamp);
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event Locked(address indexed user, address indexed asset, uint256 amount);
     event SetGovOps(address indexed user, address indexed newAddress);
     event SetGovRes(address indexed user, address indexed newAddress);
 
-    event SetNewAdmin(address indexed user, address indexed newAddress);
-    event SetNewGovExecAddress(
+
+    event GovExecAddressSet(
         address indexed user,
         address indexed newAddress
     );
@@ -112,13 +109,6 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         uint256 votingRights,
         uint256 indexed blockNumber
     );
-    event Terminated(address admin, uint256 blockNumber);
-    event TerminatedByGovernance(
-        address govContract,
-        address admin,
-        uint256 blockNumber
-    );
-    event TerminationThresholdChanged();
     event VoteLockEndTimeUpdated(address user, uint256 voteLockEndTime);
     event ProposeLockEndTimeUpdated(address user, uint256 proposeLockEndTime);
 
@@ -142,7 +132,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovernorAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govExec = IGovernorExecution(newGovernorAddress);
-        emit SetNewGovExecAddress(msg.sender, newGovernorAddress);
+        emit GovExecAddressSet(msg.sender, newGovernorAddress);
     }
 
     /**
@@ -154,7 +144,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit SetNewAdmin(oldAdmin, newAdmin);
+        emit AdminSet(oldAdmin, newAdmin);
     }
 
     /**
@@ -317,8 +307,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     function free(uint256 amount) external nonReentrant {
         if (
             (users[msg.sender].voteLockEnd > block.timestamp ||
-                users[msg.sender].proposeLockEnd > block.timestamp) &&
-            !(terminated)
+                users[msg.sender].proposeLockEnd > block.timestamp) && !emergency
         ) {
             revert TokensStillLocked(
                 users[msg.sender].voteLockEnd,
@@ -341,7 +330,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
             if (
-                users[delegated].voteLockEnd > block.timestamp && !(terminated)
+                users[delegated].voteLockEnd > block.timestamp
             ) {
                 revert TokensStillLocked(
                     users[delegated].voteLockEnd,
@@ -367,6 +356,14 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
 
         emit Freed(msg.sender, address(sci), amount);
+    }
+
+    /**
+     * @dev Toggles the `emergency` state, which overrides vote and propose locks.
+     */
+    function setEmergency() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        emergency = !emergency;
+        emit EmergencySet(emergency, block.timestamp);
     }
 
     /**
