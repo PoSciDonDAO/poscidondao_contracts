@@ -46,7 +46,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
-
+    error votingRightsThresholdNotReached();
+    
     ///*** STRUCTS ***///
     struct Proposal {
         string info;
@@ -70,6 +71,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 voteChangeCutOff;
         uint256 opThreshold;
         uint256 maxVotingStreak;
+        uint256 votingRightsThreshold;
     }
 
     struct UserVoteData {
@@ -194,6 +196,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.proposeLockTime = 0; //normally 1 week
         governanceParams.voteChangeTime = 10 minutes; //normally 1 hour
         governanceParams.voteChangeCutOff = 10 minutes; //normally 3 days
+        governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -289,6 +292,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         else if (param == "opThreshold") governanceParams.opThreshold = data;
         else if (param == "maxVotingStreak" && data <= 5 && data >= 1)
             governanceParams.maxVotingStreak = data;
+        else if (param == "votingRightsThreshold") governanceParams.votingRightsThreshold = data;
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -367,7 +371,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votingRights = ISciManager(sciManagerAddress)
             .getLatestUserRights(msg.sender);
 
-        _recordVote(id, support, votingRights);
+        if (votingRights >= governanceParams.votingRightsThreshold) {
+            _recordVote(id, support, votingRights);
+        } else {
+            revert votingRightsThresholdNotReached();
+        }
     }
 
     /**
@@ -390,9 +398,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votingRights = ISciManager(sciManagerAddress)
             .getLatestUserRights(msg.sender);
 
-        uint256 actualVotes = Math.sqrt(votingRights / 10 ** 18) * 10 ** 18;
-
-        _recordVote(id, support, actualVotes);
+        if (votingRights >= governanceParams.votingRightsThreshold) {
+            uint256 actualVotes = Math.sqrt(votingRights / 10 ** 18) * 10 ** 18;
+            _recordVote(id, support, actualVotes);
+        } else {
+            revert votingRightsThresholdNotReached();
+        }
     }
 
     /**
@@ -552,7 +563,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         emit Claimed(msg.sender, totalPoToClaim);
     }
-
 
 
     /**
