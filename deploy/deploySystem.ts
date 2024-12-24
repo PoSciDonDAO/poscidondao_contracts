@@ -46,7 +46,7 @@ export const getGraphGovOpsApi = () => {
 }
 
 export const getGraphGovResApi = () => {
-  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
+  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/T6T8gJDMoivJAEg8u8cJjeYz8RzCynHt5RXaQ54d3KF\`\;
 }
 
 export const getPrivateKey = () => {
