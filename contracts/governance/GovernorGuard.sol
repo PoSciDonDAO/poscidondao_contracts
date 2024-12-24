@@ -33,7 +33,7 @@ contract GovernorGuard is AccessControl {
         govOps = IGovernorCancel(govOps_);
         govRes = IGovernorCancel(govRes_);
 
-        _setupRole(DEFAULT_ADMIN_ROLE, admin_);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
     /**

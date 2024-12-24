@@ -7,8 +7,8 @@ import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
@@ -18,7 +18,6 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  * It integrates with external contracts for sciManager validation, participation and proposal execution.
  */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
-    using ECDSA for bytes32;
     using SignatureChecker for bytes32;
 
     // *** ERRORS *** //
@@ -759,7 +758,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes memory signature
     ) internal view returns (bool) {
         bytes32 messageHash = _getMessageHash(user, isUnique);
-        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(
             messageHash
         );
 

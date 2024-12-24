@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
-import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title GovernorExecutor
@@ -52,11 +52,11 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         delay = delay_;
         admin = admin_;
 
-        _setupRole(GOVERNOR_ROLE, govOps_);
-        _setupRole(GOVERNOR_ROLE, govRes_);
-        _setupRole(GOVERNOR_ROLE, address(this));
+        _grantRole(GOVERNOR_ROLE, govOps_);
+        _grantRole(GOVERNOR_ROLE, govRes_);
+        _grantRole(GOVERNOR_ROLE, address(this));
 
-        _setupRole(DEFAULT_ADMIN_ROLE, admin_);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
     /**
