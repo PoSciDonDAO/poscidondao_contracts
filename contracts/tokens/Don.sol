@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.19;
+pragma solidity 0.8.28;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
@@ -127,8 +127,7 @@ contract Don is ERC1155Burnable, AccessControl {
         bytes4 interfaceId
     ) public view override(ERC1155, AccessControl) returns (bool) {
         return
-            interfaceId == type(IERC1155).interfaceId ||
-            interfaceId == type(IERC1155MetadataURI).interfaceId ||
+            interfaceId == type(ERC1155).interfaceId ||
             interfaceId == type(ERC1155Burnable).interfaceId ||
             super.supportsInterface(interfaceId);
     }

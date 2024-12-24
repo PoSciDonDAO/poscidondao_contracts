@@ -1,6 +1,6 @@
 
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity ^0.8.19;
+  pragma solidity 0.8.28;
 
   library DeployedConversionAddresses {
 	  address constant admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;

@@ -222,7 +222,7 @@ function generateSolidityAddressFile(
 	);
 	const solidityFileContent = `
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity ^0.8.19;
+  pragma solidity 0.8.28;
 
   library DeployedConversionAddresses {
 	  address constant admin = ${admin};

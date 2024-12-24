@@ -1,6 +1,6 @@
 
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity ^0.8.19;
+  pragma solidity 0.8.28;
 
   library DeployedPresaleAddresses {
       address constant sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311;
