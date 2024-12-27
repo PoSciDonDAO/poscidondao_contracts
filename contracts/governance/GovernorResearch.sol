@@ -102,7 +102,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
     modifier onlyExecutor() {
-        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender) || !hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
         }
         _;
@@ -215,12 +215,40 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev grants Due Diligence role to members
+     * @param members the addresses of the DAO members
+     */
+    function grantDueDiligenceRoleByAdmin(
+        address[] memory members
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        ISciManager sciManager = ISciManager(sciManagerAddress);
+        for (uint256 i = 0; i < members.length; i++) {
+            _validateLockingRequirements(sciManager, members[i]);
+            _grantRole(DUE_DILIGENCE_ROLE, members[i]);
+            emit Elected(members[i]);
+        }
+    }
+
+    /**
      * @dev revokes Due Diligence role to member
      * @param members the address of the DAO member
      */
     function revokeDueDiligenceRole(
         address[] memory members
     ) external onlyExecutor {
+        for (uint256 i = 0; i < members.length; i++) {
+            _revokeRole(DUE_DILIGENCE_ROLE, members[i]);
+            emit Impeached(members[i]);
+        }
+    }
+
+    /**
+     * @dev revokes Due Diligence role to member
+     * @param members the address of the DAO member
+     */
+    function revokeDueDiligenceRoleByAdmin(
+        address[] memory members
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < members.length; i++) {
             _revokeRole(DUE_DILIGENCE_ROLE, members[i]);
             emit Impeached(members[i]);
@@ -278,6 +306,31 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
+        if (param == "proposalLifetime")
+            governanceParams.proposalLifetime = data;
+        else if (param == "quorum") governanceParams.quorum = data;
+        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        else if (param == "proposeLockTime")
+            governanceParams.proposeLockTime = data;
+        else if (param == "voteChangeTime")
+            governanceParams.voteChangeTime = data;
+        else if (param == "voteChangeCutOff")
+            governanceParams.voteChangeCutOff = data;
+        else if (param == "ddThreshold") governanceParams.ddThreshold = data;
+        else revert InvalidGovernanceParameter();
+
+        emit ParameterUpdated(param, data);
+    }
+
+    /**
+     * @dev sets the governance parameters given data
+     * @param param the parameter of interest
+     * @param data the data assigned to the parameter
+     */
+    function setGovernanceParameterByAdmin(
+        bytes32 param,
+        uint256 data
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (param == "proposalLifetime")
             governanceParams.proposalLifetime = data;
         else if (param == "quorum") governanceParams.quorum = data;

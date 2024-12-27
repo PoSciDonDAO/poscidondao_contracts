@@ -298,6 +298,34 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev sets the governance parameters given data
+     * @param param the parameter of interest
+     * @param data the data assigned to the parameter
+     */
+    function setGovernanceParameterByAdmin(
+        bytes32 param,
+        uint256 data
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (param == "proposalLifetime")
+            governanceParams.proposalLifetime = data;
+        else if (param == "quorum") governanceParams.quorum = data;
+        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        else if (param == "proposeLockTime")
+            governanceParams.proposeLockTime = data;
+        else if (param == "voteChangeTime")
+            governanceParams.voteChangeTime = data;
+        else if (param == "voteChangeCutOff")
+            governanceParams.voteChangeCutOff = data;
+        else if (param == "opThreshold") governanceParams.opThreshold = data;
+        else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
+            governanceParams.maxVotingStreak = data;
+        else if (param == "votingRightsThreshold") governanceParams.votingRightsThreshold = data;
+        else revert InvalidGovernanceParameter();
+
+        emit ParameterUpdated(param, data);
+    }
+
+    /**
      * @dev Proposes a change in DAO operations.
      * @param info IPFS hash of project proposal.
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
