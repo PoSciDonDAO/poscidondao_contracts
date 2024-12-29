@@ -10,13 +10,13 @@ address constant admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 address constant researchFundingWallet = 0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF;
 address constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
 address constant sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311;
-address constant donation = 0xaB9B42f3AD44DA43196f145fd7Aef09249C97914;
-address constant po = 0x0351b084476b6F5882A479359691D4df896A6A08;
-address constant poToSciExchange = 0x64EEc555276258e9D8296D3c05b6B7B007820A65;
-address constant sciManager = 0x37ce91343653f8eD2C473d8BA778149b248f731a;
-address constant governorOperations = 0xc4ed7DB43a80eFFAB1F6C2A867A2815f9AfFC1BD;
-address constant governorResearch = 0x931B3F4c2CB144237506E6B14c868815E499D7A1;
-address constant governorExecutor = 0xA50d743E7b02b5b4c1166680643E6e21281a5E98;
-address constant governorGuard = 0x8458d6d22E4Cf860f82d18903b2FD28E8fE28666;
+address constant donation = 0xE5f7959916DC633d9AC029d96B42F67FD79021a5;
+address constant po = 0x189D776164fe4A9Dd078Aa4d85cdC4b734379978;
+address constant poToSciExchange = 0xF833a0eEB20B56EE280e4f2Dff6b919199923f7D;
+address constant sciManager = 0x718df2d860B47048cfdB7f89851E65778859759E;
+address constant governorOperations = 0x571219e0BBE99e5bBCcfF5949fe07040E215d2D4;
+address constant governorResearch = 0x5b7749D6f1b435972976d5ef5C814b8CAe2E89be;
+address constant governorExecutor = 0xB4eBbc90b1501Bd034d0cA3A06EF6990b171Ebc6;
+address constant governorGuard = 0x384CCa6220123ACc053C0046ff8D9DCE10668A94;
   }
   

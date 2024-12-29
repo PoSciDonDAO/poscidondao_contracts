@@ -1,0 +1,20 @@
+{
+	"version": "1.0",
+	"chainId": 8453,
+	"createdAt": 1731441396597,
+	"meta": {
+		"name": "Set Minimum Delegation Period",
+		"description": "Set Minimum Delegation Period",
+		"txBuilderVersion": "1.17.0",
+		"createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
+		"createdFromOwnerAddress": ""
+	},
+	"transactions": [
+		{
+			"to": "0x718df2d860B47048cfdB7f89851E65778859759E",
+			"value": "0",
+			"data": "0x446897f6000000000000000000000000000000000000000000000000000000000000012c"
+		}
+	],
+	"checksum": "0x8cbb7fcf2917a5b6710dae1041d0393d19cdf3f0b5beb75f1987e30fea547632"
+}
