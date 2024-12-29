@@ -194,7 +194,7 @@ contract GovernorResearchTest is Test {
         assertEq(proposal.votesFor, 1);
         assertEq(proposal.votesTotal, 1);
 
-        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr1);
+        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr1);
 
         assertEq(voteLockEnd, (block.timestamp + govRes.getGovernanceParameters().voteLockTime));
         vm.stopPrank();
@@ -354,7 +354,7 @@ contract GovernorResearchTest is Test {
         vm.startPrank(addr2);
         govRes.vote(id, true);
         vm.stopPrank();
-        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr2);
+        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -374,7 +374,7 @@ contract GovernorResearchTest is Test {
         vm.stopPrank();
         vm.startPrank(addr2);
         govRes.vote(id, true);
-        (, , , uint256 voteLockEnd, , ) = sciManager.users(addr2);
+        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr2);
         vm.warp(voteLockEnd);
         sciManager.free(1200e18);
         vm.stopPrank();

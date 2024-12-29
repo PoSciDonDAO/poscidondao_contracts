@@ -24,6 +24,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotBeZeroAddress();
     error CannotExecute();
     error CannotVoteOnQVProposals();
+    error DelegateeHasAlreadyVoted(uint256 id, address delegatee);
     error ExecutableProposalsCannotBeCompleted();
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
@@ -46,7 +47,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
     error votingRightsThresholdNotReached();
-    
+
     ///*** STRUCTS ***///
     struct Proposal {
         string info;
@@ -149,10 +150,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event PoUpdated(address indexed user, address po);
     event SignerUpdated(address indexed newAddress);
     event SciManagerUpdated(address indexed user, address indexed newAddress);
-    event StatusUpdated(
-        uint256 indexed id,
-        ProposalStatus indexed status
-    );
+    event StatusUpdated(uint256 indexed id, ProposalStatus indexed status);
 
     event Voted(
         uint256 indexed id,
@@ -289,9 +287,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         else if (param == "voteChangeCutOff")
             governanceParams.voteChangeCutOff = data;
         else if (param == "opThreshold") governanceParams.opThreshold = data;
-        else if (param == "maxVotingStreak" && data <= 5 && data >= 1)
+        else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
             governanceParams.maxVotingStreak = data;
-        else if (param == "votingRightsThreshold") governanceParams.votingRightsThreshold = data;
+        else if (param == "votingRightsThreshold")
+            governanceParams.votingRightsThreshold = data;
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -319,7 +318,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         else if (param == "opThreshold") governanceParams.opThreshold = data;
         else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
             governanceParams.maxVotingStreak = data;
-        else if (param == "votingRightsThreshold") governanceParams.votingRightsThreshold = data;
+        else if (param == "votingRightsThreshold")
+            governanceParams.votingRightsThreshold = data;
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -369,10 +369,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             proposals[currentIndex].quadraticVoting
         );
 
-        emit StatusUpdated(
-            currentIndex,
-            proposals[currentIndex].status
-        );
+        emit StatusUpdated(currentIndex, proposals[currentIndex].status);
 
         emit VotesUpdated(
             currentIndex,
@@ -455,10 +452,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
             proposals[id].status = ProposalStatus.Scheduled;
 
-            emit StatusUpdated(
-                id,
-                proposals[id].status
-            );
+            emit StatusUpdated(id, proposals[id].status);
         } else {
             revert ProposalNotSchedulable();
         }
@@ -484,10 +478,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Executed;
 
-        emit StatusUpdated(
-            id,
-            proposals[id].status
-        );
+        emit StatusUpdated(id, proposals[id].status);
     }
 
     /**
@@ -506,10 +497,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Completed;
 
-        emit StatusUpdated(
-            id,
-            proposals[id].status
-        );
+        emit StatusUpdated(id, proposals[id].status);
     }
 
     /**
@@ -526,10 +514,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         proposals[id].status = ProposalStatus.Canceled;
 
-        emit StatusUpdated(
-            id,
-            proposals[id].status
-        );
+        emit StatusUpdated(id, proposals[id].status);
     }
 
     /**
@@ -538,19 +523,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function cancelRejected(uint256 id) external nonReentrant {
         if (id >= _index) revert ProposalInexistent();
-        if (
-            proposals[id].status == ProposalStatus.Canceled
-        ) revert IncorrectPhase(proposals[id].status);
+        if (proposals[id].status == ProposalStatus.Canceled)
+            revert IncorrectPhase(proposals[id].status);
 
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {
             proposals[id].status = ProposalStatus.Canceled;
 
-            emit StatusUpdated(
-                id,
-                proposals[id].status
-            );
+            emit StatusUpdated(id, proposals[id].status);
         } else {
             revert ProposalNotCancelable();
         }
@@ -591,6 +572,26 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         emit Claimed(msg.sender, totalPoToClaim);
     }
 
+    /**
+     * @dev Checks if the delegatee has voted on any currently active proposals.
+     * @param delegatee The address of the delegatee (user who received the delegated voting rights).
+     * @return bool True if the delegatee has voted on at least one active proposal, false otherwise.
+     */
+    function hasDelegateeVotedOnActiveProposals(
+        address delegatee
+    ) external view returns (bool) {
+        for (uint256 i = 0; i < _index; i++) {
+            Proposal storage proposal = proposals[i];
+
+            if (proposal.status == ProposalStatus.Active) {
+                if (userVoteData[delegatee][i].voted) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /**
      * @dev returns the PO token address
@@ -657,9 +658,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      */
-    function getProposal(
-        uint256 id
-    ) external view returns (Proposal memory) {
+    function getProposal(uint256 id) external view returns (Proposal memory) {
         if (id > _index) revert ProposalInexistent();
 
         return
@@ -810,8 +809,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *
      */
     function _votingChecks(uint id, address voter) internal view {
-        // Common proposal-related checks
         if (id >= _index) revert ProposalInexistent();
+        address delegatee = ISciManager(sciManagerAddress).getDelegatee(voter);
+        if (delegatee != address(0) && userVoteData[delegatee][id].voted) {
+            revert DelegateeHasAlreadyVoted(id, delegatee);
+        }
         if (proposals[id].status != ProposalStatus.Active)
             revert IncorrectPhase(proposals[id].status);
         if (block.timestamp > proposals[id].endTimestamp)

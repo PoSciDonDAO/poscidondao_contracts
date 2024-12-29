@@ -12,6 +12,8 @@ interface ISciManager {
 
     function getTotalLockedSci() external returns (uint256);
     
+    function getDelegatee(address delegator) external view returns (address);
+
     function getUserRights(
         address user,
         uint256 snapshotIndex,
