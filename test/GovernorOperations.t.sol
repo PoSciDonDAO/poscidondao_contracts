@@ -46,7 +46,10 @@ contract GovernorOperationsTest is Test {
     address admin = DeployedAddresses.admin;
     address opWallet = vm.addr(8);
 
-    event StatusUpdated(uint256 indexed id, GovernorOperations.ProposalStatus indexed status);
+    event StatusUpdated(
+        uint256 indexed id,
+        GovernorOperations.ProposalStatus indexed status
+    );
 
     function setUp() public {
         usdc = Usdc(DeployedAddresses.usdc);
@@ -145,9 +148,7 @@ contract GovernorOperationsTest is Test {
 
         govOps.propose("Info", address(transaction), false);
 
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
 
         assertEq(proposal.info, "Info");
         assertEq(proposal.startBlockNum, block.number);
@@ -268,11 +269,7 @@ contract GovernorOperationsTest is Test {
         vm.warp(block.timestamp + 3 days);
         govOps.execute(id);
         vm.stopPrank();
-        assertTrue(
-            govRes.checkDueDiligenceRole(
-                test
-            ) == true
-        );
+        assertTrue(govRes.checkDueDiligenceRole(test) == true);
         assertTrue(
             govRes.checkDueDiligenceRole(
                 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
@@ -343,11 +340,7 @@ contract GovernorOperationsTest is Test {
         govOps.execute(id2);
         vm.stopPrank();
 
-        assertTrue(
-            govRes.checkDueDiligenceRole(
-                test
-            ) == false
-        );
+        assertTrue(govRes.checkDueDiligenceRole(test) == false);
     }
 
     function test_VoteFor() public {
@@ -358,9 +351,7 @@ contract GovernorOperationsTest is Test {
         govOps.propose("Info", address(transaction), false);
         govOps.voteStandard(id, true);
 
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
 
         assertEq(proposal.votesFor, 2000000e18);
         assertEq(proposal.votesTotal, 2000000e18);
@@ -382,17 +373,13 @@ contract GovernorOperationsTest is Test {
         govOps.propose("Info", address(transaction), false);
         govOps.voteStandard(id, true);
 
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
 
         assertEq(proposal.votesFor, 2000000e18);
         assertEq(proposal.votesTotal, 2000000e18);
 
         govOps.voteStandard(id, false);
-        GovernorOperations.Proposal memory proposal2 = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal2 = govOps.getProposal(id);
 
         assertEq(proposal2.votesTotal - proposal2.votesFor, 2000000e18);
         assertEq(proposal2.votesTotal, 2000000e18);
@@ -413,7 +400,7 @@ contract GovernorOperationsTest is Test {
         govOps.voteStandard(id, true);
         vm.stopPrank();
         vm.warp(block.timestamp + 8 days);
-        
+
         vm.startPrank(addr1);
         uint256 id2 = govOps.getProposalIndex();
         govOps.propose("Info", address(transaction), false);
@@ -421,13 +408,13 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         govOps.voteStandard(id2, true);
         vm.stopPrank();
-        
+
         vm.startPrank(addr1);
         vm.warp(block.timestamp + 15 days);
         uint256 id3 = govOps.getProposalIndex();
         govOps.propose("Info", address(transaction), false);
         vm.stopPrank();
-        
+
         vm.startPrank(addr2);
         govOps.voteStandard(id3, true);
         vm.stopPrank();
@@ -462,9 +449,7 @@ contract GovernorOperationsTest is Test {
         bool support = true;
 
         govOps.voteQV(id, support, isUnique, signature);
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
         assertEq(proposal.votesFor, 1414e18);
         assertEq(proposal.votesTotal, 1414e18);
         assertEq(proposal.quadraticVoting, true);
@@ -499,6 +484,56 @@ contract GovernorOperationsTest is Test {
             .getUserVoteData(addr2, id);
         assertEq(userVoteData.previousSupport, false);
 
+        vm.stopPrank();
+    }
+
+    function test_RevertIfDelegateeHasAlreadyVoted() public {
+        // Step 1: Lock tokens for the delegatee (addr2) and delegator (addr1)
+        vm.startPrank(addr2);
+        sciManager.lock(2000000e18); // Delegatee locks tokens
+        vm.stopPrank();
+
+        // Step 2: Create a proposal
+
+        vm.startPrank(addr1);
+        sciManager.lock(2000000e18);
+        addDelegate = new AddDelegate(
+            addr2,
+            address(executor),
+            address(sciManager)
+        );
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(addDelegate), false);
+        govOps.voteStandard(id, true);
+        vm.warp(block.timestamp + 4.1 weeks);
+        govOps.schedule(id);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        sciManager.lock(2000000e18); // Delegator locks tokens
+        sciManager.delegate(addr2); // Delegator delegates voting rights to addr2
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
+        sciManager.lock(2000000e18);
+        uint256 id2 = govOps.getProposalIndex();
+        govOps.propose("Info", address(transaction), false);
+        vm.stopPrank();
+
+        // Step 3: Delegatee votes on the proposal
+        vm.startPrank(addr2);
+        govOps.voteStandard(id2, true);
+        vm.stopPrank();
+
+        // Step 4: Attempt to vote as the delegator (addr1)
+        vm.startPrank(addr1);
+        bytes4 selector = bytes4(
+            keccak256("DelegateeHasAlreadyVoted(uint256,address)")
+        );
+        vm.expectRevert(abi.encodeWithSelector(selector, id2, addr2));
+        govOps.voteStandard(id2, true); // This should revert
         vm.stopPrank();
     }
 
@@ -596,9 +631,7 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr1);
         vm.warp(block.timestamp + 4.1 weeks);
         govOps.schedule(id);
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
         assertTrue(
             proposal.status == GovernorOperations.ProposalStatus.Scheduled
         );
@@ -657,7 +690,6 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         sciManager.lock(2000000e18);
         govOps.voteStandard(id, true);
-        vm.stopPrank();
         (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
@@ -665,8 +697,7 @@ contract GovernorOperationsTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(selector, voteLockEnd, block.timestamp)
         );
-        vm.startPrank(addr2);
-        sciManager.free(2000e18);
+        sciManager.free(2000e18); //only passes if voteLockTime is not zero.
         vm.stopPrank();
     }
 
@@ -734,9 +765,7 @@ contract GovernorOperationsTest is Test {
         govOps.voteStandard(id, false);
         vm.warp(block.timestamp + 4.1 weeks);
         govOps.cancelRejected(id);
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
         assertTrue(
             proposal.status == GovernorOperations.ProposalStatus.Canceled
         );
@@ -757,9 +786,7 @@ contract GovernorOperationsTest is Test {
         govOps.schedule(id);
         vm.startPrank(admin);
         guard.cancelOps(id);
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
         assertTrue(
             proposal.status == GovernorOperations.ProposalStatus.Canceled
         );
@@ -817,9 +844,7 @@ contract GovernorOperationsTest is Test {
         govOps.schedule(id);
 
         govOps.complete(id);
-        GovernorOperations.Proposal memory proposal = govOps.getProposal(
-            id
-        );
+        GovernorOperations.Proposal memory proposal = govOps.getProposal(id);
         assertTrue(
             proposal.status == GovernorOperations.ProposalStatus.Completed
         );

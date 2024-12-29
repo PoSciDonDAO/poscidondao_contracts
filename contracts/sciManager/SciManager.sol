@@ -5,7 +5,6 @@ import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISciManager} from "contracts/interfaces/ISciManager.sol";
-import {IGovernorOperations} from "contracts/interfaces/IGovernorOperations.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";

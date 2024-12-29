@@ -573,27 +573,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Checks if the delegatee has voted on any currently active proposals.
-     * @param delegatee The address of the delegatee (user who received the delegated voting rights).
-     * @return bool True if the delegatee has voted on at least one active proposal, false otherwise.
-     */
-    function hasDelegateeVotedOnActiveProposals(
-        address delegatee
-    ) external view returns (bool) {
-        for (uint256 i = 0; i < _index; i++) {
-            Proposal storage proposal = proposals[i];
-
-            if (proposal.status == ProposalStatus.Active) {
-                if (userVoteData[delegatee][i].voted) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * @dev returns the PO token address
      */
     function getPoToken() external view returns (address) {
