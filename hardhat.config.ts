@@ -31,7 +31,7 @@ export default {
 	solidity: {
 		compilers: [
 			{
-				version: "0.8.28",
+				version: "0.8.19",
 				settings: {
 					optimizer: {
 						enabled: true,

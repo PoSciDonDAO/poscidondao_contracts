@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 interface IGovernorRoleRevoke {
@@ -17,7 +17,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error AddressHasNotDDRole();
 
-    address[] internal targetWallets;
+    address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -41,7 +41,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
                 revert AddressHasNotDDRole();
             }
         }
-        targetWallets = targetWallets_;
+        _targetWallets = targetWallets_;
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor);
@@ -51,7 +51,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
      * @dev Returns all elected wallets
      */
     function getAllImpeachedWallets() public view returns (address[] memory) {
-        return targetWallets;
+        return _targetWallets;
     }
 
     /**
@@ -59,7 +59,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorRoleRevoke(governorResearch).revokeDueDiligenceRole(
-            targetWallets
+            _targetWallets
         );
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
         emit ActionExecuted(address(this), "Impeachment");

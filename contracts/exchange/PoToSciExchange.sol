@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC1155Burnable} from "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title PoToSciExchange
@@ -16,8 +16,8 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
 
     error IncorrectInput();
 
-    ERC1155Burnable private po;
-    IERC20 private sci;
+    ERC1155Burnable public po;
+    IERC20 public sci;
     address public rewardWallet;
     uint256 public conversionRate;
 

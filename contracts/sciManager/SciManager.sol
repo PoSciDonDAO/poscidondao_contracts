@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ISciManager} from "contracts/interfaces/ISciManager.sol";
@@ -36,7 +36,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error Unauthorized(address user);
 
     ///*** TOKEN ***//
-    IERC20 private sci;
+    IERC20 private _sci;
 
     ///*** STRUCTS ***///
     struct User {
@@ -61,15 +61,15 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     address public admin;
     address public govOpsContract;
     address public govResContract;
-    IGovernorExecution govExec;
-    uint256 private totLocked;
-    uint256 private totDelegated;
-    uint256 private delegateThreshold;
+    IGovernorExecution _govExec;
+    uint256 private _totLocked;
+    uint256 private _totDelegated;
+    uint256 private _delegateThreshold;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18;
-    uint256 private minDelegationPeriod;
+    uint256 private _minDelegationPeriod;
 
     mapping(address => User) public users;
-    mapping(address => bool) private delegates;
+    mapping(address => bool) private _delegates;
 
     ///*** MODIFIERS ***///
     modifier onlyGov() {
@@ -82,7 +82,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
     modifier onlyExecutor() {
-        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+        if (!_govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
         }
         _;
@@ -121,11 +121,11 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             revert CannotBeZeroAddress();
         }
         admin = admin_;
-        sci = IERC20(sci_);
-        delegateThreshold = 50000e18;
-        delegates[address(0)] = true;
+        _sci = IERC20(sci_);
+        _delegateThreshold = 50000e18;
+        _delegates[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
-        minDelegationPeriod = 30 days;
+        _minDelegationPeriod = 30 days;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -149,7 +149,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     function setDelegateThreshold(
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        delegateThreshold = newThreshold;
+        _delegateThreshold = newThreshold;
         emit DelegateThresholdUpdated();
     }
 
@@ -158,18 +158,18 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @param newDelegate Address to be added to the whitelist
      */
     function addDelegate(address newDelegate) external onlyExecutor {
-        if (delegates[newDelegate]) {
+        if (_delegates[newDelegate]) {
             revert DelegateAlreadyAdded(newDelegate);
         }
         if (
-            users[newDelegate].lockedSci < delegateThreshold &&
+            users[newDelegate].lockedSci < _delegateThreshold &&
             newDelegate != address(0)
         )
             revert InsufficientBalance(
                 users[newDelegate].lockedSci,
-                delegateThreshold
+                _delegateThreshold
             );
-        delegates[newDelegate] = true;
+        _delegates[newDelegate] = true;
         emit DelegateAdded(newDelegate);
     }
 
@@ -178,10 +178,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @param formerDelegate Address to be removed from the whitelist
      */
     function removeDelegate(address formerDelegate) external onlyExecutor {
-        if (!delegates[formerDelegate]) {
+        if (!_delegates[formerDelegate]) {
             revert DelegateNotAllowListed(formerDelegate);
         }
-        delegates[formerDelegate] = false;
+        _delegates[formerDelegate] = false;
         emit DelegateRemoved(formerDelegate);
     }
 
@@ -191,7 +191,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     function setGovExec(
         address newGovernorAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govExec = IGovernorExecution(newGovernorAddress);
+        _govExec = IGovernorExecution(newGovernorAddress);
         emit GovExecSet(msg.sender, newGovernorAddress);
     }
 
@@ -222,12 +222,12 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     function setMinDelegationPeriod(
         uint256 newPeriod
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        minDelegationPeriod = newPeriod;
+        _minDelegationPeriod = newPeriod;
         emit MinDelegationPeriodSet(newPeriod, block.timestamp);
     }
 
     /**
-     * @dev delegates the owner's voting rights
+     * @dev _delegates the owner's voting rights
      * @param newDelegate user that will receive the delegated voting rights
      */
     function delegate(address newDelegate) external nonReentrant {
@@ -239,7 +239,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             revert CannotDelegateDuringEmergency();
         }
 
-        if (newDelegate != address(0) && !delegates[newDelegate]) {
+        if (newDelegate != address(0) && !_delegates[newDelegate]) {
             revert DelegateNotAllowListed(newDelegate);
         }
 
@@ -256,11 +256,11 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
 
         if (oldDelegate != address(0)) {
-            // Ensure user cannot remove/change delegation before `minDelegationPeriod`
+            // Ensure user cannot remove/change delegation before `_minDelegationPeriod`
             if (
                 !emergency &&
                 block.timestamp <
-                users[owner].delegationTime + minDelegationPeriod
+                users[owner].delegationTime + _minDelegationPeriod
             ) {
                 revert CannotUndelegateBeforePeriodElapsed();
             }
@@ -280,7 +280,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             _snapshot(owner, users[owner].votingRights);
 
-            totDelegated -= lockedSci;
+            _totDelegated -= lockedSci;
         }
 
         if (newDelegate != address(0)) {
@@ -292,7 +292,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             _snapshot(owner, users[owner].votingRights);
 
-            totDelegated += lockedSci;
+            _totDelegated += lockedSci;
 
             users[owner].delegate = newDelegate;
 
@@ -300,7 +300,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             // Extend `voteLockEnd` based on the new delegation
             users[owner].voteLockEnd = Math.max(
-                users[owner].delegationTime + minDelegationPeriod,
+                users[owner].delegationTime + _minDelegationPeriod,
                 users[owner].voteLockEnd
             );
             emit VoteLockEndTimeUpdated(owner, users[owner].voteLockEnd);
@@ -323,7 +323,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         users[msg.sender].lockedSci += amount;
 
-        totLocked += amount;
+        _totLocked += amount;
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
@@ -331,16 +331,16 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             _snapshot(delegated, users[delegated].votingRights);
 
-            totDelegated += amount;
+            _totDelegated += amount;
         } else {
             users[msg.sender].votingRights += amount;
 
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        IERC20(sci).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
 
-        emit Locked(msg.sender, address(sci), amount);
+        emit Locked(msg.sender, address(_sci), amount);
     }
 
     /**
@@ -369,13 +369,13 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         users[msg.sender].lockedSci -= amount;
 
-        IERC20(sci).safeTransfer(msg.sender, amount);
+        IERC20(_sci).safeTransfer(msg.sender, amount);
 
-        if (totLocked < amount) {
-            revert InsufficientBalance(totLocked, amount);
+        if (_totLocked < amount) {
+            revert InsufficientBalance(_totLocked, amount);
         }
 
-        totLocked -= amount;
+        _totLocked -= amount;
 
         address delegated = users[msg.sender].delegate;
         if (delegated != address(0)) {
@@ -389,13 +389,13 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             _snapshot(delegated, users[delegated].votingRights);
 
-            if (totDelegated < amount) {
+            if (_totDelegated < amount) {
                 revert InsufficientBalance(
                     users[delegated].votingRights,
                     amount
                 );
             }
-            totDelegated -= amount;
+            _totDelegated -= amount;
 
             if (users[msg.sender].lockedSci == 0) {
                 users[msg.sender].delegate = address(0);
@@ -412,7 +412,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             _snapshot(msg.sender, users[msg.sender].votingRights);
         }
 
-        emit Freed(msg.sender, address(sci), amount);
+        emit Freed(msg.sender, address(_sci), amount);
     }
 
     /**
@@ -477,35 +477,35 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @dev returns the current threshold to become a delegate.
      */
     function getDelegateThreshold() external view returns (uint256) {
-        return delegateThreshold;
+        return _delegateThreshold;
     }
 
     /**
      * @dev returns the current minimum delegation period.
      */
     function getMinDelegationPeriod() external view returns (uint256) {
-        return minDelegationPeriod;
+        return _minDelegationPeriod;
     }
 
     /**
      * @dev returns the SCI token contract address
      */
     function getSciAddress() external view returns (address) {
-        return address(sci);
+        return address(_sci);
     }
 
     /**
      * @dev returns the total amount of locked SCI tokens
      */
     function getTotalLockedSci() external view returns (uint256) {
-        return totLocked;
+        return _totLocked;
     }
 
     /**
      * @dev returns the total amount of delegated SCI tokens
      */
     function getTotalDelegated() external view returns (uint256) {
-        return totDelegated;
+        return _totDelegated;
     }
 
     /**
@@ -519,7 +519,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @dev returns true if address is a delegate
      */
     function getDelegate(address delegateAddress) external view returns (bool) {
-        return delegates[delegateAddress];
+        return _delegates[delegateAddress];
     }
 
     /**

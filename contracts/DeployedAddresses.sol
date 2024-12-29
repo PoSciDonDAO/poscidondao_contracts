@@ -1,6 +1,6 @@
 
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity 0.8.28;
+  pragma solidity 0.8.19;
 
   library DeployedAddresses {
       uint constant chainId = 84532;

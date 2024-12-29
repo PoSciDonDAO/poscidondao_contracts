@@ -15,7 +15,7 @@
  * see <http://www.gnu.org/licenses/>.
  */
 
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";

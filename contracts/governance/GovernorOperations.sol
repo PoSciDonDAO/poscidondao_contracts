@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "./../interfaces/IPo.sol";
 import "./../interfaces/ISciManager.sol";
@@ -7,8 +7,8 @@ import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
@@ -18,6 +18,7 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  * It integrates with external contracts for sciManager validation, participation and proposal execution.
  */
 contract GovernorOperations is AccessControl, ReentrancyGuard {
+    using ECDSA for bytes32;
     using SignatureChecker for bytes32;
 
     // *** ERRORS *** //
@@ -84,22 +85,22 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     ///*** INTERFACES ***///
-    IPo private po;
-    IGovernorExecution private govExec;
-    IGovernorGuard private govGuard;
+    IPo private _po;
+    IGovernorExecution private _govExec;
+    IGovernorGuard private _govGuard;
 
     ///*** KEY ADDRESSES ***///
     address public sciManagerAddress;
     address public admin;
-    address private signer;
+    address private _signer;
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _index;
     GovernanceParameters public governanceParams;
-    mapping(uint256 => Proposal) private proposals;
-    mapping(address => uint256) private votingStreak;
+    mapping(uint256 => Proposal) private _proposals;
+    mapping(address => uint256) private _votingStreak;
     mapping(address => uint256) public unclaimedTokens;
-    mapping(address => mapping(uint256 => UserVoteData)) private userVoteData;
+    mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
@@ -125,7 +126,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
      */
     modifier onlyExecutor() {
-        if (!govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
+        if (!_govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
         }
         _;
@@ -147,7 +148,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool executable,
         bool quadraticVoting
     );
-    event PoUpdated(address indexed user, address po);
+    event PoUpdated(address indexed user, address _po);
     event SignerUpdated(address indexed newAddress);
     event SciManagerUpdated(address indexed user, address indexed newAddress);
     event StatusUpdated(uint256 indexed id, ProposalStatus indexed status);
@@ -182,8 +183,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         }
         sciManagerAddress = sciManager_;
         admin = admin_;
-        po = IPo(po_);
-        signer = signer_;
+        _po = IPo(po_);
+        _signer = signer_;
 
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
@@ -230,7 +231,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovExec(
         address newGovExecAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govExec = IGovernorExecution(newGovExecAddress);
+        _govExec = IGovernorExecution(newGovExecAddress);
         emit GovExecUpdated(msg.sender, newGovExecAddress);
     }
 
@@ -242,19 +243,19 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovGuard(
         address newGovGuardAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        govGuard = IGovernorGuard(newGovGuardAddress);
+        _govGuard = IGovernorGuard(newGovGuardAddress);
         _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit GovGuardUpdated(msg.sender, newGovGuardAddress);
     }
 
     /**
-     * @dev sets the signer address
-     * @param newSigner The address to be set as the signer used to sign off-chain messages
+     * @dev sets the _signer address
+     * @param newSigner The address to be set as the _signer used to sign off-chain messages
      */
     function setSigner(
         address newSigner
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        signer = newSigner;
+        _signer = newSigner;
         emit SignerUpdated(newSigner);
     }
 
@@ -263,7 +264,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param po_ the address of the PO token
      */
     function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        po = IPo(po_);
+        _po = IPo(po_);
         emit PoUpdated(msg.sender, po_);
     }
 
@@ -361,21 +362,21 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         emit Proposed(
             currentIndex,
             msg.sender,
-            proposals[currentIndex].info,
-            proposals[currentIndex].startBlockNum,
-            proposals[currentIndex].endTimestamp,
-            proposals[currentIndex].action,
-            proposals[currentIndex].executable,
-            proposals[currentIndex].quadraticVoting
+            _proposals[currentIndex].info,
+            _proposals[currentIndex].startBlockNum,
+            _proposals[currentIndex].endTimestamp,
+            _proposals[currentIndex].action,
+            _proposals[currentIndex].executable,
+            _proposals[currentIndex].quadraticVoting
         );
 
-        emit StatusUpdated(currentIndex, proposals[currentIndex].status);
+        emit StatusUpdated(currentIndex, _proposals[currentIndex].status);
 
         emit VotesUpdated(
             currentIndex,
-            proposals[currentIndex].votesFor,
-            proposals[currentIndex].votesAgainst,
-            proposals[currentIndex].votesTotal
+            _proposals[currentIndex].votesFor,
+            _proposals[currentIndex].votesAgainst,
+            _proposals[currentIndex].votesTotal
         );
 
         return currentIndex;
@@ -390,7 +391,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function voteStandard(uint id, bool support) external nonReentrant {
         _votingChecks(id, msg.sender);
 
-        if (proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
+        if (_proposals[id].quadraticVoting) revert CannotVoteOnQVProposals();
 
         uint256 votingRights = ISciManager(sciManagerAddress)
             .getLatestUserRights(msg.sender);
@@ -437,22 +438,22 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function schedule(uint256 id) external nonReentrant {
         if (id >= _index) revert ProposalInexistent();
 
-        if (block.timestamp < proposals[id].endTimestamp)
+        if (block.timestamp < _proposals[id].endTimestamp)
             revert ProposalOngoing(
                 id,
                 block.timestamp,
-                proposals[id].endTimestamp
+                _proposals[id].endTimestamp
             );
 
         bool schedulable = _proposalSchedulingChecks(id, true);
 
         if (schedulable) {
-            if (proposals[id].executable) {
-                govExec.schedule(proposals[id].action);
+            if (_proposals[id].executable) {
+                _govExec.schedule(_proposals[id].action);
             }
-            proposals[id].status = ProposalStatus.Scheduled;
+            _proposals[id].status = ProposalStatus.Scheduled;
 
-            emit StatusUpdated(id, proposals[id].status);
+            emit StatusUpdated(id, _proposals[id].status);
         } else {
             revert ProposalNotSchedulable();
         }
@@ -465,20 +466,20 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function execute(uint256 id) external payable nonReentrant {
         if (id >= _index) revert ProposalInexistent();
 
-        if (proposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(proposals[id].status);
+        if (_proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(_proposals[id].status);
 
-        if (!proposals[id].executable) revert CannotExecute();
+        if (!_proposals[id].executable) revert CannotExecute();
 
-        _grantRole(EXECUTOR_ROLE, proposals[id].action);
+        _grantRole(EXECUTOR_ROLE, _proposals[id].action);
 
-        govExec.execution(proposals[id].action);
+        _govExec.execution(_proposals[id].action);
 
-        _revokeRole(EXECUTOR_ROLE, proposals[id].action);
+        _revokeRole(EXECUTOR_ROLE, _proposals[id].action);
 
-        proposals[id].status = ProposalStatus.Executed;
+        _proposals[id].status = ProposalStatus.Executed;
 
-        emit StatusUpdated(id, proposals[id].status);
+        emit StatusUpdated(id, _proposals[id].status);
     }
 
     /**
@@ -488,16 +489,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function complete(uint256 id) external nonReentrant {
         if (id > _index) revert ProposalInexistent();
 
-        if (proposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(proposals[id].status);
+        if (_proposals[id].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(_proposals[id].status);
 
-        if (proposals[id].executable) {
+        if (_proposals[id].executable) {
             revert ExecutableProposalsCannotBeCompleted();
         }
 
-        proposals[id].status = ProposalStatus.Completed;
+        _proposals[id].status = ProposalStatus.Completed;
 
-        emit StatusUpdated(id, proposals[id].status);
+        emit StatusUpdated(id, _proposals[id].status);
     }
 
     /**
@@ -506,15 +507,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
         if (
-            proposals[id].status == ProposalStatus.Executed ||
-            proposals[id].status == ProposalStatus.Canceled
-        ) revert IncorrectPhase(proposals[id].status);
+            _proposals[id].status == ProposalStatus.Executed ||
+            _proposals[id].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(_proposals[id].status);
 
-        if (proposals[id].executable) govExec.cancel(proposals[id].action);
+        if (_proposals[id].executable) _govExec.cancel(_proposals[id].action);
 
-        proposals[id].status = ProposalStatus.Canceled;
+        _proposals[id].status = ProposalStatus.Canceled;
 
-        emit StatusUpdated(id, proposals[id].status);
+        emit StatusUpdated(id, _proposals[id].status);
     }
 
     /**
@@ -523,15 +524,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function cancelRejected(uint256 id) external nonReentrant {
         if (id >= _index) revert ProposalInexistent();
-        if (proposals[id].status == ProposalStatus.Canceled)
-            revert IncorrectPhase(proposals[id].status);
+        if (_proposals[id].status == ProposalStatus.Canceled)
+            revert IncorrectPhase(_proposals[id].status);
 
         bool schedulable = _proposalSchedulingChecks(id, false);
 
         if (!schedulable) {
-            proposals[id].status = ProposalStatus.Canceled;
+            _proposals[id].status = ProposalStatus.Canceled;
 
-            emit StatusUpdated(id, proposals[id].status);
+            emit StatusUpdated(id, _proposals[id].status);
         } else {
             revert ProposalNotCancelable();
         }
@@ -544,7 +545,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 totalPoToClaim = 0;
 
         for (uint256 i = 0; i < _index; i++) {
-            UserVoteData storage voteData = userVoteData[msg.sender][i];
+            UserVoteData storage voteData = _userVoteData[msg.sender][i];
 
             if (!voteData.voted || voteData.poClaimed) {
                 continue;
@@ -552,9 +553,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
                 10 ** 18;
-            bool quorumReached = proposals[i].quadraticVoting
-                ? proposals[i].votesTotal >= sqrtQuorum
-                : proposals[i].votesTotal >= governanceParams.quorum;
+            bool quorumReached = _proposals[i].quadraticVoting
+                ? _proposals[i].votesTotal >= sqrtQuorum
+                : _proposals[i].votesTotal >= governanceParams.quorum;
 
             if (quorumReached) {
                 totalPoToClaim += voteData.votingStreakAtVote;
@@ -567,7 +568,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert NoTokensToClaim();
         }
 
-        po.mint(msg.sender, totalPoToClaim);
+        _po.mint(msg.sender, totalPoToClaim);
 
         emit Claimed(msg.sender, totalPoToClaim);
     }
@@ -576,7 +577,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev returns the PO token address
      */
     function getPoToken() external view returns (address) {
-        return address(po);
+        return address(_po);
     }
 
     /**
@@ -587,7 +588,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the signer address
+     * @dev returns the _signer address
      */
     function getSigner()
         external
@@ -595,7 +596,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         onlyRole(DEFAULT_ADMIN_ROLE)
         returns (address)
     {
-        return signer;
+        return _signer;
     }
 
     /**
@@ -623,12 +624,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (id > _index) revert ProposalInexistent();
         return
             UserVoteData(
-                userVoteData[user][id].voted,
-                userVoteData[user][id].initialVoteTimestamp,
-                userVoteData[user][id].previousSupport,
-                userVoteData[user][id].previousVoteAmount,
-                userVoteData[user][id].poClaimed,
-                userVoteData[user][id].votingStreakAtVote
+                _userVoteData[user][id].voted,
+                _userVoteData[user][id].initialVoteTimestamp,
+                _userVoteData[user][id].previousSupport,
+                _userVoteData[user][id].previousVoteAmount,
+                _userVoteData[user][id].poClaimed,
+                _userVoteData[user][id].votingStreakAtVote
             );
     }
 
@@ -642,16 +643,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         return
             Proposal(
-                proposals[id].info,
-                proposals[id].startBlockNum,
-                proposals[id].endTimestamp,
-                proposals[id].status,
-                proposals[id].action,
-                proposals[id].votesFor,
-                proposals[id].votesAgainst,
-                proposals[id].votesTotal,
-                proposals[id].executable,
-                proposals[id].quadraticVoting
+                _proposals[id].info,
+                _proposals[id].startBlockNum,
+                _proposals[id].endTimestamp,
+                _proposals[id].status,
+                _proposals[id].action,
+                _proposals[id].votesFor,
+                _proposals[id].votesAgainst,
+                _proposals[id].votesTotal,
+                _proposals[id].executable,
+                _proposals[id].quadraticVoting
             );
     }
 
@@ -672,16 +673,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
             10 ** 18;
 
-        bool isProposalOngoing = block.timestamp < proposals[id].endTimestamp;
+        bool isProposalOngoing = block.timestamp < _proposals[id].endTimestamp;
 
-        bool isProposalActive = proposals[id].status == ProposalStatus.Active;
+        bool isProposalActive = _proposals[id].status == ProposalStatus.Active;
 
-        bool quorumReached = proposals[id].quadraticVoting
-            ? proposals[id].votesTotal >= sqrtQuorum
-            : proposals[id].votesTotal >= governanceParams.quorum;
+        bool quorumReached = _proposals[id].quadraticVoting
+            ? _proposals[id].votesTotal >= sqrtQuorum
+            : _proposals[id].votesTotal >= governanceParams.quorum;
 
-        bool isVotesForGreaterThanVotesAgainst = proposals[id].votesFor >
-            proposals[id].votesAgainst;
+        bool isVotesForGreaterThanVotesAgainst = _proposals[id].votesFor >
+            _proposals[id].votesAgainst;
 
         bool passed = !isProposalOngoing &&
             isProposalActive &&
@@ -693,17 +694,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 revert ProposalOngoing(
                     id,
                     block.timestamp,
-                    proposals[id].endTimestamp
+                    _proposals[id].endTimestamp
                 );
             }
             if (!isProposalActive) {
-                revert IncorrectPhase(proposals[id].status);
+                revert IncorrectPhase(_proposals[id].status);
             }
             if (!quorumReached) {
                 revert QuorumNotReached(
                     id,
-                    proposals[id].votesTotal,
-                    proposals[id].quadraticVoting
+                    _proposals[id].votesTotal,
+                    _proposals[id].quadraticVoting
                         ? sqrtQuorum
                         : governanceParams.quorum
                 );
@@ -731,7 +732,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool isUnique,
         bytes memory signature
     ) internal view {
-        if (proposals[id].quadraticVoting) {
+        if (_proposals[id].quadraticVoting) {
             bool verified = _verify(user, isUnique, signature);
             require(verified, "Invalid signature");
             require(isUnique, "User does not have a valid SBT");
@@ -764,13 +765,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes memory signature
     ) internal view returns (bool) {
         bytes32 messageHash = _getMessageHash(user, isUnique);
-        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(
+        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
             messageHash
         );
 
         return
             SignatureChecker.isValidSignatureNow(
-                signer,
+                _signer,
                 ethSignedMessageHash,
                 signature
             );
@@ -790,22 +791,22 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function _votingChecks(uint id, address voter) internal view {
         if (id >= _index) revert ProposalInexistent();
         address delegatee = ISciManager(sciManagerAddress).getDelegatee(voter);
-        if (delegatee != address(0) && userVoteData[delegatee][id].voted) {
+        if (delegatee != address(0) && _userVoteData[delegatee][id].voted) {
             revert DelegateeHasAlreadyVoted(id, delegatee);
         }
-        if (proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(proposals[id].status);
-        if (block.timestamp > proposals[id].endTimestamp)
+        if (_proposals[id].status != ProposalStatus.Active)
+            revert IncorrectPhase(_proposals[id].status);
+        if (block.timestamp > _proposals[id].endTimestamp)
             revert ProposalLifetimePassed();
         if (
-            userVoteData[voter][id].voted &&
+            _userVoteData[voter][id].voted &&
             block.timestamp >=
-            proposals[id].endTimestamp - governanceParams.voteChangeCutOff
+            _proposals[id].endTimestamp - governanceParams.voteChangeCutOff
         ) revert VoteChangeNotAllowedAfterCutOff();
         if (
-            userVoteData[voter][id].voted &&
+            _userVoteData[voter][id].voted &&
             block.timestamp >
-            userVoteData[voter][id].initialVoteTimestamp +
+            _userVoteData[voter][id].initialVoteTimestamp +
                 governanceParams.voteChangeTime
         ) {
             revert VoteChangeWindowExpired();
@@ -821,37 +822,37 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param actualVotes The effective number of votes to record, which may be adjusted for voting type, such as quadratic.
      */
     function _recordVote(uint id, bool support, uint actualVotes) internal {
-        UserVoteData storage voteData = userVoteData[msg.sender][id];
+        UserVoteData storage voteData = _userVoteData[msg.sender][id];
 
         if (voteData.voted) {
             if (voteData.previousSupport) {
-                proposals[id].votesFor -= voteData.previousVoteAmount;
+                _proposals[id].votesFor -= voteData.previousVoteAmount;
             } else {
-                proposals[id].votesAgainst -= voteData.previousVoteAmount;
+                _proposals[id].votesAgainst -= voteData.previousVoteAmount;
             }
-            proposals[id].votesTotal -= voteData.previousVoteAmount;
+            _proposals[id].votesTotal -= voteData.previousVoteAmount;
         }
 
         if (support) {
-            proposals[id].votesFor += actualVotes;
+            _proposals[id].votesFor += actualVotes;
         } else {
-            proposals[id].votesAgainst += actualVotes;
+            _proposals[id].votesAgainst += actualVotes;
         }
-        proposals[id].votesTotal += actualVotes;
+        _proposals[id].votesTotal += actualVotes;
 
         if (!voteData.voted) {
-            if (id > 0 && userVoteData[msg.sender][id - 1].voted) {
-                votingStreak[msg.sender] = votingStreak[msg.sender] >=
+            if (id > 0 && _userVoteData[msg.sender][id - 1].voted) {
+                _votingStreak[msg.sender] = _votingStreak[msg.sender] >=
                     governanceParams.maxVotingStreak
                     ? governanceParams.maxVotingStreak
-                    : votingStreak[msg.sender] + 1;
+                    : _votingStreak[msg.sender] + 1;
             } else {
-                votingStreak[msg.sender] = 1;
+                _votingStreak[msg.sender] = 1;
             }
 
-            voteData.votingStreakAtVote = votingStreak[msg.sender];
+            voteData.votingStreakAtVote = _votingStreak[msg.sender];
 
-            unclaimedTokens[msg.sender] += votingStreak[msg.sender];
+            unclaimedTokens[msg.sender] += _votingStreak[msg.sender];
         }
 
         voteData.voted = true;
@@ -871,9 +872,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         emit VotesUpdated(
             id,
-            proposals[id].votesFor,
-            proposals[id].votesAgainst,
-            proposals[id].votesTotal
+            _proposals[id].votesFor,
+            _proposals[id].votesAgainst,
+            _proposals[id].votesTotal
         );
     }
 
@@ -923,7 +924,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         );
 
         uint256 currentIndex = _index++;
-        proposals[currentIndex] = proposal;
+        _proposals[currentIndex] = proposal;
 
         sciManager.proposed(
             msg.sender,

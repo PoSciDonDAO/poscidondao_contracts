@@ -129,11 +129,11 @@ function generateSolidityAddressFile(deployedContracts: {
 	);
 	const solidityFileContent = `
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity 0.8.28;
+  pragma solidity 0.8.19;
 
   library DeployedSwapAddress {
-      address constant swap = ${deployedContracts.swapAddress};
-	  address constant voucher = ${voucher}; 
+      address constant SWAP = ${deployedContracts.swapAddress};
+	  address constant VOUCHER = ${voucher}; 
   }
   `;
 

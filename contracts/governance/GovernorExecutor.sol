@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title GovernorExecutor

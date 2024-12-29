@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
@@ -18,10 +18,10 @@ contract Po is ERC1155Burnable, AccessControl {
     address public govOpsAddress;
     string public name = "Participation Token";
     string public symbol = "PO";
-    bool internal frozenUri = false; 
-    bool internal frozenGovOps = false;
+    bool internal _frozenUri = false; 
+    bool internal _frozenGovOps = false;
     string private _uri;
-    uint256 private constant PARTICIPATION_TOKEN_ID = 0;
+    uint256 private constant _PARTICIPATION_TOKEN_ID = 0;
     uint256 private _totalSupply;
 
     /**
@@ -48,7 +48,7 @@ contract Po is ERC1155Burnable, AccessControl {
     function setGovOps(
         address newGovOpsAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (frozenGovOps) revert Frozen();
+        if (_frozenGovOps) revert Frozen();
         govOpsAddress = newGovOpsAddress;
     }
 
@@ -63,14 +63,14 @@ contract Po is ERC1155Burnable, AccessControl {
      * @dev Freezes the base URI, preventing any further changes.
      */
     function freezeUri() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        frozenUri = true;
+        _frozenUri = true;
     }
 
     /**
      * @dev Freezes the governance operations address, preventing any further changes.
      */
     function freezeGovOps() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        frozenGovOps = true;
+        _frozenGovOps = true;
     }
 
     /**
@@ -79,7 +79,7 @@ contract Po is ERC1155Burnable, AccessControl {
      * @param amount the amount of tokens to be minted
      */
     function mint(address user, uint256 amount) external onlyGov {
-        _mint(user, PARTICIPATION_TOKEN_ID, amount, "");
+        _mint(user, _PARTICIPATION_TOKEN_ID, amount, "");
         _totalSupply += amount;
     }
 
@@ -89,7 +89,7 @@ contract Po is ERC1155Burnable, AccessControl {
      */
     function mintBatchByAdmin(address[] memory users, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < users.length; i++) {
-            _mint(users[i], PARTICIPATION_TOKEN_ID, amount, "");
+            _mint(users[i], _PARTICIPATION_TOKEN_ID, amount, "");
             _totalSupply += amount;
         }
     }
@@ -114,7 +114,7 @@ contract Po is ERC1155Burnable, AccessControl {
     function setURI(
         string memory baseURI
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (frozenUri) revert Frozen();
+        if (_frozenUri) revert Frozen();
         _setURI(baseURI);
     }
 
@@ -127,7 +127,6 @@ contract Po is ERC1155Burnable, AccessControl {
         bytes4 interfaceId
     ) public view override(ERC1155, AccessControl) returns (bool) {
         return
-            interfaceId == type(ERC1155).interfaceId ||
             interfaceId == type(ERC1155Burnable).interfaceId ||
             super.supportsInterface(interfaceId);
     }
@@ -163,6 +162,6 @@ contract Po is ERC1155Burnable, AccessControl {
      * @return String representing the token URI.
      */
     function uri() public view returns (string memory) {
-        return string(abi.encodePacked(_uri, "/", PARTICIPATION_TOKEN_ID));
+        return string(abi.encodePacked(_uri, "/", _PARTICIPATION_TOKEN_ID));
     }
 }

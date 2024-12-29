@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.28;
+pragma solidity 0.8.19;
 
 import "./../interfaces/IDon.sol";
 import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {ERC1155} from "../../lib/openzeppelin-contracts/contracts/token/ERC1155/ERC1155.sol";
 import "../../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "../../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
 /**
@@ -23,7 +23,7 @@ contract Donation is AccessControl, ReentrancyGuard {
     uint256 public donationThresholdUsdc;
     uint256 public donationThresholdEth;
 
-    IDon private don;
+    IDon private _don;
     address public usdc;
     address public donationWallet;
     address public treasuryWallet;
@@ -48,7 +48,7 @@ contract Donation is AccessControl, ReentrancyGuard {
         treasuryWallet = treasuryWallet_;
         _grantRole(DEFAULT_ADMIN_ROLE, treasuryWallet_);
         usdc = usdc_;
-        don = IDon(don_);
+        _don = IDon(don_);
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -100,7 +100,7 @@ contract Donation is AccessControl, ReentrancyGuard {
         (bool sentTreasury, ) = treasuryWallet.call{value: amountTreasury}("");
         require(sentDonation && sentTreasury);
 
-        don.mint(msg.sender, 1);
+        _don.mint(msg.sender, 1);
 
         emit Donated(msg.sender, address(0), msg.value);
     }
@@ -126,7 +126,7 @@ contract Donation is AccessControl, ReentrancyGuard {
             amountTreasury
         );
         
-        don.mint(msg.sender, 1);
+        _don.mint(msg.sender, 1);
 
         emit Donated(msg.sender, address(usdc), usdcAmount);
     }
