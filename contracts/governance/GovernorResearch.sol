@@ -24,9 +24,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidGovernanceParameter();
     error ProposalLifetimePassed();
     error ProposalNotPassed();
-    error ProposalOngoing(uint256 id, uint256 currentBlock, uint256 endBlock);
+    error ProposalOngoing(uint256 index, uint256 currentBlock, uint256 endBlock);
     error ProposalInexistent();
-    error QuorumNotReached(uint256 id, uint256 votesTotal, uint256 quorum);
+    error QuorumNotReached(uint256 index, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
@@ -70,7 +70,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     address public researchFundingWallet;
 
     ///*** STORAGE & MAPPINGS ***///
-    uint256 private _index;
+    uint256 private _proposalIndex;
     uint256 constant _VOTE = 1;
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private _proposals;
@@ -116,7 +116,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
     event Proposed(
-        uint256 indexed id,
+        uint256 indexed index,
         address indexed user,
         string info,
         uint256 startBlockNum,
@@ -126,7 +126,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     );
     event SciManagerUpdated(address indexed user, address indexed newAddress);
     event StatusUpdated(
-        uint256 indexed id,
+        uint256 indexed index,
         ProposalStatus indexed status
     );
     event ResearchFundingWalletUpdated(
@@ -134,13 +134,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address indexed setNewResearchFundingWallet
     );
     event Voted(
-        uint256 indexed id,
+        uint256 indexed index,
         address indexed user,
         bool indexed support,
         uint256 amount
     );
     event VotesUpdated(
-        uint256 indexed id,
+        uint256 indexed index,
         uint256 votesFor,
         uint256 votesAgainst,
         uint256 votesTotal
@@ -400,134 +400,134 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @dev vote for an of option of a given proposal
      *      using the rights from the most recent snapshot
-     * @param id the index of the proposal
+     * @param index the index of the proposal
      * @param support true if in support of proposal
      */
     function vote(
-        uint256 id,
+        uint256 index,
         bool support
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        _votingChecks(id, msg.sender);
+        _votingChecks(index, msg.sender);
 
         ISciManager sciManager = ISciManager(sciManagerAddress);
 
         _validateLockingRequirements(sciManager, msg.sender);
 
-        _recordVote(id, support);
+        _recordVote(index, support);
     }
 
     /**
      * @dev finalizes the voting phase for a research proposal
-     * @param id the index of the proposal of interest
+     * @param index the index of the proposal of interest
      */
     function schedule(
-        uint256 id
+        uint256 index
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id >= _index) revert ProposalInexistent();
+        if (index >= _proposalIndex) revert ProposalInexistent();
 
-        bool schedulable = _proposalSchedulingChecks(id, true);
+        bool schedulable = _proposalSchedulingChecks(index, true);
 
         if (schedulable) {
-            if (_proposals[id].executable) {
-                _govExec.schedule(_proposals[id].action);
+            if (_proposals[index].executable) {
+                _govExec.schedule(_proposals[index].action);
             }
-            _proposals[id].status = ProposalStatus.Scheduled;
+            _proposals[index].status = ProposalStatus.Scheduled;
 
             emit StatusUpdated(
-                id,
-                _proposals[id].status
+                index,
+                _proposals[index].status
             );
         }
     }
 
     /**
      * @dev executes the proposal
-     * @param id the index of the proposal of interest
+     * @param index the index of the proposal of interest
      */
     function execute(
-        uint256 id
+        uint256 index
     ) external payable nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         // Check if proposal exists and has finalized voting
-        if (id >= _index) revert ProposalInexistent();
-        if (_proposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(_proposals[id].status);
+        if (index >= _proposalIndex) revert ProposalInexistent();
+        if (_proposals[index].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(_proposals[index].status);
 
-        if (!_proposals[id].executable) revert CannotExecute();
+        if (!_proposals[index].executable) revert CannotExecute();
 
-        _govExec.execution(_proposals[id].action);
+        _govExec.execution(_proposals[index].action);
 
-        _proposals[id].status = ProposalStatus.Executed;
+        _proposals[index].status = ProposalStatus.Executed;
 
         emit StatusUpdated(
-            id,
-            _proposals[id].status
+            index,
+            _proposals[index].status
         );
     }
 
     /**
      * @dev completes a non-executable proposal
-     * @param id the _index of the proposal of interest
+     * @param index the _proposalIndex of the proposal of interest
      */
     function complete(
-        uint256 id
+        uint256 index
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id > _index) revert ProposalInexistent();
+        if (index > _proposalIndex) revert ProposalInexistent();
 
-        if (_proposals[id].status != ProposalStatus.Scheduled)
-            revert IncorrectPhase(_proposals[id].status);
+        if (_proposals[index].status != ProposalStatus.Scheduled)
+            revert IncorrectPhase(_proposals[index].status);
 
-        if (_proposals[id].executable) {
+        if (_proposals[index].executable) {
             revert CannotComplete();
         }
 
-        _proposals[id].status = ProposalStatus.Completed;
+        _proposals[index].status = ProposalStatus.Completed;
 
         emit StatusUpdated(
-            id,
-            _proposals[id].status
+            index,
+            _proposals[index].status
         );
     }
 
     /**
      * @dev cancels the proposal
-     * @param id the _index of the proposal of interest
+     * @param index the _proposalIndex of the proposal of interest
      */
-    function cancel(uint256 id) external nonReentrant onlyRole(GUARD_ROLE) {
+    function cancel(uint256 index) external nonReentrant onlyRole(GUARD_ROLE) {
         if (
-            _proposals[id].status == ProposalStatus.Executed ||
-            _proposals[id].status == ProposalStatus.Canceled
-        ) revert IncorrectPhase(_proposals[id].status);
+            _proposals[index].status == ProposalStatus.Executed ||
+            _proposals[index].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(_proposals[index].status);
         
-        if (_proposals[id].executable) _govExec.cancel(_proposals[id].action);
+        if (_proposals[index].executable) _govExec.cancel(_proposals[index].action);
 
-        _proposals[id].status = ProposalStatus.Canceled;
+        _proposals[index].status = ProposalStatus.Canceled;
 
         emit StatusUpdated(
-            id,
-            _proposals[id].status
+            index,
+            _proposals[index].status
         );
     }
 
     /**
      * @dev cancels the proposal
-     * @param id the index of the proposal of interest
+     * @param index the index of the proposal of interest
      */
     function cancelRejected(
-        uint256 id
+        uint256 index
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        if (id >= _index) revert ProposalInexistent();
+        if (index >= _proposalIndex) revert ProposalInexistent();
         if (
-            _proposals[id].status == ProposalStatus.Canceled
-        ) revert IncorrectPhase(_proposals[id].status);
+            _proposals[index].status == ProposalStatus.Canceled
+        ) revert IncorrectPhase(_proposals[index].status);
         
-        bool schedulable = _proposalSchedulingChecks(id, false);
+        bool schedulable = _proposalSchedulingChecks(index, false);
 
         if (!schedulable) {
-            _proposals[id].status = ProposalStatus.Canceled;
+            _proposals[index].status = ProposalStatus.Canceled;
 
             emit StatusUpdated(
-                id,
-                _proposals[id].status
+                index,
+                _proposals[index].status
             );
         }
     }
@@ -536,7 +536,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev returns the proposal index
      */
     function getProposalIndex() external view returns (uint256) {
-        return _index;
+        return _proposalIndex;
     }
 
     /**
@@ -553,25 +553,25 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /**
      * @notice Retrieves detailed information about a specific governance proposal.
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
-     * @param id The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @param index The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      */
     function getProposal(
-        uint256 id
+        uint256 index
     ) external view returns (Proposal memory) {
-        if (id > _index) revert ProposalInexistent();
+        if (index > _proposalIndex) revert ProposalInexistent();
 
         // Return a struct with the proposal details
         return
             Proposal(
-                _proposals[id].info,
-                _proposals[id].startBlockNum,
-                _proposals[id].endTimestamp,
-                _proposals[id].status,
-                _proposals[id].action,
-                _proposals[id].votesFor,
-                _proposals[id].votesAgainst,
-                _proposals[id].votesTotal,
-                _proposals[id].executable
+                _proposals[index].info,
+                _proposals[index].startBlockNum,
+                _proposals[index].endTimestamp,
+                _proposals[index].status,
+                _proposals[index].action,
+                _proposals[index].votesFor,
+                _proposals[index].votesAgainst,
+                _proposals[index].votesTotal,
+                _proposals[index].executable
             );
     }
 
@@ -580,7 +580,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
      *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param user The address of the user whose voting data is being requested.
-     * @param id The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @param index The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
      * @return voted A boolean indicating whether the user has voted on this proposal. `true` means the user has cast a vote, `false` means they have not.
      * @return initialVoteTimestamp The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
      * @return previousSupport A boolean indicating whether the user supported the proposal in their last vote. `true` means they supported it, `false` means they opposed it.
@@ -590,18 +590,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
      *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param user The address of the user whose voting data is being requested.
-     * @param id The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
+     * @param index The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
      */
     function getUserVoteData(
         address user,
-        uint256 id
+        uint256 index
     ) external view returns (UserVoteData memory) {
-        if (id > _index) revert ProposalInexistent();
+        if (index > _proposalIndex) revert ProposalInexistent();
         return
             UserVoteData(
-                _userVoteData[user][id].voted,
-                _userVoteData[user][id].initialVoteTimestamp,
-                _userVoteData[user][id].previousSupport
+                _userVoteData[user][index].voted,
+                _userVoteData[user][index].initialVoteTimestamp,
+                _userVoteData[user][index].previousSupport
             );
     }
 
@@ -611,23 +611,23 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Internal function that performs checks to determine if a proposal can be scheduled.
      *      - Checks include proposal status, quorum requirements, and vote tally.
      *      - Optionally reverts with specific errors if `revertable` is set to true.
-     * @param id The unique identifier of the proposal.
+     * @param index The unique identifier of the proposal.
      * @param revertable If true, reverts with an error if any check fails.
      * @return passed A boolean value indicating whether all the checks are passed.
      */
     function _proposalSchedulingChecks(
-        uint256 id,
+        uint256 index,
         bool revertable
     ) internal view returns (bool) {
-        bool isProposalOngoing = block.timestamp < _proposals[id].endTimestamp;
+        bool isProposalOngoing = block.timestamp < _proposals[index].endTimestamp;
 
-        bool isProposalActive = _proposals[id].status == ProposalStatus.Active;
+        bool isProposalActive = _proposals[index].status == ProposalStatus.Active;
 
-        bool quorumReached = _proposals[id].votesTotal >=
+        bool quorumReached = _proposals[index].votesTotal >=
             governanceParams.quorum;
 
-        bool isVotesForGreaterThanVotesAgainst = _proposals[id].votesFor >
-            _proposals[id].votesAgainst;
+        bool isVotesForGreaterThanVotesAgainst = _proposals[index].votesFor >
+            _proposals[index].votesAgainst;
 
         bool passed = !isProposalOngoing &&
             isProposalActive &&
@@ -637,18 +637,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (!passed && revertable) {
             if (isProposalOngoing) {
                 revert ProposalOngoing(
-                    id,
+                    index,
                     block.timestamp,
-                    _proposals[id].endTimestamp
+                    _proposals[index].endTimestamp
                 );
             }
             if (!isProposalActive) {
-                revert IncorrectPhase(_proposals[id].status);
+                revert IncorrectPhase(_proposals[index].status);
             }
             if (!quorumReached) {
                 revert QuorumNotReached(
-                    id,
-                    _proposals[id].votesTotal,
+                    index,
+                    _proposals[index].votesTotal,
                     governanceParams.quorum
                 );
             }
@@ -666,26 +666,26 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      *      conditions such as proposal activity and timing constraints are met, and verifies
      *      the signature of the voter where necessary.
      *
-     * @param id The index of the proposal on which to vote.
-     * @param voter the user that wants to vote on the given proposal id
+     * @param index The index of the proposal on which to vote.
+     * @param voter the user that wants to vote on the given proposal index
      *
      *
      */
-    function _votingChecks(uint id, address voter) internal view {
-        if (id >= _index) revert ProposalInexistent();
-        if (_proposals[id].status != ProposalStatus.Active)
-            revert IncorrectPhase(_proposals[id].status);
-        if (block.timestamp > _proposals[id].endTimestamp)
+    function _votingChecks(uint index, address voter) internal view {
+        if (index >= _proposalIndex) revert ProposalInexistent();
+        if (_proposals[index].status != ProposalStatus.Active)
+            revert IncorrectPhase(_proposals[index].status);
+        if (block.timestamp > _proposals[index].endTimestamp)
             revert ProposalLifetimePassed();
         if (
-            _userVoteData[voter][id].voted &&
+            _userVoteData[voter][index].voted &&
             block.timestamp >=
-            _proposals[id].endTimestamp - governanceParams.voteChangeCutOff
+            _proposals[index].endTimestamp - governanceParams.voteChangeCutOff
         ) revert VoteChangeNotAllowedAfterCutOff();
         if (
-            _userVoteData[voter][id].voted &&
+            _userVoteData[voter][index].voted &&
             block.timestamp >
-            _userVoteData[voter][id].initialVoteTimestamp +
+            _userVoteData[voter][index].initialVoteTimestamp +
                 governanceParams.voteChangeTime
         ) {
             revert VoteChangeWindowExpired();
@@ -696,27 +696,27 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Records a vote on a proposal, updating the vote totals and voter status.
      *      This function is called after all preconditions checked by `_votingChecks` are met.
      *
-     * @param id The index of the proposal on which to vote.
+     * @param index The index of the proposal on which to vote.
      * @param support A boolean indicating whether the vote is in support of (true) or against (false) the proposal.
      */
-    function _recordVote(uint id, bool support) internal {
-        UserVoteData storage voteData = _userVoteData[msg.sender][id];
+    function _recordVote(uint index, bool support) internal {
+        UserVoteData storage voteData = _userVoteData[msg.sender][index];
 
         if (voteData.voted) {
             if (voteData.previousSupport) {
-                _proposals[id].votesFor -= _VOTE;
+                _proposals[index].votesFor -= _VOTE;
             } else {
-                _proposals[id].votesAgainst -= _VOTE;
+                _proposals[index].votesAgainst -= _VOTE;
             }
-            _proposals[id].votesTotal -= _VOTE;
+            _proposals[index].votesTotal -= _VOTE;
         }
 
         if (support) {
-            _proposals[id].votesFor += _VOTE;
+            _proposals[index].votesFor += _VOTE;
         } else {
-            _proposals[id].votesAgainst += _VOTE;
+            _proposals[index].votesAgainst += _VOTE;
         }
-        _proposals[id].votesTotal += _VOTE;
+        _proposals[index].votesTotal += _VOTE;
 
         voteData.voted = true;
         voteData.previousSupport = support;
@@ -730,13 +730,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             block.timestamp + governanceParams.voteLockTime
         );
 
-        emit Voted(id, msg.sender, support, _VOTE);
+        emit Voted(index, msg.sender, support, _VOTE);
 
         emit VotesUpdated(
-            id,
-            _proposals[id].votesFor,
-            _proposals[id].votesAgainst,
-            _proposals[id].votesTotal
+            index,
+            _proposals[index].votesFor,
+            _proposals[index].votesAgainst,
+            _proposals[index].votesTotal
         );
     }
 
@@ -778,7 +778,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             executable
         );
 
-        uint256 currentIndex = _index++;
+        uint256 currentIndex = _proposalIndex++;
         _proposals[currentIndex] = proposal;
 
         return currentIndex;
