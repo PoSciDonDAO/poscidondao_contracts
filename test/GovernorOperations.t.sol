@@ -417,6 +417,7 @@ contract GovernorOperationsTest is Test {
 
         vm.startPrank(addr2);
         govOps.voteStandard(id3, true);
+        govOps.claimPo();
         vm.stopPrank();
         assertEq(po.balanceOf(addr2, 0), 6);
     }
@@ -606,7 +607,7 @@ contract GovernorOperationsTest is Test {
                 selector,
                 id,
                 block.timestamp,
-                proposalLifetime + 1
+                block.timestamp + proposalLifetime
             )
         );
         govOps.schedule(id);
