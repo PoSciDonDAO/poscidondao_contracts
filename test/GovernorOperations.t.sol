@@ -488,15 +488,14 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_RevertIfDelegateeHasAlreadyVoted() public {
-        // Step 1: Lock tokens for the delegatee (addr2) and delegator (addr1)
         vm.startPrank(addr2);
         sciManager.lock(2000000e18); // Delegatee locks tokens
         vm.stopPrank();
-
-        // Step 2: Create a proposal
-
         vm.startPrank(addr1);
         sciManager.lock(2000000e18);
+        vm.stopPrank();
+
+        vm.startPrank(addr1);
         addDelegate = new AddDelegate(
             addr2,
             address(executor),
@@ -512,28 +511,25 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        sciManager.lock(2000000e18); // Delegator locks tokens
-        sciManager.delegate(addr2); // Delegator delegates voting rights to addr2
+        sciManager.delegate(addr2);
         vm.stopPrank();
 
         vm.startPrank(addr1);
-        sciManager.lock(2000000e18);
         uint256 id2 = govOps.getProposalIndex();
         govOps.propose("Info", address(transaction), false);
         vm.stopPrank();
 
-        // Step 3: Delegatee votes on the proposal
         vm.startPrank(addr2);
         govOps.voteStandard(id2, true);
         vm.stopPrank();
 
-        // Step 4: Attempt to vote as the delegator (addr1)
+
         vm.startPrank(addr1);
         bytes4 selector = bytes4(
             keccak256("DelegateeHasAlreadyVoted(uint256,address)")
         );
         vm.expectRevert(abi.encodeWithSelector(selector, id2, addr2));
-        govOps.voteStandard(id2, true); // This should revert
+        govOps.voteStandard(id2, true);
         vm.stopPrank();
     }
 

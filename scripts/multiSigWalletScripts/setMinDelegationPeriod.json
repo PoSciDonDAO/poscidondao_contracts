@@ -1,6 +1,6 @@
 {
 	"version": "1.0",
-	"chainId": 8453,
+	"chainId": 84532,
 	"createdAt": 1731441396597,
 	"meta": {
 		"name": "Set Minimum Delegation Period",
@@ -11,9 +11,9 @@
 	},
 	"transactions": [
 		{
-			"to": "0x718df2d860B47048cfdB7f89851E65778859759E",
+			"to": "0x9A0EC655625CDAF6fcE6B7d617CF91C4fA330feE",
 			"value": "0",
-			"data": "0x446897f6000000000000000000000000000000000000000000000000000000000000012c"
+			"data": "0x446897f60000000000000000000000000000000000000000000000000000000000000258"
 		}
 	],
 	"checksum": "0x8cbb7fcf2917a5b6710dae1041d0393d19cdf3f0b5beb75f1987e30fea547632"

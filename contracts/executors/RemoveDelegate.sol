@@ -4,15 +4,15 @@ pragma solidity 0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface IGovernorAddDelegate {
-    function addDelegate(address newDelegate) external;
+interface IGovernorRemoveDelegate {
+    function removeDelegate(address formerDelegate) external;
 }
 
 /**
- * @title AddDelegate
- * @dev Handles the addition of a delegate selected by the DAO.
+ * @title RemoveDelegate
+ * @dev Handles the removal of a delegate selected by the DAO.
  */
-contract AddDelegate is ReentrancyGuard, AccessControl {
+contract RemoveDelegate is ReentrancyGuard, AccessControl {
     address public targetWallet;
     address public sciManager;
     address public governorExecutor;
@@ -32,11 +32,11 @@ contract AddDelegate is ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Execute the proposal to add a delegate
+     * @dev Execute the proposal to remove a delegate
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        IGovernorAddDelegate(sciManager).addDelegate(targetWallet);
+        IGovernorRemoveDelegate(sciManager).removeDelegate(targetWallet);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
-        emit ActionExecuted(address(this), "AddDelegate");
+        emit ActionExecuted(address(this), "RemoveDelegate");
     }
 }

@@ -18,7 +18,7 @@ contract Election is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error AddressAlreadyHasDDRole();
 
-    address[] internal targetWallets;
+    address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -47,7 +47,7 @@ contract Election is ReentrancyGuard, AccessControl {
                 revert AddressAlreadyHasDDRole();
             }
         }
-        targetWallets = targetWallets_;
+        _targetWallets = targetWallets_;
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor);
@@ -57,7 +57,7 @@ contract Election is ReentrancyGuard, AccessControl {
      * @dev Returns all elected wallets
      */
     function getAllElectedWallets() public view returns (address[] memory) {
-        return targetWallets;
+        return _targetWallets;
     }
 
     /**
@@ -65,7 +65,7 @@ contract Election is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(
-            targetWallets
+            _targetWallets
         );
         emit ActionExecuted(address(this), "Election");
         _revokeRole(GOVERNOR_ROLE, governorExecutor);

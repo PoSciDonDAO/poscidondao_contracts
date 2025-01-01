@@ -228,7 +228,7 @@ function generateSolidityAddressFile(
 
 	const solidityFileContent: string = `
   // SPDX-License-Identifier: UNLICENSED
-  pragma solidity 0.8.28;
+  pragma solidity 0.8.19;
 
   library DeployedAddresses {
       ${Object.entries(deployedContracts)
