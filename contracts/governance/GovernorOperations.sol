@@ -333,6 +333,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev Proposes a change in DAO operations.
      * @param info IPFS hash of project proposal.
+     * @param action the smart contract address facilitating the on-chain execution of an action
      * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
      * @return uint256 Index of the newly created proposal.
      */

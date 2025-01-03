@@ -338,6 +338,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             _snapshot(delegated, users[delegated].votingRights);
 
             _totDelegated += amount;
+
+            users[msg.sender].delegationTime = block.timestamp;
         } else {
             users[msg.sender].votingRights += amount;
 
@@ -404,6 +406,9 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             _totDelegated -= amount;
 
             if (users[msg.sender].lockedSci == 0) {
+                users[msg.sender].previousDelegatee = users[msg.sender]
+                    .delegatee;
+                users[msg.sender].undelegationTime = block.timestamp;
                 users[msg.sender].delegatee = address(0);
             }
         } else {

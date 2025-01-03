@@ -11,7 +11,7 @@ interface IGovernorRoleRevoke {
 
 /**
  * @title Impeachment
- * @dev Manages the impeachment of scientists that govern the research funding process. 
+ * @dev Manages the impeachment of scientists that govern the research funding process.
  */
 contract Impeachment is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
@@ -21,7 +21,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     address public governorResearch;
     address public governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
-    
+
     event ActionExecuted(address indexed action, string indexed contractName);
 
     constructor(
@@ -29,6 +29,11 @@ contract Impeachment is ReentrancyGuard, AccessControl {
         address governorResearch_,
         address governorExecutor_
     ) {
+        if (
+            governorResearch_ == address(0) || governorExecutor_ == address(0)
+        ) {
+            revert CannotBeZeroAddress();
+        }
         for (uint256 i = 0; i < targetWallets_.length; i++) {
             if (targetWallets_[i] == address(0)) {
                 revert CannotBeZeroAddress();

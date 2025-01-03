@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface IGovernorRemoveDelegate {
+interface ISciManagerRemoveDelegate {
     function removeDelegate(address formerDelegate) external;
 }
 
@@ -35,7 +35,7 @@ contract RemoveDelegate is ReentrancyGuard, AccessControl {
      * @dev Execute the proposal to remove a delegate
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        IGovernorRemoveDelegate(sciManager).removeDelegate(targetWallet);
+        ISciManagerRemoveDelegate(sciManager).removeDelegate(targetWallet);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
         emit ActionExecuted(address(this), "RemoveDelegate");
     }
