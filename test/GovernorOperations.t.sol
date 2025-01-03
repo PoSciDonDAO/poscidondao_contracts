@@ -489,11 +489,25 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_RevertIfDelegateeHasAlreadyVoted() public {
-        // vm.startPrank(delegator);
-        // sciManager.delegate(delegatee);
-        // vm.stopPrank();
-        //assume already delegated;
+    function test_RevertIfPreviousDelegateeHasAlreadyVoted() public {
+        vm.startPrank(delegator);
+        addDelegate = new AddDelegate(
+            delegatee,
+            address(executor),
+            address(sciManager)
+        );
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(addDelegate), false);
+        govOps.voteStandard(id, true);
+        vm.warp(block.timestamp + 4.1 weeks);
+        govOps.schedule(id);
+        vm.warp(block.timestamp + 3 days);
+        govOps.execute(id);
+        vm.stopPrank();
+
+        vm.startPrank(delegator);
+        sciManager.delegate(delegatee);
+        vm.stopPrank();
         vm.warp(block.timestamp + 31 days);
         vm.startPrank(delegatee);
         uint256 id2 = govOps.getProposalIndex();

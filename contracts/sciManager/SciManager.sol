@@ -25,8 +25,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error CannotDelegateToContract();
     error CannotDelegateDuringEmergency();
     error CannotUndelegateBeforePeriodElapsed();
-    error DelegateAlreadyAdded(address delegate);
-    error DelegateNotAllowListed(address delegate);
+    error DelegateeAlreadyAdded(address delegate);
+    error DelegateeNotAllowListed(address delegate);
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
@@ -66,7 +66,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     IGovernorExecution _govExec;
     uint256 private _totLocked;
     uint256 private _totDelegated;
-    uint256 private _delegateThreshold;
+    uint256 private _delegateeThreshold;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18; //never changes
     uint256 private _minDelegationPeriod;
 
@@ -124,7 +124,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
         admin = admin_;
         _sci = IERC20(sci_);
-        _delegateThreshold = 50000e18;
+        _delegateeThreshold = 50000e18;
         _delegates[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
         _minDelegationPeriod = 15 minutes;
@@ -151,7 +151,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     function setDelegateThreshold(
         uint256 newThreshold
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _delegateThreshold = newThreshold;
+        _delegateeThreshold = newThreshold;
         emit DelegateThresholdUpdated();
     }
 
@@ -161,15 +161,15 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      */
     function addDelegate(address newDelegate) external onlyExecutor {
         if (_delegates[newDelegate]) {
-            revert DelegateAlreadyAdded(newDelegate);
+            revert DelegateeAlreadyAdded(newDelegate);
         }
         if (
-            users[newDelegate].lockedSci < _delegateThreshold &&
+            users[newDelegate].lockedSci < _delegateeThreshold &&
             newDelegate != address(0)
         )
             revert InsufficientBalance(
                 users[newDelegate].lockedSci,
-                _delegateThreshold
+                _delegateeThreshold
             );
         _delegates[newDelegate] = true;
         emit DelegateAdded(newDelegate);
@@ -181,7 +181,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      */
     function removeDelegate(address formerDelegate) external onlyExecutor {
         if (!_delegates[formerDelegate]) {
-            revert DelegateNotAllowListed(formerDelegate);
+            revert DelegateeNotAllowListed(formerDelegate);
         }
         _delegates[formerDelegate] = false;
         emit DelegateRemoved(formerDelegate);
@@ -242,7 +242,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
 
         if (newDelegate != address(0) && !_delegates[newDelegate]) {
-            revert DelegateNotAllowListed(newDelegate);
+            revert DelegateeNotAllowListed(newDelegate);
         }
 
         if (owner == newDelegate) revert SelfDelegationNotAllowed();
@@ -258,7 +258,6 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
 
         if (oldDelegate != address(0)) {
-            // Ensure user cannot remove/change delegation before `_minDelegationPeriod`
             if (
                 !emergency &&
                 block.timestamp <
@@ -282,6 +281,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             _snapshot(owner, users[owner].votingRights);
 
             _totDelegated -= lockedSci;
+
+            users[owner].previousDelegatee = oldDelegate;
+
+            users[owner].undelegationTime = block.timestamp;
         }
 
         if (newDelegate != address(0)) {
@@ -306,6 +309,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             emit VoteLockEndTimeUpdated(owner, users[owner].voteLockEnd);
         } else {
             users[owner].delegatee = address(0);
+
+            users[owner].previousDelegatee = oldDelegate;
+
+            users[owner].undelegationTime = block.timestamp;
         }
 
         emit Delegated(owner, oldDelegate, newDelegate, lockedSci);
@@ -527,7 +534,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @dev returns the current threshold to become a delegate.
      */
     function getDelegateThreshold() external view returns (uint256) {
-        return _delegateThreshold;
+        return _delegateeThreshold;
     }
 
     /**

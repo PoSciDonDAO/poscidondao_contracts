@@ -13,7 +13,7 @@ interface DeployedContracts {
 
 const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
-const sci = "0x8cC93105f240B4aBAF472e7cB2DeC836159AA311";
+const sci = "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
 const researchFundingWallet = "0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF";
 
 const frontendAddressesFilePath =

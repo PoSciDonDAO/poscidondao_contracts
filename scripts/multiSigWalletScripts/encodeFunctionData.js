@@ -1,7 +1,7 @@
 const ethers = require("ethers");
 
 // Replace with your contract ABI
-const abi = ["function setMinDelegationPeriod(uint256)"];
+const abi = ["function setEmergency()"];
 
 // const contractAddress = "0xd0AB13e730cb266C66Df3FC6EdDFC2fD944ed87a";
 
@@ -16,8 +16,10 @@ const input = 300;
 const iface = new ethers.utils.Interface(abi);
 
 // Encode the data for the transaction
-const data = iface.encodeFunctionData("setMinDelegationPeriod", [
-	input,
-]);
+// const data = iface.encodeFunctionData("setEmergency", [
+// 	input,
+// ]);
+
+const data = iface.encodeFunctionData("setEmergency");
 
 console.log(data);
