@@ -41,7 +41,8 @@ contract GovernorOperationsTest is Test {
     address addr3 = vm.addr(3);
     address addr4 = vm.addr(4);
     address addr5 = vm.addr(5);
-    address test = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
+    address delegator = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
+    address delegatee = 0x2Cd5221188390bc6e3a3BAcF7EbB7BCC0FdFC3Fe;
     address researchFundingWallet = vm.addr(6);
     address admin = DeployedAddresses.admin;
     address opWallet = vm.addr(8);
@@ -126,11 +127,11 @@ contract GovernorOperationsTest is Test {
         deal(address(usdc), addr3, 100000000e6);
         vm.stopPrank();
 
-        vm.startPrank(test);
+        vm.startPrank(delegatee);
         sci.approve(address(govOps), 1000000000000e18);
         sci.approve(address(sciManager), 1000000000000e18);
-        deal(address(sci), test, 100000000e18);
-        deal(address(usdc), test, 100000000e6);
+        deal(address(sci), delegatee, 100000000e18);
+        deal(address(usdc), delegatee, 100000000e6);
         vm.stopPrank();
     }
 
@@ -241,12 +242,12 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_ElectScientists() public {
-        vm.startPrank(test);
+        vm.startPrank(delegatee);
         sciManager.lock(1000e18);
         vm.stopPrank();
         vm.startPrank(addr1);
         address[] memory electedMembers = new address[](1);
-        electedMembers[0] = test;
+        electedMembers[0] = delegatee;
         election = new Election(
             electedMembers,
             address(govRes),
@@ -269,7 +270,7 @@ contract GovernorOperationsTest is Test {
         vm.warp(block.timestamp + 3 days);
         govOps.execute(id);
         vm.stopPrank();
-        assertTrue(govRes.checkDueDiligenceRole(test) == true);
+        assertTrue(govRes.checkDueDiligenceRole(delegatee) == true);
         assertTrue(
             govRes.checkDueDiligenceRole(
                 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a
@@ -286,7 +287,7 @@ contract GovernorOperationsTest is Test {
         // vm.stopPrank();
         // vm.startPrank(addr1);
         // address[] memory electedMembers = new address[](4);
-        // electedMembers[0] = test;
+        // electedMembers[0] = delegatee;
         // electedMembers[1] = 0x690BF2dB31D39EE0a88fcaC89117b66a588E865a;
         // election = new Election(
         //     electedMembers,
@@ -340,7 +341,7 @@ contract GovernorOperationsTest is Test {
         govOps.execute(id2);
         vm.stopPrank();
 
-        assertTrue(govRes.checkDueDiligenceRole(test) == false);
+        assertTrue(govRes.checkDueDiligenceRole(delegatee) == false);
     }
 
     function test_VoteFor() public {
@@ -356,7 +357,7 @@ contract GovernorOperationsTest is Test {
         assertEq(proposal.votesFor, 2000000e18);
         assertEq(proposal.votesTotal, 2000000e18);
 
-        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr1);
+        (, , , uint256 voteLockEnd, , , , , ) = sciManager.users(addr1);
 
         assertEq(
             voteLockEnd,
@@ -455,7 +456,7 @@ contract GovernorOperationsTest is Test {
         assertEq(proposal.votesTotal, 1414e18);
         assertEq(proposal.quadraticVoting, true);
 
-        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr1);
+        (, , , uint256 voteLockEnd, , , , , ) = sciManager.users(addr1);
 
         assertEq(
             voteLockEnd,
@@ -489,47 +490,26 @@ contract GovernorOperationsTest is Test {
     }
 
     function test_RevertIfDelegateeHasAlreadyVoted() public {
-        vm.startPrank(addr2);
-        sciManager.lock(2000000e18); // Delegatee locks tokens
-        vm.stopPrank();
-        vm.startPrank(addr1);
-        sciManager.lock(2000000e18);
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
-        addDelegate = new AddDelegate(
-            addr2,
-            address(executor),
-            address(sciManager)
-        );
-        uint256 id = govOps.getProposalIndex();
-        govOps.propose("Info", address(addDelegate), false);
-        govOps.voteStandard(id, true);
-        vm.warp(block.timestamp + 4.1 weeks);
-        govOps.schedule(id);
-        vm.warp(block.timestamp + 3 days);
-        govOps.execute(id);
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
-        sciManager.delegate(addr2);
-        vm.stopPrank();
-
-        vm.startPrank(addr1);
+        // vm.startPrank(delegator);
+        // sciManager.delegate(delegatee);
+        // vm.stopPrank();
+        //assume already delegated;
+        vm.warp(block.timestamp + 31 days);
+        vm.startPrank(delegatee);
         uint256 id2 = govOps.getProposalIndex();
         govOps.propose("Info", address(transaction), false);
-        vm.stopPrank();
-
-        vm.startPrank(addr2);
         govOps.voteStandard(id2, true);
         vm.stopPrank();
 
+        vm.startPrank(delegator);
+        sciManager.delegate(address(0));
+        vm.stopPrank();
 
-        vm.startPrank(addr1);
+        vm.startPrank(delegator);
         bytes4 selector = bytes4(
             keccak256("DelegateeHasAlreadyVoted(uint256,address)")
         );
-        vm.expectRevert(abi.encodeWithSelector(selector, id2, addr2));
+        vm.expectRevert(abi.encodeWithSelector(selector, id2, delegatee));
         govOps.voteStandard(id2, true);
         vm.stopPrank();
     }
@@ -687,7 +667,7 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         sciManager.lock(2000000e18);
         govOps.voteStandard(id, true);
-        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr2);
+        (, , , uint256 voteLockEnd, , , , , ) = sciManager.users(addr2);
         bytes4 selector = bytes4(
             keccak256("TokensStillLocked(uint256,uint256)")
         );
@@ -708,7 +688,7 @@ contract GovernorOperationsTest is Test {
         vm.startPrank(addr2);
         sciManager.lock(2000000e18);
         govOps.voteStandard(id, true);
-        (, , , uint256 voteLockEnd, , , ) = sciManager.users(addr2);
+        (, , , uint256 voteLockEnd, , , , , ) = sciManager.users(addr2);
         vm.warp(voteLockEnd);
         sciManager.free(2000e18);
         vm.stopPrank();

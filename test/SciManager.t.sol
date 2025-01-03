@@ -179,7 +179,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         assertEq(lockedSci, 2000000e18);
         assertEq(votingRights, 2000000e18);
@@ -215,7 +215,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         assertEq(lockedSci, 2000000e18);
         assertEq(votingRights, 0);
@@ -232,7 +232,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots1,
             address delegate1,
 
-        ) = sciManager.users(addr2);
+        , , ) = sciManager.users(addr2);
         assertEq(lockedSci1, 2000000e18);
         assertEq(votingRights1, 4000000e18);
         assertEq(amtSnapshots1, 2);
@@ -252,7 +252,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         assertEq(lockedSci, 1000000e18);
         assertEq(votingRights, 1000000e18);
@@ -278,7 +278,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
         assertEq(lockedSci, (2000000e18 - 300e18));
         assertEq(votingRights, 0);
         assertEq(voteLockEnd, sciManager.getVoteLockEnd(addr1));
@@ -294,7 +294,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots1,
             address delegate1,
 
-        ) = sciManager.users(addr2);
+        , , ) = sciManager.users(addr2);
         assertEq(lockedSci1, 2000000e18);
         assertEq(votingRights1, (2000000e18 - 300e18 + 2000000e18));
         assertEq(amtSnapshots1, 2);
@@ -348,7 +348,7 @@ contract SciManagerTest is Test {
             ,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         assertEq(lockedSci, 2000000e18);
         assertEq(votingRights, 2000000e18);
@@ -381,7 +381,7 @@ contract SciManagerTest is Test {
         vm.warp(block.timestamp + minDelegationPeriod);
 
         vm.startPrank(addr1);
-        (, , uint256 oldDelegateVoteLockEnd, , , , ) = sciManager.users(addr2);
+        (, , uint256 oldDelegateVoteLockEnd, , , , , , ) = sciManager.users(addr2);
         sciManager.delegate(address(0));
         vm.stopPrank();
 
@@ -393,7 +393,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
             uint256 delegationTime
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         uint256 actualBlockTimestamp = block.timestamp;
         uint256 expectedVoteLockEnd = Math.max(
@@ -466,7 +466,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots1,
             address delegate1,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
         vm.stopPrank();
 
         assertEq(lockedSci1, 2000000e18);
@@ -484,7 +484,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots2,
             address delegate2,
 
-        ) = sciManager.users(addr2);
+        , , ) = sciManager.users(addr2);
 
         assertEq(lockedSci2, 2000000e18);
         assertEq(votingRights2, 2000000e18 + 2000000e18);
@@ -512,7 +512,7 @@ contract SciManagerTest is Test {
             uint256 amtSnapshots,
             address delegate,
 
-        ) = sciManager.users(addr1);
+        , , ) = sciManager.users(addr1);
 
         assertEq(lockedSci, 2000000e18);
         assertEq(votingRights, 2000000e18);

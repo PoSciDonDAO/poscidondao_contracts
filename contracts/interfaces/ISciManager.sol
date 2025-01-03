@@ -4,15 +4,21 @@ pragma solidity 0.8.19;
 interface ISciManager {
     function free(uint256 amount) external;
 
-    function getLatestUserRights(address user) external view returns (uint256);
+    function getCurrentDelegatee(address delegator) external view returns (address);
 
-    function getProposeLockEnd(address user) external view returns (uint256);
+    function getLatestUserRights(address user) external view returns (uint256);
 
     function getLockedSci(address user) external view returns (uint256);
 
-    function getTotalLockedSci() external returns (uint256);
+    function getMinDelegationPeriod() external view returns (uint256);
     
-    function getDelegatee(address delegator) external view returns (address);
+    function getProposeLockEnd(address user) external view returns (uint256);
+    
+    function getPreviousDelegatee(address delegator) external view returns (address);
+
+    function getTotalLockedSci() external returns (uint256);
+
+    function getUndelegationTime(address delegator) external view returns (uint256);
 
     function getUserRights(
         address user,

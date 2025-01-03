@@ -47,6 +47,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         uint256 amtSnapshots; //Amount of snapshots
         address delegatee; //Address of the delegatee
         uint256 delegationTime; // Last delegation timestamp
+        uint256 undelegationTime; // Last undelegation timestamp
+        address previousDelegatee; //Last delegatee the user delegated to
         mapping(uint256 => Snapshot) snapshots; //Index => snapshot
     }
 
@@ -125,7 +127,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         _delegateThreshold = 50000e18;
         _delegates[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
-        _minDelegationPeriod = 30 days;
+        _minDelegationPeriod = 15 minutes;
     }
 
     ///*** EXTERNAL FUNCTIONS ***///
@@ -415,7 +417,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev toggles the `emergency` state, which overrides vote and propose locks.
      */
-    function setEmergency() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setEmergency() external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         emergency = !emergency;
         emit EmergencySet(emergency, block.timestamp);
     }
@@ -466,17 +468,59 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @param delegator The address of the delegator.
      * @return address The address of the delegatee or address(0) if no delegation exists.
      */
-    function getDelegatee(address delegator) external view returns (address) {
+    function getCurrentDelegatee(
+        address delegator
+    ) external view returns (address) {
         return users[delegator].delegatee;
     }
 
     /**
-     * @dev Retrieves the delegatee of a given delegator.
+     * @dev returns the previous delegatee of a given delegator.
      * @param delegator The address of the delegator.
      * @return address The address of the delegatee or address(0) if no delegation exists.
      */
-    function getDelegationTime(address delegator) external view returns (uint256) {
+    function getPreviousDelegatee(
+        address delegator
+    ) external view returns (address) {
+        return users[delegator].previousDelegatee;
+    }
+
+    /**
+     * @dev returns the previous delegatee of a given delegator.
+     * @param delegator The address of the delegator.
+     * @return address The address of the previous delegatee or address(0) if no delegation has ever existed.
+     */
+    function getUndelegationTime(
+        address delegator
+    ) external view returns (uint256) {
+        return users[delegator].undelegationTime;
+    }
+
+    /**
+     * @dev returns the time at which the delegator delegated their voting power.
+     * @param delegator The address of the delegator.
+     */
+    function getDelegationTime(
+        address delegator
+    ) external view returns (uint256) {
         return users[delegator].delegationTime;
+    }
+
+    /**
+     * @dev returns the current minimum delegation period.
+     */
+    function getMinDelegationPeriod() external view returns (uint256) {
+        return _minDelegationPeriod;
+    }
+
+    /**
+     * @dev returns the time at which the delegator can undelegate their voting power.
+     * @param delegator The address of the delegator.
+     */
+    function getDelegationEndtime(
+        address delegator
+    ) external view returns (uint256) {
+        return users[delegator].delegationTime + _minDelegationPeriod;
     }
 
     /**
@@ -487,10 +531,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the current minimum delegation period.
+     * @dev returns true if address is a DAO-elected delegate
      */
-    function getMinDelegationPeriod() external view returns (uint256) {
-        return _minDelegationPeriod;
+    function getDelegate(address delegateAddress) external view returns (bool) {
+        return _delegates[delegateAddress];
     }
 
     /**
@@ -519,13 +563,6 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      */
     function getLockedSci(address user) external view returns (uint256) {
         return users[user].lockedSci;
-    }
-
-    /**
-     * @dev returns true if address is a DAO-elected delegate
-     */
-    function getDelegate(address delegateAddress) external view returns (bool) {
-        return _delegates[delegateAddress];
     }
 
     /**

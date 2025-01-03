@@ -25,6 +25,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotBeZeroAddress();
     error CannotExecute();
     error CannotVoteOnQVProposals();
+    error CannotVoteWhenDelegated();
     error DelegateeHasAlreadyVoted(uint256 index, address delegatee);
     error ExecutableProposalsCannotBeCompleted();
     error ProposalInexistent();
@@ -99,7 +100,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
-    mapping(address => uint256) public unclaimedTokens;
+    mapping(address => uint256) private _unclaimedTokens;
+    mapping(address => uint256) private _lastClaimedProposal;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
     ///*** ROLES ***///
@@ -214,7 +216,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the sciManager address
+     * @dev Sets the sciManager address
      * @param newSciManagerAddress The address to be set as the sci manager contract
      */
     function setSciManagerAddress(
@@ -225,7 +227,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the GovernorExecution address
+     * @dev Sets the GovernorExecution address
      * @param newGovExecAddress The address to be set as the governor executor
      */
     function setGovExec(
@@ -236,7 +238,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the GovernorGuard address
+     * @dev Sets the GovernorGuard address
      * @param newGovGuardAddress The address to be set as the governor guard
 
      */
@@ -249,7 +251,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the _signer address
+     * @dev Sets the _signer address
      * @param newSigner The address to be set as the _signer used to sign off-chain messages
      */
     function setSigner(
@@ -260,7 +262,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the PO token address and interface
+     * @dev Sets the PO token address and interface
      * @param po_ the address of the PO token
      */
     function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -269,7 +271,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the governance parameters given data
+     * @dev Sets the governance parameters given data
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
@@ -277,8 +279,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
-        if (param == "proposalLifetime")
-            governanceParams.proposalLifetime = data;
+        if (
+            param == "proposalLifetime" &&
+            data < ISciManager(sciManagerAddress).getMinDelegationPeriod()
+        ) governanceParams.proposalLifetime = data;
         else if (param == "quorum") governanceParams.quorum = data;
         else if (param == "voteLockTime") governanceParams.voteLockTime = data;
         else if (param == "proposeLockTime")
@@ -383,7 +387,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev vote for an option of a given proposal
+     * @dev Vote for an option of a given proposal
      *      using the rights from the most recent snapshot
      * @param index the _proposalIndex of the proposal
      * @param support user's choice to support a proposal or not
@@ -404,7 +408,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev vote for an option of a given proposal
+     * @dev Vote for an option of a given proposal
      *      using the rights from the most recent snapshot
      * @param index the _proposalIndex of the proposal
      * @param support user's choice to support a proposal or not
@@ -432,7 +436,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev schedules the the execution or completion of a proposal
+     * @dev Schedules the the execution or completion of a proposal
      * @param index the _proposalIndex of the proposal of interest
      */
     function schedule(uint256 index) external nonReentrant {
@@ -483,7 +487,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev completes off-chain execution proposals
+     * @dev Completes off-chain execution proposals
      * @param index the _proposalIndex of the proposal of interest
      */
     function complete(uint256 index) external nonReentrant {
@@ -502,7 +506,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal by governor guard
+     * @dev Cancels the proposal by governor guard
      * @param index the _proposalIndex of the proposal of interest
      */
     function cancel(uint256 index) external nonReentrant onlyRole(GUARD_ROLE) {
@@ -511,7 +515,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             _proposals[index].status == ProposalStatus.Canceled
         ) revert IncorrectPhase(_proposals[index].status);
 
-        if (_proposals[index].executable) _govExec.cancel(_proposals[index].action);
+        if (_proposals[index].executable)
+            _govExec.cancel(_proposals[index].action);
 
         _proposals[index].status = ProposalStatus.Canceled;
 
@@ -543,8 +548,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function claimPo() external {
         uint256 totalPoToClaim = 0;
+        uint256 startIndex = _lastClaimedProposal[msg.sender];
+        uint256 endIndex = _proposalIndex;
 
-        for (uint256 i = 0; i < _proposalIndex; i++) {
+        for (uint256 i = startIndex; i < endIndex; i++) {
             UserVoteData storage voteData = _userVoteData[msg.sender][i];
 
             if (!voteData.voted || voteData.poClaimed) {
@@ -559,8 +566,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             if (quorumReached) {
                 totalPoToClaim += voteData.votingStreakAtVote;
-
                 voteData.poClaimed = true;
+
+                _lastClaimedProposal[msg.sender] = i + 1;
             }
         }
 
@@ -585,6 +593,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getProposalIndex() external view returns (uint256) {
         return _proposalIndex;
+    }
+
+    /**
+     * @dev returns the number of unclaimed tokens from the user
+     */
+    function getUnclaimedPoTokens(address user) external view returns (uint256) {
+        return _unclaimedTokens[user];
     }
 
     /**
@@ -638,7 +653,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev This function returns comprehensive details of a proposal identified by its unique ID. It ensures the proposal exists before fetching the details. If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
      * @param index The unique identifier (index) of the proposal whose information is being requested. This ID is sequentially assigned to proposals as they are created.
      */
-    function getProposal(uint256 index) external view returns (Proposal memory) {
+    function getProposal(
+        uint256 index
+    ) external view returns (Proposal memory) {
         if (index > _proposalIndex) revert ProposalInexistent();
 
         return
@@ -673,9 +690,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
             10 ** 18;
 
-        bool isProposalOngoing = block.timestamp < _proposals[index].endTimestamp;
+        bool isProposalOngoing = block.timestamp <
+            _proposals[index].endTimestamp;
 
-        bool isProposalActive = _proposals[index].status == ProposalStatus.Active;
+        bool isProposalActive = _proposals[index].status ==
+            ProposalStatus.Active;
 
         bool quorumReached = _proposals[index].quadraticVoting
             ? _proposals[index].votesTotal >= sqrtQuorum
@@ -788,11 +807,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *
      *
      */
-    function _votingChecks(uint index, address voter) internal view {
+    function _votingChecks(uint256 index, address voter) internal view {
         if (index >= _proposalIndex) revert ProposalInexistent();
-        address delegatee = ISciManager(sciManagerAddress).getDelegatee(voter);
-        if (delegatee != address(0) && _userVoteData[delegatee][index].voted) {
-            revert DelegateeHasAlreadyVoted(index, delegatee);
+        address currentDelegatee = ISciManager(sciManagerAddress)
+            .getCurrentDelegatee(voter);
+        if (currentDelegatee != address(0)) revert CannotVoteWhenDelegated();
+        //explicitly check for delegation rather than based on voting power which is 0 after delegating
+        address previousDelegatee = ISciManager(sciManagerAddress)
+            .getPreviousDelegatee(voter);
+        uint256 undelegationTime = ISciManager(sciManagerAddress)
+            .getUndelegationTime(voter);
+        if (
+            previousDelegatee != address(0) && // Ensure there's a previous delegatee
+            _userVoteData[previousDelegatee][index].voted && // Ensure the delegatee voted
+            undelegationTime >=
+            _userVoteData[previousDelegatee][index].initialVoteTimestamp // Undelegation occurred after delegatee voted
+        ) {
+            revert DelegateeHasAlreadyVoted(index, previousDelegatee);
         }
         if (_proposals[index].status != ProposalStatus.Active)
             revert IncorrectPhase(_proposals[index].status);
@@ -821,7 +852,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param support A boolean indicating whether the vote is in support of (true) or against (false) the proposal.
      * @param actualVotes The effective number of votes to record, which may be adjusted for voting type, such as quadratic.
      */
-    function _recordVote(uint256 index, bool support, uint256 actualVotes) internal {
+    function _recordVote(
+        uint256 index,
+        bool support,
+        uint256 actualVotes
+    ) internal {
         UserVoteData storage voteData = _userVoteData[msg.sender][index];
 
         if (voteData.voted) {
@@ -852,7 +887,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
             voteData.votingStreakAtVote = _votingStreak[msg.sender];
 
-            unclaimedTokens[msg.sender] += _votingStreak[msg.sender];
+            _unclaimedTokens[msg.sender] += _votingStreak[msg.sender];
         }
 
         voteData.voted = true;
