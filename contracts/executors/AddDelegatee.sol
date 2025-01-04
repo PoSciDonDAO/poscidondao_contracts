@@ -4,18 +4,18 @@ pragma solidity 0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface ISciManagerAddDelegate {
-    function addDelegate(address newDelegate) external;
+interface ISciManagerAddDelegatee {
+    function addDelegatee(address newDelegatee) external;
     function getCurrentDelegatee(
         address delegator
     ) external view returns (address);
 }
 
 /**
- * @title AddDelegate
- * @dev Handles the addition of a delegate selected by the DAO.
+ * @title AddDelegatee
+ * @dev Handles the addition of a Delegatee selected by the DAO.
  */
-contract AddDelegate is ReentrancyGuard, AccessControl {
+contract AddDelegatee is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error DelegatorCannotBeDelegatee();
 
@@ -45,16 +45,16 @@ contract AddDelegate is ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Execute the proposal to add a delegate
+     * @dev Execute the proposal to add a Delegatee
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        address currentDelegatee = ISciManagerAddDelegate(sciManager)
+        address currentDelegatee = ISciManagerAddDelegatee(sciManager)
             .getCurrentDelegatee(targetWallet);
         if (currentDelegatee != address(0)) {
             revert DelegatorCannotBeDelegatee();
         }
-        ISciManagerAddDelegate(sciManager).addDelegate(targetWallet);
+        ISciManagerAddDelegatee(sciManager).addDelegatee(targetWallet);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
-        emit ActionExecuted(address(this), "AddDelegate");
+        emit ActionExecuted(address(this), "AddDelegatee");
     }
 }
