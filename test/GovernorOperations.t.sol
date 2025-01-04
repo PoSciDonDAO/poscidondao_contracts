@@ -388,7 +388,7 @@ contract GovernorOperationsTest is Test {
         vm.stopPrank();
     }
 
-    function test_VoteMultiple() public {
+    function test_VoteMultipleAndClaimPO() public {
         vm.startPrank(addr2);
         sciManager.lock(2000000e18);
         vm.stopPrank();
@@ -421,6 +421,45 @@ contract GovernorOperationsTest is Test {
         govOps.claimPo();
         vm.stopPrank();
         assertEq(po.balanceOf(addr2, 0), 6);
+    }
+
+    function test_VoteMultipleAndClaimPOMultipleTimes() public {
+        vm.startPrank(addr2);
+        sciManager.lock(2000000e18);
+        vm.stopPrank();
+        vm.startPrank(addr1);
+        sciManager.lock(2000000e18);
+        uint256 id = govOps.getProposalIndex();
+        govOps.propose("Info", address(transaction), false);
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        govOps.voteStandard(id, true);
+        govOps.claimPo();
+        assertEq(po.balanceOf(addr2, 0), 1);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 8 days);
+
+        vm.startPrank(addr1);
+        uint256 id2 = govOps.getProposalIndex();
+        govOps.propose("Info", address(transaction), false);
+        vm.stopPrank();
+        // vm.startPrank(addr2);
+        // govOps.voteStandard(id2, true);
+        // govOps.claimPo();
+        // assertEq(po.balanceOf(addr2, 0), 3);
+        // vm.stopPrank();
+
+        vm.startPrank(addr1);
+        vm.warp(block.timestamp + 15 days);
+        uint256 id3 = govOps.getProposalIndex();
+        govOps.propose("Info", address(transaction), false);
+        vm.stopPrank();
+
+        vm.startPrank(addr2);
+        govOps.voteStandard(id3, true);
+        govOps.claimPo();
+        vm.stopPrank();
+        assertEq(po.balanceOf(addr2, 0), 2);
     }
 
     function test_VoteForProposalWithQuadraticVoting() public {

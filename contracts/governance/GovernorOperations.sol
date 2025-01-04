@@ -100,7 +100,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
-    mapping(address => uint256) private _unclaimedTokens;
     mapping(address => uint256) private _lastClaimedProposal;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
@@ -599,8 +598,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     /**
      * @dev returns the number of unclaimed tokens from the user
      */
-    function getUnclaimedPoTokens(address user) external view returns (uint256) {
-        return _unclaimedTokens[user];
+    function getLastClaimedProposal(address user) external view returns (uint256) {
+        return _lastClaimedProposal[user];
     }
 
     /**
@@ -887,8 +886,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
 
             voteData.votingStreakAtVote = _votingStreak[msg.sender];
-
-            _unclaimedTokens[msg.sender] += _votingStreak[msg.sender];
         }
 
         voteData.voted = true;
