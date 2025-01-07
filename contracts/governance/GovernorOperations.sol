@@ -812,16 +812,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address currentDelegatee = ISciManager(sciManagerAddress)
             .getCurrentDelegatee(voter);
         if (currentDelegatee != address(0)) revert CannotVoteWhenDelegated();
-        //explicitly check for delegation rather than based on voting power which is 0 after delegating
+
         address previousDelegatee = ISciManager(sciManagerAddress)
             .getPreviousDelegatee(voter);
         uint256 undelegationTime = ISciManager(sciManagerAddress)
             .getUndelegationTime(voter);
         if (
-            previousDelegatee != address(0) && // Ensure there's a previous delegatee
-            _userVoteData[previousDelegatee][index].voted && // Ensure the delegatee voted
+            previousDelegatee != address(0) &&
+            _userVoteData[previousDelegatee][index].voted &&
             undelegationTime >=
-            _userVoteData[previousDelegatee][index].initialVoteTimestamp // Undelegation occurred after delegatee voted
+            _userVoteData[previousDelegatee][index].initialVoteTimestamp
         ) {
             revert DelegateeHasAlreadyVoted(index, previousDelegatee);
         }

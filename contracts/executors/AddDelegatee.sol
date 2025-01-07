@@ -9,6 +9,7 @@ interface ISciManagerAddDelegatee {
     function getCurrentDelegatee(
         address delegator
     ) external view returns (address);
+    function getDelegatee(address delegatee) external view returns (bool);
 }
 
 /**
@@ -17,6 +18,7 @@ interface ISciManagerAddDelegatee {
  */
 contract AddDelegatee is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
+    error CannotRedelegateAllowlistedDelegatee();
     error DelegatorCannotBeDelegatee();
 
     address public targetWallet;
@@ -48,6 +50,10 @@ contract AddDelegatee is ReentrancyGuard, AccessControl {
      * @dev Execute the proposal to add a Delegatee
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
+        bool allowlistedDelegatee = ISciManagerAddDelegatee(sciManager)
+            .getDelegatee(targetWallet);
+        if (allowlistedDelegatee) revert CannotRedelegateAllowlistedDelegatee();
+
         address currentDelegatee = ISciManagerAddDelegatee(sciManager)
             .getCurrentDelegatee(targetWallet);
         if (currentDelegatee != address(0)) {

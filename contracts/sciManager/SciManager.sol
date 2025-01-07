@@ -8,6 +8,7 @@ import {ISciManager} from "contracts/interfaces/ISciManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "../../lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
 /**
  * @title SciManager
@@ -15,6 +16,7 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  */
 contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     ///*** ERRORS ***///
     error AlreadyDelegated();
@@ -71,7 +73,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     uint256 private _minDelegationPeriod;
 
     mapping(address => User) public users;
-    mapping(address => bool) private _delegates;
+    mapping(address => bool) private _allowlistedDelegatees;
+    mapping(address => EnumerableSet.AddressSet) private _delegateeToDelegators;
 
     ///*** MODIFIERS ***///
     modifier onlyGov() {
@@ -125,7 +128,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         admin = admin_;
         _sci = IERC20(sci_);
         _delegateeThreshold = 50000e18;
-        _delegates[address(0)] = true;
+        _allowlistedDelegatees[address(0)] = true;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
         _minDelegationPeriod = 15 minutes;
     }
@@ -160,7 +163,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @param newDelegatee Address to be added to the whitelist
      */
     function addDelegatee(address newDelegatee) external onlyExecutor {
-        if (_delegates[newDelegatee]) {
+        if (_allowlistedDelegatees[newDelegatee]) {
             revert DelegateeAlreadyAdded(newDelegatee);
         }
         if (
@@ -171,7 +174,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
                 users[newDelegatee].lockedSci,
                 _delegateeThreshold
             );
-        _delegates[newDelegatee] = true;
+        _allowlistedDelegatees[newDelegatee] = true;
         emit DelegateAdded(newDelegatee);
     }
 
@@ -180,10 +183,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      * @param formerDelegatee Address to be removed from the whitelist
      */
     function removeDelegatee(address formerDelegatee) external onlyExecutor {
-        if (!_delegates[formerDelegatee]) {
+        if (!_allowlistedDelegatees[formerDelegatee]) {
             revert DelegateeNotAllowListed(formerDelegatee);
         }
-        _delegates[formerDelegatee] = false;
+        _allowlistedDelegatees[formerDelegatee] = false;
         emit DelegateRemoved(formerDelegatee);
     }
 
@@ -229,25 +232,27 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev _delegates the owner's voting rights
+     * @dev _allowlistedDelegatees the owner's voting rights
      * @param newDelegatee user that will receive the delegated voting rights
      */
     function delegate(address newDelegatee) external nonReentrant {
         address owner = msg.sender;
-        address oldDelegate = users[owner].delegatee;
+        address oldDelegatee = users[owner].delegatee;
         uint256 lockedSci = users[owner].lockedSci;
 
         if (emergency && newDelegatee != address(0)) {
             revert CannotDelegateDuringEmergency();
         }
 
-        if (newDelegatee != address(0) && !_delegates[newDelegatee]) {
+        if (
+            newDelegatee != address(0) && !_allowlistedDelegatees[newDelegatee]
+        ) {
             revert DelegateeNotAllowListed(newDelegatee);
         }
 
         if (owner == newDelegatee) revert SelfDelegationNotAllowed();
 
-        if (oldDelegate == newDelegatee) revert AlreadyDelegated();
+        if (oldDelegatee == newDelegatee) revert AlreadyDelegated();
 
         if (lockedSci == 0 && newDelegatee != address(0)) {
             revert NoVotingPowerToDelegate();
@@ -257,7 +262,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             revert CannotDelegateToAnotherDelegator();
         }
 
-        if (oldDelegate != address(0)) {
+        if (oldDelegatee != address(0)) {
             if (
                 !emergency &&
                 block.timestamp <
@@ -268,13 +273,13 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             users[owner].voteLockEnd = Math.max(
                 users[owner].voteLockEnd,
-                users[oldDelegate].voteLockEnd
+                users[oldDelegatee].voteLockEnd
             );
             emit VoteLockEndTimeUpdated(owner, users[owner].voteLockEnd);
 
-            users[oldDelegate].votingRights -= lockedSci;
+            users[oldDelegatee].votingRights -= lockedSci;
 
-            _snapshot(oldDelegate, users[oldDelegate].votingRights);
+            _snapshot(oldDelegatee, users[oldDelegatee].votingRights);
 
             users[owner].votingRights += lockedSci;
 
@@ -282,9 +287,11 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
             _totDelegated -= lockedSci;
 
-            users[owner].previousDelegatee = oldDelegate;
+            users[owner].previousDelegatee = oldDelegatee;
 
             users[owner].undelegationTime = block.timestamp;
+
+            _delegateeToDelegators[oldDelegatee].remove(owner);
         }
 
         if (newDelegatee != address(0)) {
@@ -307,15 +314,17 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
                 users[owner].voteLockEnd
             );
             emit VoteLockEndTimeUpdated(owner, users[owner].voteLockEnd);
+
+            _delegateeToDelegators[newDelegatee].add(owner);
         } else {
             users[owner].delegatee = address(0);
 
-            users[owner].previousDelegatee = oldDelegate;
+            users[owner].previousDelegatee = oldDelegatee;
 
             users[owner].undelegationTime = block.timestamp;
         }
 
-        emit Delegated(owner, oldDelegate, newDelegatee, lockedSci);
+        emit Delegated(owner, oldDelegatee, newDelegatee, lockedSci);
     }
 
     /**
@@ -536,6 +545,16 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
+    * @dev Returns the list of all delegators for a specified delegatee.
+    * @param delegatee The address of the delegatee.
+    */
+    function getDelegators(
+        address delegatee
+    ) external view returns (address[] memory) {
+        return _delegateeToDelegators[delegatee].values();
+    }
+
+    /**
      * @dev returns the current threshold to become a delegate.
      */
     function getDelegateThreshold() external view returns (uint256) {
@@ -545,8 +564,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev returns true if address is a DAO-elected delegate
      */
-    function getDelegate(address delegateAddress) external view returns (bool) {
-        return _delegates[delegateAddress];
+    function getDelegatee(address delegatee) external view returns (bool) {
+        return _allowlistedDelegatees[delegatee];
     }
 
     /**
