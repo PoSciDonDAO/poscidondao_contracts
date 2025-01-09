@@ -7,6 +7,7 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 import {ISciManager} from "contracts/interfaces/ISciManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
+import "./../interfaces/IGovernorOperations.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
@@ -23,6 +24,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error CannotBeZero();
     error CannotBeZeroAddress();
     error CannotClaim();
+    error CannotDelegateVotingPowerIfJustVoted();
     error CannotDelegateToAnotherDelegator();
     error CannotDelegateToContract();
     error CannotDelegateDuringEmergency();
@@ -50,7 +52,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address delegatee; //Address of the delegatee
         uint256 delegationTime; // Last delegation timestamp
         uint256 undelegationTime; // Last undelegation timestamp
-        address previousDelegatee; //Last delegatee the user delegated to
+        address previousDelegatee; //Last delegatee the user delegatee to
         mapping(uint256 => Snapshot) snapshots; //Index => snapshot
     }
 
@@ -65,6 +67,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     address public admin;
     address public govOpsContract;
     address public govResContract;
+    IGovernorOperations _govOps;
     IGovernorExecution _govExec;
     uint256 private _totLocked;
     uint256 private _totDelegated;
@@ -207,6 +210,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govOpsContract = newGovOps;
+        _govOps = IGovernorOperations(newGovOps);
         emit GovOpsSet(msg.sender, newGovOps);
     }
 
@@ -233,7 +237,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
     /**
      * @dev _allowlistedDelegatees the owner's voting rights
-     * @param newDelegatee user that will receive the delegated voting rights
+     * @param newDelegatee user that will receive the delegatee voting rights
      */
     function delegate(address newDelegatee) external nonReentrant {
         address owner = msg.sender;
@@ -242,6 +246,10 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         if (emergency && newDelegatee != address(0)) {
             revert CannotDelegateDuringEmergency();
+        }
+
+        if (!_govOps.canDelegateVotingPower(msg.sender)) {
+           revert CannotDelegateVotingPowerIfJustVoted(); 
         }
 
         if (
@@ -340,11 +348,11 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         _totLocked += amount;
 
-        address delegated = users[msg.sender].delegatee;
-        if (delegated != address(0)) {
-            users[delegated].votingRights += amount;
+        address delegatee = users[msg.sender].delegatee;
+        if (delegatee != address(0)) {
+            users[delegatee].votingRights += amount;
 
-            _snapshot(delegated, users[delegated].votingRights);
+            _snapshot(delegatee, users[delegatee].votingRights);
 
             _totDelegated += amount;
 
@@ -394,21 +402,21 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         _totLocked -= amount;
 
-        address delegated = users[msg.sender].delegatee;
-        if (delegated != address(0)) {
-            if (users[delegated].votingRights < amount) {
+        address delegatee = users[msg.sender].delegatee;
+        if (delegatee != address(0)) {
+            if (users[delegatee].votingRights < amount) {
                 revert InsufficientBalance(
-                    users[delegated].votingRights,
+                    users[delegatee].votingRights,
                     amount
                 );
             }
-            users[delegated].votingRights -= amount;
+            users[delegatee].votingRights -= amount;
 
-            _snapshot(delegated, users[delegated].votingRights);
+            _snapshot(delegatee, users[delegatee].votingRights);
 
             if (_totDelegated < amount) {
                 revert InsufficientBalance(
-                    users[delegated].votingRights,
+                    users[delegatee].votingRights,
                     amount
                 );
             }
@@ -419,6 +427,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
                     .delegatee;
                 users[msg.sender].undelegationTime = block.timestamp;
                 users[msg.sender].delegatee = address(0);
+                _delegateeToDelegators[delegatee].remove(msg.sender);
             }
         } else {
             if (users[msg.sender].votingRights < amount) {
@@ -518,7 +527,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the time at which the delegator delegated their voting power.
+     * @dev returns the time at which the delegator delegatee their voting power.
      * @param delegator The address of the delegator.
      */
     function getDelegationTime(
@@ -545,9 +554,9 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-    * @dev Returns the list of all delegators for a specified delegatee.
-    * @param delegatee The address of the delegatee.
-    */
+     * @dev Returns the list of all delegators for a specified delegatee.
+     * @param delegatee The address of the delegatee.
+     */
     function getDelegators(
         address delegatee
     ) external view returns (address[] memory) {
@@ -583,7 +592,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the total amount of delegated SCI tokens
+     * @dev returns the total amount of delegatee SCI tokens
      */
     function getTotalDelegated() external view returns (uint256) {
         return _totDelegated;
@@ -629,6 +638,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         if (snap.atBlock > blockNum) revert IncorrectBlockNumber();
         return snap.rights;
     }
+
+
 
     ///*** INTERNAL FUNCTIONS ***///
 

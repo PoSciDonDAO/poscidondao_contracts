@@ -101,6 +101,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
     mapping(address => uint256) private _lastClaimedProposal;
+    mapping(address => uint256) private _latestVoteTimestamp;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
     ///*** ROLES ***///
@@ -582,28 +583,39 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the PO token address
+     * @dev Returns the PO token address
      */
     function getPoToken() external view returns (address) {
         return address(_po);
     }
 
     /**
-     * @dev returns the operations proposal _proposalIndex
+     * @dev Returns the operations proposal _proposalIndex
      */
     function getProposalIndex() external view returns (uint256) {
         return _proposalIndex;
     }
 
     /**
-     * @dev returns the number of unclaimed tokens from the user
+     * @dev Returns the number of unclaimed tokens from the user
      */
-    function getLastClaimedProposal(address user) external view returns (uint256) {
+    function getLastClaimedProposal(
+        address user
+    ) external view returns (uint256) {
         return _lastClaimedProposal[user];
     }
 
     /**
-     * @dev returns the _signer address
+     * @dev Returns the latest vote timestamp from the user
+     */
+    function getLatestVoteTimestamp(
+        address user
+    ) external view returns (uint256) {
+        return _latestVoteTimestamp[user];
+    }
+
+    /**
+     * @dev Returns the _signer address
      */
     function getSigner()
         external
@@ -618,11 +630,26 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Retrieves the current governance parameters.
      */
     function getGovernanceParameters()
-        public
+        external
         view
         returns (GovernanceParameters memory)
     {
         return governanceParams;
+    }
+
+    /**
+     * @dev Retrieves if the user can delegate voting power.
+     */
+    function canDelegateVotingPower(address user) external view returns (bool) {
+        uint256 latestVoteTime = _latestVoteTimestamp[user];
+
+        if (latestVoteTime == 0) {
+            return true;
+        }
+
+        return
+            latestVoteTime + governanceParams.proposalLifetime <=
+            block.timestamp;
     }
 
     /**
@@ -895,6 +922,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (voteData.initialVoteTimestamp == 0) {
             voteData.initialVoteTimestamp = block.timestamp;
         }
+
+        _latestVoteTimestamp[msg.sender] = block.timestamp;
 
         ISciManager(sciManagerAddress).voted(
             msg.sender,
