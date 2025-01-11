@@ -26,7 +26,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotExecute();
     error CannotVoteOnQVProposals();
     error CannotVoteWhenDelegated();
-    error DelegateeHasAlreadyVoted(uint256 index, address delegatee);
     error ExecutableProposalsCannotBeCompleted();
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
@@ -638,21 +637,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Retrieves if the user can delegate voting power.
-     */
-    function canDelegateVotingPower(address user) external view returns (bool) {
-        uint256 latestVoteTime = _latestVoteTimestamp[user];
-
-        if (latestVoteTime == 0) {
-            return true;
-        }
-
-        return
-            latestVoteTime + governanceParams.proposalLifetime <=
-            block.timestamp;
-    }
-
-    /**
      * @notice Retrieves voting data for a specific user on a specific proposal.
      * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
      *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
@@ -836,22 +820,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _votingChecks(uint256 index, address voter) internal view {
         if (index >= _proposalIndex) revert ProposalInexistent();
-        address currentDelegatee = ISciManager(sciManagerAddress)
-            .getCurrentDelegatee(voter);
-        if (currentDelegatee != address(0)) revert CannotVoteWhenDelegated();
 
-        address previousDelegatee = ISciManager(sciManagerAddress)
-            .getPreviousDelegatee(voter);
-        uint256 undelegationTime = ISciManager(sciManagerAddress)
-            .getUndelegationTime(voter);
-        if (
-            previousDelegatee != address(0) &&
-            _userVoteData[previousDelegatee][index].voted &&
-            undelegationTime >=
-            _userVoteData[previousDelegatee][index].initialVoteTimestamp
-        ) {
-            revert DelegateeHasAlreadyVoted(index, previousDelegatee);
-        }
         if (_proposals[index].status != ProposalStatus.Active)
             revert IncorrectPhase(_proposals[index].status);
         if (block.timestamp > _proposals[index].endTimestamp)
