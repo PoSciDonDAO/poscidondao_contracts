@@ -7,7 +7,6 @@ import {SafeERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/
 import {ISciManager} from "contracts/interfaces/ISciManager.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/math/Math.sol";
 import "./../interfaces/IGovernorExecution.sol";
-import "./../interfaces/IGovernorOperations.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
@@ -98,7 +97,6 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         }
         admin = admin_;
         _sci = IERC20(sci_);
-        _delegateeThreshold = 50000e18;
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
@@ -133,7 +131,6 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         govOpsContract = newGovOps;
-        _govOps = IGovernorOperations(newGovOps);
         emit GovOpsSet(msg.sender, newGovOps);
     }
 

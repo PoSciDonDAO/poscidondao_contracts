@@ -25,7 +25,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotBeZeroAddress();
     error CannotExecute();
     error CannotVoteOnQVProposals();
-    error CannotVoteWhenDelegated();
     error ExecutableProposalsCannotBeCompleted();
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
@@ -278,10 +277,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
-        if (
-            param == "proposalLifetime" &&
-            data < ISciManager(sciManagerAddress).getMinDelegationPeriod()
-        ) governanceParams.proposalLifetime = data;
+        if (param == "proposalLifetime")
+            governanceParams.proposalLifetime = data;
         else if (param == "quorum") governanceParams.quorum = data;
         else if (param == "voteLockTime") governanceParams.voteLockTime = data;
         else if (param == "proposeLockTime")
