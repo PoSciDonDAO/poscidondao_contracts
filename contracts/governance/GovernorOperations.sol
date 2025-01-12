@@ -42,6 +42,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 proposalEndTimestamp
     );
     error ProposalNotPassed();
+    error ProposalTooNew();
     error QuorumNotReached(uint256 index, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
@@ -51,7 +52,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STRUCTS ***///
     struct Proposal {
         string info;
-        uint256 startBlockNum;
+        uint256 startTimestamp;
         uint256 endTimestamp;
         ProposalStatus status;
         address action;
@@ -72,6 +73,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 opThreshold;
         uint256 maxVotingStreak;
         uint256 votingRightsThreshold;
+        uint256 votingDelay;
     }
 
     struct UserVoteData {
@@ -142,7 +144,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 indexed index,
         address indexed user,
         string info,
-        uint256 startBlockNum,
+        uint256 startTimestamp,
         uint256 endTimestamp,
         address action,
         bool executable,
@@ -189,12 +191,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
-        governanceParams.proposalLifetime = 30 minutes;
-        governanceParams.voteLockTime = 0; //normally 1 week
-        governanceParams.proposeLockTime = 0; //normally 1 week
-        governanceParams.voteChangeTime = 10 minutes; //normally 1 hour
-        governanceParams.voteChangeCutOff = 10 minutes; //normally 3 days
+        governanceParams.proposalLifetime = 3 weeks;
+        governanceParams.voteLockTime = 3 weeks; //normally 3 weeks
+        governanceParams.proposeLockTime = 3 weeks; //normally 3 weeks
+        governanceParams.voteChangeTime = 1 hours; //normally 1 hour
+        governanceParams.voteChangeCutOff = 3 days; //normally 3 days
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
+        governanceParams.votingDelay = 5 minutes; //5 minutes to prevent flash loan attacks
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -291,7 +294,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
             governanceParams.maxVotingStreak = data;
         else if (param == "votingRightsThreshold")
-            governanceParams.votingRightsThreshold = data;
+            governanceParams.votingRightsThreshold = data; 
+
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -321,6 +325,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             governanceParams.maxVotingStreak = data;
         else if (param == "votingRightsThreshold")
             governanceParams.votingRightsThreshold = data;
+        else if (param == "votingDelay") governanceParams.votingDelay = data; //only by admin
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -364,7 +369,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             currentIndex,
             msg.sender,
             _proposals[currentIndex].info,
-            _proposals[currentIndex].startBlockNum,
+            _proposals[currentIndex].startTimestamp,
             _proposals[currentIndex].endTimestamp,
             _proposals[currentIndex].action,
             _proposals[currentIndex].executable,
@@ -669,7 +674,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return
             Proposal(
                 _proposals[index].info,
-                _proposals[index].startBlockNum,
+                _proposals[index].startTimestamp,
                 _proposals[index].endTimestamp,
                 _proposals[index].status,
                 _proposals[index].action,
@@ -817,7 +822,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _votingChecks(uint256 index, address voter) internal view {
         if (index >= _proposalIndex) revert ProposalInexistent();
-
+        if (block.timestamp < _proposals[index].startTimestamp + governanceParams.votingDelay)
+            revert ProposalTooNew();
         if (_proposals[index].status != ProposalStatus.Active)
             revert IncorrectPhase(_proposals[index].status);
         if (block.timestamp > _proposals[index].endTimestamp)
@@ -940,7 +946,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) internal returns (uint256) {
         Proposal memory proposal = Proposal(
             info,
-            block.number,
+            block.timestamp,
             block.timestamp + governanceParams.proposalLifetime,
             ProposalStatus.Active,
             action,
