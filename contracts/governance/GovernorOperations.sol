@@ -134,7 +134,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminUpdated(address indexed user, address indexed newAddress);
-    event Claimed(address indexed claimer, uint256 poToClaim);
+    event Claimed(address indexed claimer, uint256 amount);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
