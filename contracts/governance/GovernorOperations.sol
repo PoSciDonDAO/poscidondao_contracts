@@ -30,6 +30,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InvalidInput();
     error InvalidGovernanceParameter();
+    error VoteLockShorterThanProposal(
+        uint256 voteLockTime,
+        uint256 proposalLifetime
+    );
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error NoTokensToClaim();
     error ProposalNotCancelable();
@@ -280,10 +284,21 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
-        if (param == "proposalLifetime")
+        if (param == "proposalLifetime") {
+            if (data > governanceParams.voteLockTime)
+                revert VoteLockShorterThanProposal(
+                    governanceParams.voteLockTime,
+                    data
+                );
             governanceParams.proposalLifetime = data;
-        else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        } else if (param == "voteLockTime") {
+            if (data < governanceParams.proposalLifetime)
+                revert VoteLockShorterThanProposal(
+                    data,
+                    governanceParams.proposalLifetime
+                );
+            governanceParams.voteLockTime = data;
+        } else if (param == "quorum") governanceParams.quorum = data;
         else if (param == "proposeLockTime")
             governanceParams.proposeLockTime = data;
         else if (param == "voteChangeTime")
@@ -309,10 +324,21 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (param == "proposalLifetime")
+        if (param == "proposalLifetime") {
+            if (data > governanceParams.voteLockTime)
+                revert VoteLockShorterThanProposal(
+                    governanceParams.voteLockTime,
+                    data
+                );
             governanceParams.proposalLifetime = data;
-        else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
+        } else if (param == "voteLockTime") {
+            if (data < governanceParams.proposalLifetime)
+                revert VoteLockShorterThanProposal(
+                    data,
+                    governanceParams.proposalLifetime
+                );
+            governanceParams.voteLockTime = data;
+        } else if (param == "quorum") governanceParams.quorum = data;
         else if (param == "proposeLockTime")
             governanceParams.proposeLockTime = data;
         else if (param == "voteChangeTime")
@@ -345,6 +371,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) external nonReentrant returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
 
+        if (governanceParams.voteLockTime < governanceParams.proposalLifetime) {
+            revert VoteLockShorterThanProposal(
+                governanceParams.voteLockTime,
+                governanceParams.proposalLifetime
+            );
+        }
         bool executable;
 
         if (action == address(0)) {
@@ -536,10 +568,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (block.timestamp < _proposals[index].endTimestamp)
             revert ProposalOngoing(
-                    index,
-                    block.timestamp,
-                    _proposals[index].endTimestamp
-                );
+                index,
+                block.timestamp,
+                _proposals[index].endTimestamp
+            );
 
         bool schedulable = _proposalSchedulingChecks(index, false);
 
