@@ -294,8 +294,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
             governanceParams.maxVotingStreak = data;
         else if (param == "votingRightsThreshold")
-            governanceParams.votingRightsThreshold = data; 
-
+            governanceParams.votingRightsThreshold = data;
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -325,7 +324,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             governanceParams.maxVotingStreak = data;
         else if (param == "votingRightsThreshold")
             governanceParams.votingRightsThreshold = data;
-        else if (param == "votingDelay") governanceParams.votingDelay = data; //only by admin
+        else if (param == "votingDelay")
+            governanceParams.votingDelay = data; //only by admin
         else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
@@ -533,6 +533,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (index >= _proposalIndex) revert ProposalInexistent();
         if (_proposals[index].status == ProposalStatus.Canceled)
             revert IncorrectPhase(_proposals[index].status);
+
+        if (block.timestamp < _proposals[index].endTimestamp)
+            revert ProposalOngoing(
+                    index,
+                    block.timestamp,
+                    _proposals[index].endTimestamp
+                );
 
         bool schedulable = _proposalSchedulingChecks(index, false);
 
@@ -822,8 +829,10 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function _votingChecks(uint256 index, address voter) internal view {
         if (index >= _proposalIndex) revert ProposalInexistent();
-        if (block.timestamp < _proposals[index].startTimestamp + governanceParams.votingDelay)
-            revert ProposalTooNew();
+        if (
+            block.timestamp <
+            _proposals[index].startTimestamp + governanceParams.votingDelay
+        ) revert ProposalTooNew();
         if (_proposals[index].status != ProposalStatus.Active)
             revert IncorrectPhase(_proposals[index].status);
         if (block.timestamp > _proposals[index].endTimestamp)
