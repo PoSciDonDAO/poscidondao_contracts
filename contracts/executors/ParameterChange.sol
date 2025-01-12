@@ -16,9 +16,9 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
 
-    address public gov;
-    address public governorExecutor;
-    uint256 public data;
+    address public immutable gov;
+    address public immutable governorExecutor;
+    uint256 public immutable data;
     bytes32 public param;
     string public humanReadableParam;
 

@@ -17,12 +17,12 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZero();
     error CannotBeZeroAddress();
 
-    address public usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
-    address public sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
-    address public targetWallet;
-    uint256 public amountUsdc;
-    uint256 public amountSci;
-    address public fundingWallet;
+    address public constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
+    address public constant sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
+    address public immutable targetWallet;
+    uint256 public immutable amountUsdc;
+    uint256 public immutable amountSci;
+    address public immutable fundingWallet;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 

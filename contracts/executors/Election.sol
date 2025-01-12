@@ -19,8 +19,8 @@ contract Election is ReentrancyGuard, AccessControl {
     error AddressAlreadyHasDDRole();
 
     address[] internal _targetWallets;
-    address public governorResearch;
-    address public governorExecutor;
+    address public immutable governorResearch;
+    address public immutable governorExecutor;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     event ActionExecuted(address indexed action, string indexed contractName);
