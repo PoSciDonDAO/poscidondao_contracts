@@ -386,9 +386,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (action == address(0)) {
             executable = false;
         } else {
+            uint256 codeSize;
+            assembly {
+                codeSize := extcodesize(action)
+            }
+            if (codeSize == 0) {
+                revert InvalidActionContract(action);
+            }
             executable = true;
         }
-
+        
         ISciManager sciManager = ISciManager(sciManagerAddress);
 
         _validateLockingRequirements(sciManager, msg.sender);

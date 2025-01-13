@@ -116,31 +116,33 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the GovernorExecution address
+     * @dev sets the GovernorExecution contract address
      */
     function setGovExec(
-        address newGovernorAddress
+        address newGovernorExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _govExec = IGovernorExecution(newGovernorAddress);
-        emit GovExecSet(msg.sender, newGovernorAddress);
+        _govExec = IGovernorExecution(newGovernorExec);
+        emit GovExecSet(msg.sender, newGovernorExec);
     }
 
     /**
-     * @dev sets the address of the operations governance smart contract
+     * @dev sets the GovernorOperations contract address
      */
     function setGovOps(
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovOps == address(0)) revert CannotBeZeroAddress();
         govOpsContract = newGovOps;
         emit GovOpsSet(msg.sender, newGovOps);
     }
 
     /**
-     * @dev sets the address of the operations governance smart contract
+     * @dev sets the GovernorResearch contract address
      */
     function setGovRes(
         address newGovRes
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovRes == address(0)) revert CannotBeZeroAddress();
         govResContract = newGovRes;
         emit GovResSet(msg.sender, newGovRes);
     }
@@ -154,17 +156,23 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
             revert CannotBeZero();
         }
 
-        users[msg.sender].lockedSci += amount;
-
-        _totLocked += amount;
-
-        users[msg.sender].votingRights += amount;
-
-        _snapshot(msg.sender, users[msg.sender].votingRights);
+        uint256 balanceBefore = IERC20(_sci).balanceOf(address(this));
 
         IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
 
-        emit Locked(msg.sender, address(_sci), amount);
+        uint256 balanceAfter = IERC20(_sci).balanceOf(address(this));
+
+        uint256 actualAmount = balanceAfter - balanceBefore;
+
+        users[msg.sender].lockedSci += actualAmount;
+
+        _totLocked += actualAmount;
+
+        users[msg.sender].votingRights += actualAmount;
+
+        _snapshot(msg.sender, users[msg.sender].votingRights);
+
+        emit Locked(msg.sender, address(_sci), actualAmount);
     }
 
     /**
@@ -230,8 +238,9 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     ) external onlyGov returns (bool) {
         if (users[user].voteLockEnd < voteLockEnd) {
             users[user].voteLockEnd = voteLockEnd;
+            emit VoteLockEndTimeUpdated(user, voteLockEnd);
         }
-        emit VoteLockEndTimeUpdated(user, voteLockEnd);
+
         return true;
     }
 
@@ -246,8 +255,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     ) external onlyGov returns (bool) {
         if (users[user].proposeLockEnd < proposeLockEnd) {
             users[user].proposeLockEnd = proposeLockEnd;
+            emit ProposeLockEndTimeUpdated(user, proposeLockEnd);
         }
-        emit ProposeLockEndTimeUpdated(user, proposeLockEnd);
         return true;
     }
 
