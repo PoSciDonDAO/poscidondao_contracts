@@ -20,9 +20,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     error TooEarly(uint256 currentTime, uint256 scheduledTime);
 
     uint256 public delay;
-    address public admin;
+    address public immutable admin;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
-    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     mapping(address => uint256) public scheduledTime;
 
@@ -45,7 +44,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             govRes_ == address(0)
         ) revert CannotBeZeroAddress();
 
-        if(delay_ == 0) {
+        if (delay_ == 0) {
             revert CannotBeZero();
         }
 
@@ -63,7 +62,9 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
      * @dev Update delay time
      * @param newDelay the updated time between proposal scheduling and execution
      */
-    function updateDelay(uint56 newDelay) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateDelay(
+        uint56 newDelay
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         delay = newDelay;
         emit DelayUpdated(newDelay);
     }
@@ -142,17 +143,12 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert TooEarly(block.timestamp, scheduled);
         }
 
-        _grantRole(EXECUTOR_ROLE, action);
-
         (bool success, ) = action.call(abi.encodeWithSignature("execute()"));
         if (!success) {
             revert ExecutionFailed();
-
         }
         scheduledTime[action] = 0;
 
-        _revokeRole(EXECUTOR_ROLE, action);
-        
         emit Executed(action);
     }
 }

@@ -13,7 +13,6 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  * It integrates with external contracts for sciManager validation, participation and proposal execution.
  */
 contract GovernorResearch is AccessControl, ReentrancyGuard {
-    
     ///*** ERRORS ***///
     error CannotBeZeroAddress();
     error CannotComplete();
@@ -24,7 +23,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidGovernanceParameter();
     error ProposalLifetimePassed();
     error ProposalNotPassed();
-    error ProposalOngoing(uint256 index, uint256 currentBlock, uint256 endBlock);
+    error ProposalOngoing(
+        uint256 index,
+        uint256 currentBlock,
+        uint256 endBlock
+    );
     error ProposalInexistent();
     error QuorumNotReached(uint256 index, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
@@ -125,10 +128,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool executable
     );
     event SciManagerUpdated(address indexed user, address indexed newAddress);
-    event StatusUpdated(
-        uint256 indexed index,
-        ProposalStatus indexed status
-    );
+    event StatusUpdated(uint256 indexed index, ProposalStatus indexed status);
     event ResearchFundingWalletUpdated(
         address indexed user,
         address indexed setNewResearchFundingWallet
@@ -259,9 +259,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev checks if user has the DD role
      * @param member the address of the DAO member
      */
-    function checkDueDiligenceRole(
-        address member
-    ) public view returns (bool) {
+    function checkDueDiligenceRole(address member) public view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -382,10 +380,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             _proposals[currentIndex].executable
         );
 
-        emit StatusUpdated(
-            currentIndex,
-            _proposals[currentIndex].status
-        );
+        emit StatusUpdated(currentIndex, _proposals[currentIndex].status);
 
         emit VotesUpdated(
             currentIndex,
@@ -433,10 +428,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             }
             _proposals[index].status = ProposalStatus.Scheduled;
 
-            emit StatusUpdated(
-                index,
-                _proposals[index].status
-            );
+            emit StatusUpdated(index, _proposals[index].status);
         }
     }
 
@@ -447,8 +439,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function execute(
         uint256 index
     ) external payable nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
-        // Check if proposal exists and has finalized voting
         if (index >= _proposalIndex) revert ProposalInexistent();
+
         if (_proposals[index].status != ProposalStatus.Scheduled)
             revert IncorrectPhase(_proposals[index].status);
 
@@ -458,10 +450,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         _proposals[index].status = ProposalStatus.Executed;
 
-        emit StatusUpdated(
-            index,
-            _proposals[index].status
-        );
+        emit StatusUpdated(index, _proposals[index].status);
     }
 
     /**
@@ -482,10 +471,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         _proposals[index].status = ProposalStatus.Completed;
 
-        emit StatusUpdated(
-            index,
-            _proposals[index].status
-        );
+        emit StatusUpdated(index, _proposals[index].status);
     }
 
     /**
@@ -497,15 +483,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             _proposals[index].status == ProposalStatus.Executed ||
             _proposals[index].status == ProposalStatus.Canceled
         ) revert IncorrectPhase(_proposals[index].status);
-        
-        if (_proposals[index].executable) _govExec.cancel(_proposals[index].action);
+
+        if (_proposals[index].executable)
+            _govExec.cancel(_proposals[index].action);
 
         _proposals[index].status = ProposalStatus.Canceled;
 
-        emit StatusUpdated(
-            index,
-            _proposals[index].status
-        );
+        emit StatusUpdated(index, _proposals[index].status);
     }
 
     /**
@@ -516,19 +500,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 index
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         if (index >= _proposalIndex) revert ProposalInexistent();
-        if (
-            _proposals[index].status == ProposalStatus.Canceled
-        ) revert IncorrectPhase(_proposals[index].status);
-        
+        if (_proposals[index].status == ProposalStatus.Canceled)
+            revert IncorrectPhase(_proposals[index].status);
+            
+        if (block.timestamp < _proposals[index].endTimestamp)
+            revert ProposalOngoing(
+                index,
+                block.timestamp,
+                _proposals[index].endTimestamp
+            );
         bool schedulable = _proposalSchedulingChecks(index, false);
 
         if (!schedulable) {
             _proposals[index].status = ProposalStatus.Canceled;
 
-            emit StatusUpdated(
-                index,
-                _proposals[index].status
-            );
+            emit StatusUpdated(index, _proposals[index].status);
         }
     }
 
@@ -619,9 +605,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 index,
         bool revertable
     ) internal view returns (bool) {
-        bool isProposalOngoing = block.timestamp < _proposals[index].endTimestamp;
+        bool isProposalOngoing = block.timestamp <
+            _proposals[index].endTimestamp;
 
-        bool isProposalActive = _proposals[index].status == ProposalStatus.Active;
+        bool isProposalActive = _proposals[index].status ==
+            ProposalStatus.Active;
 
         bool quorumReached = _proposals[index].votesTotal >=
             governanceParams.quorum;
