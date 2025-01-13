@@ -77,7 +77,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     uint256 constant _VOTE = 1;
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private _proposals;
-    mapping(address => uint8) private _proposedResearch;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
     ///*** ROLES ***///
@@ -112,7 +111,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event AdminUpdated(address indexed user, address indexed newAddress);
+    event AdminSet(address indexed user, address indexed newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
     event Impeached(address indexed impeached);
@@ -265,24 +264,27 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin The address to be set as the new admin.
+     * @param newAdmin_ The address to be set as the new admin.
      */
-    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if(newAdmin == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
-        admin = newAdmin;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        admin = newAdmin_;
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit AdminUpdated(oldAdmin, newAdmin);
+        emit AdminSet(oldAdmin, newAdmin_);
     }
 
     /**
      * @dev sets the research funding wallet address
      */
     function setResearchFundingWallet(
-        address newresearchFundingWallet
+        address newResearchFundingWallet
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        researchFundingWallet = newresearchFundingWallet;
-        emit ResearchFundingWalletUpdated(msg.sender, newresearchFundingWallet);
+        if (newResearchFundingWallet == address(0))
+            revert CannotBeZeroAddress();
+        researchFundingWallet = newResearchFundingWallet;
+        emit ResearchFundingWalletUpdated(msg.sender, newResearchFundingWallet);
     }
 
     /**
@@ -291,6 +293,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function setSciManagerAddress(
         address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
         sciManagerAddress = newSciManagerAddress;
         emit SciManagerUpdated(msg.sender, newSciManagerAddress);
     }
@@ -438,7 +441,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function execute(
         uint256 index
-    ) external payable nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
+    ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) {
         if (index >= _proposalIndex) revert ProposalInexistent();
 
         if (_proposals[index].status != ProposalStatus.Scheduled)
@@ -502,7 +505,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (index >= _proposalIndex) revert ProposalInexistent();
         if (_proposals[index].status == ProposalStatus.Canceled)
             revert IncorrectPhase(_proposals[index].status);
-            
+
         if (block.timestamp < _proposals[index].endTimestamp)
             revert ProposalOngoing(
                 index,

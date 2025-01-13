@@ -213,6 +213,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param newAdmin The address to be set as the new admin.
      */
     function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAdmin == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
@@ -227,6 +228,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setSciManagerAddress(
         address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
         sciManagerAddress = newSciManagerAddress;
         emit SciManagerUpdated(msg.sender, newSciManagerAddress);
     }
@@ -238,6 +240,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovExec(
         address newGovExecAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovExecAddress == address(0)) revert CannotBeZeroAddress();
         _govExec = IGovernorExecution(newGovExecAddress);
         emit GovExecUpdated(msg.sender, newGovExecAddress);
     }
@@ -250,6 +253,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     function setGovGuard(
         address newGovGuardAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovGuardAddress == address(0)) revert CannotBeZeroAddress();
         _govGuard = IGovernorGuard(newGovGuardAddress);
         _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit GovGuardUpdated(msg.sender, newGovGuardAddress);
@@ -501,7 +505,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Executes a scheduled proposal
      * @param index The ID of the proposal to be executed.
      */
-    function execute(uint256 index) external payable nonReentrant {
+    function execute(uint256 index) external nonReentrant {
         if (index >= _proposalIndex) revert ProposalInexistent();
 
         if (_proposals[index].status != ProposalStatus.Scheduled)

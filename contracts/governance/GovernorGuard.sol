@@ -16,7 +16,7 @@ contract GovernorGuard is AccessControl {
     IGovernorCancel public govOps;
     IGovernorCancel public govRes;
 
-    event SetNewAdmin(address indexed user, address indexed newAdmin);
+    event AdminSet(address indexed user, address indexed newAdmin);
 
     error CannotBeZeroAddress();
     error ProposalAlreadyDropped(uint256 id);
@@ -41,11 +41,12 @@ contract GovernorGuard is AccessControl {
      * @param newAdmin_ The address to be set as the new admin.
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if(newAdmin == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit SetNewAdmin(oldAdmin, newAdmin_);
+        emit AdminSet(oldAdmin, newAdmin_);
     }
 
     /**

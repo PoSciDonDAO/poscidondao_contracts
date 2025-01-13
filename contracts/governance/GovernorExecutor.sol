@@ -70,6 +70,19 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Updates the admin address and transfers admin role.
+     * @param newAdmin_ The address to be set as the new admin.
+     */
+    function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if(newAdmin == address(0)) revert CannotBeZeroAddress();
+        address oldAdmin = admin;
+        admin = newAdmin_;
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        emit AdminSet(oldAdmin, newAdmin_);
+    }
+
+    /**
      * @dev Adds a new governor to the list.
      * @param newGovernor The address to be added as a new governor.
      */
