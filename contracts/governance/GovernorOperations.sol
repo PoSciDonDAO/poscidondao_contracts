@@ -195,11 +195,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
-        governanceParams.proposalLifetime = 3 weeks;
-        governanceParams.voteLockTime = 3 weeks; //normally 3 weeks
-        governanceParams.proposeLockTime = 3 weeks; //normally 3 weeks
-        governanceParams.voteChangeTime = 1 hours; //normally 1 hour
-        governanceParams.voteChangeCutOff = 3 days; //normally 3 days
+        governanceParams.proposalLifetime = 2 weeks;
+        governanceParams.voteLockTime = 2 weeks; //normally 2 weeks
+        governanceParams.proposeLockTime = 2 weeks; //normally 2 weeks
+        governanceParams.voteChangeTime = 12 hours; //normally 1 hour
+        governanceParams.voteChangeCutOff = 3 days; //normally 2 days
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
         governanceParams.votingDelay = 5 minutes; //5 minutes to prevent flash loan attacks
 
@@ -395,7 +395,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
             executable = true;
         }
-        
+
         ISciManager sciManager = ISciManager(sciManagerAddress);
 
         _validateLockingRequirements(sciManager, msg.sender);
