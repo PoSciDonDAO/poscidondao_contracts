@@ -37,6 +37,19 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Updates the admin address and transfers admin role.
+     * @param newRewardWallet The address to be set as the new admin.
+     */
+    function setRewardWallet(address newRewardWallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newRewardWallet == address(0)) revert CannotBeZeroAddress();
+        address oldRewardWallet = rewardWallet;
+        rewardWallet = newRewardWallet;
+        _grantRole(DEFAULT_ADMIN_ROLE, newRewardWallet);
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldRewardWallet);
+        emit RewardWalletSet(oldRewardWallet, newRewardWallet);
+    }
+
+    /**
      * @dev Sets a new conversion rate for the PO to SCI exchange. Can only be called by the admin.
      * @param rate The new conversion rate, scaled by 1e18.
      */
