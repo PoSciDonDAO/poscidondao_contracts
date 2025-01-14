@@ -13,7 +13,8 @@ import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol"
  */
 contract PoToSciExchange is AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
-
+    
+    error CannotBeZeroAddress();
     error IncorrectInput();
 
     ERC1155Burnable public po;
@@ -26,6 +27,7 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         uint256 amount,
         uint256 amountSci
     );
+    event RewardWalletSet(address indexed user, address indexed newAddress);
 
     constructor(address rewardWallet_, address sci_, address po_) {
         rewardWallet = rewardWallet_;

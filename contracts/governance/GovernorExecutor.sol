@@ -20,11 +20,12 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     error TooEarly(uint256 currentTime, uint256 scheduledTime);
 
     uint256 public delay;
-    address public immutable admin;
+    address public admin;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     mapping(address => uint256) public scheduledTime;
 
+    event AdminSet(address indexed user, address indexed newAddress);
     event Canceled(address indexed action);
     event DelayUpdated(uint256 newDelay);
     event Executed(address indexed action);
@@ -74,7 +75,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
      * @param newAdmin_ The address to be set as the new admin.
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);

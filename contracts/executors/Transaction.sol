@@ -14,27 +14,49 @@ import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IER
 contract Transaction is ReentrancyGuard, AccessControl {
     using SafeERC20 for IERC20;
 
+    error AlreadyInitialized();
     error CannotBeZero();
     error CannotBeZeroAddress();
 
-    address public constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
-    address public constant sci = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
-    address public immutable targetWallet;
-    uint256 public immutable amountUsdc;
-    uint256 public immutable amountSci;
-    address public immutable fundingWallet;
+    address public constant USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
+    address public constant SCI = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
+    address public targetWallet;
+    uint256 public amountUsdc;
+    uint256 public amountSci;
+    address public fundingWallet;
+    bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     event ActionExecuted(address indexed action, string indexed contractName);
 
-    constructor(
-        address fundingWallet_,
-        address targetWallet_,
-        uint256 amountUsdc_,
-        uint256 amountSci_,
-        address governorExecutor_
-    ) {
+    /**
+     * @dev Empty constructor for implementation contract
+     */
+    constructor() {
+        targetWallet = address(0);
+        amountUsdc = 0;
+        amountSci = 0;
+        fundingWallet = address(0);
+    }
+
+    /**
+     * @dev Initializes the transaction with required parameters
+     * @param params Encoded parameters (fundingWallet, targetWallet, amountUsdc, amountSci, governorExecutor)
+     */
+    function initialize(bytes memory params) external {
+        if (_initialized) {
+            revert AlreadyInitialized();
+        }
+
+        (
+            address fundingWallet_,
+            address targetWallet_,
+            uint256 amountUsdc_,
+            uint256 amountSci_,
+            address governorExecutor_
+        ) = abi.decode(params, (address, address, uint256, uint256, address));
+
         if (
             fundingWallet_ == address(0) ||
             targetWallet_ == address(0) ||
@@ -43,7 +65,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
             revert CannotBeZeroAddress();
         }
 
-        if(amountUsdc_ == 0 && amountSci_ == 0) {
+        if (amountUsdc_ == 0 && amountSci_ == 0) {
             revert CannotBeZero();
         }
 
@@ -52,6 +74,8 @@ contract Transaction is ReentrancyGuard, AccessControl {
         amountSci = amountSci_;
         fundingWallet = fundingWallet_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
+
+        _initialized = true;
     }
 
     /**
@@ -59,13 +83,12 @@ contract Transaction is ReentrancyGuard, AccessControl {
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         if (amountUsdc > 0) {
-            _transferToken(usdc, fundingWallet, targetWallet, amountUsdc);
+            _transferToken(USDC, fundingWallet, targetWallet, amountUsdc);
         }
         if (amountSci > 0) {
-            _transferToken(sci, fundingWallet, targetWallet, amountSci);
+            _transferToken(SCI, fundingWallet, targetWallet, amountSci);
         }
         emit ActionExecuted(address(this), "Transaction");
-
     }
 
     /**

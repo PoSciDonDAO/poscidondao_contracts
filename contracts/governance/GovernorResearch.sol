@@ -267,7 +267,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param newAdmin_ The address to be set as the new admin.
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(newAdmin == address(0)) revert CannotBeZeroAddress();
+        if(newAdmin_ == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);

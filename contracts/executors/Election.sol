@@ -12,29 +12,51 @@ interface IGovernorRoleGrant {
 /**
  * @title Election
  * @dev Facilitates the election of scientists that govern the research funding process. 
- * Ensures secure role-based access control and protection against reentrancy attacks.
  */
 contract Election is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error AddressAlreadyHasDDRole();
+    error AlreadyInitialized();
 
     address[] internal _targetWallets;
-    address public immutable governorResearch;
-    address public immutable governorExecutor;
+    address public governorResearch;
+    address public governorExecutor;
+    bool private _initialized;
+
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     event ActionExecuted(address indexed action, string indexed contractName);
 
-    constructor(
-        address[] memory targetWallets_,
-        address governorResearch_,
-        address governorExecutor_
-    ) {
+    /**
+     * @dev Empty constructor for implementation contract
+     */
+    constructor() {
+        governorResearch = address(0);
+        governorExecutor = address(0);
+    }
+
+    /**
+     * @dev Initializes the election contract
+     * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
+     */
+    function initialize(bytes memory params) external {
+        if (_initialized) {
+            revert AlreadyInitialized();
+        }
+
+        (
+            address[] memory targetWallets_,
+            address governorResearch_,
+            address governorExecutor_
+        ) = abi.decode(params, (address[], address, address));
+
         if (
-            governorResearch_ == address(0) || governorExecutor_ == address(0)
+            governorResearch_ == address(0) || 
+            governorExecutor_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
+
         for (uint256 i = 0; i < targetWallets_.length; i++) {
             if (targetWallets_[i] == address(0)) {
                 revert CannotBeZeroAddress();
@@ -47,10 +69,13 @@ contract Election is ReentrancyGuard, AccessControl {
                 revert AddressAlreadyHasDDRole();
             }
         }
+
         _targetWallets = targetWallets_;
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
-        _grantRole(GOVERNOR_ROLE, governorExecutor);
+        _grantRole(GOVERNOR_ROLE, governorExecutor_);
+        
+        _initialized = true;
     }
 
     /**

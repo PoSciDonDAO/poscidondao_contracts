@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.19;
 
+import "../governance/ActionCloneFactory.sol";
 import "./../interfaces/IPo.sol";
 import "./../interfaces/ISciManager.sol";
 import "./../interfaces/IGovernorExecution.sol";
@@ -26,14 +27,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error CannotExecute();
     error CannotVoteOnQVProposals();
     error ExecutableProposalsCannotBeCompleted();
+    error FactoryNotSet();
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
+    error InvalidActionContract(address action);
+    error InvalidActionType(uint256 actionType);
     error InvalidInput();
     error InvalidGovernanceParameter();
-    error VoteLockShorterThanProposal(
-        uint256 voteLockTime,
-        uint256 proposalLifetime
-    );
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error NoTokensToClaim();
     error ProposalNotCancelable();
@@ -51,7 +51,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
-    error votingRightsThresholdNotReached();
+    error VoteLockShorterThanProposal(
+        uint256 voteLockTime,
+        uint256 proposalLifetime
+    );
+    error VotingRightsThresholdNotReached();
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -102,6 +106,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _proposalIndex;
     GovernanceParameters public governanceParams;
+    ActionCloneFactory public factory;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
     mapping(address => uint256) private _lastClaimedProposal;
@@ -139,7 +144,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
-    event AdminUpdated(address indexed user, address indexed newAddress);
+    event AdminSet(address indexed user, address indexed newAddress);
     event Claimed(address indexed claimer, uint256 amount);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
@@ -218,7 +223,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        emit AdminUpdated(oldAdmin, newAdmin);
+        emit AdminSet(oldAdmin, newAdmin);
     }
 
     /**
@@ -363,29 +368,43 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Proposes a change in DAO operations.
-     * @param info IPFS hash of project proposal.
-     * @param action the smart contract address facilitating the on-chain execution of an action
-     * @param quadraticVoting Whether quadratic voting is enabled for the proposal.
-     * @return uint256 Index of the newly created proposal.
+     * @param info IPFS hash containing proposal details
+     * @param actionType Type of action to create:
+     *        0 = No action
+     *        1 = Election
+     *        2 = Impeachment
+     *        3 = ParameterChange
+     *        4 = Transaction
+     * @param actionParams Encoded parameters specific to the action type:
+     *        Election: (address[] targetWallets, address governorResearch, address governorExecutor)
+     *        Impeachment: (address[] targetWallets, address governorResearch, address governorExecutor)
+     *        ParameterChange: (address gov, address governorExecutor, string param, uint256 data)
+     *        Transaction: (address fundingWallet, address targetWallet, uint256 amountUsdc, uint256 amountSci, address governorExecutor)
+     * @param quadraticVoting Whether quadratic voting is enabled for the proposal
+     * @return uint256 Index of the newly created proposal
      */
     function propose(
         string memory info,
-        address action,
+        uint256 actionType,
+        bytes memory actionParams,
         bool quadraticVoting
     ) external nonReentrant returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
-
+        if (actionType > 4) revert InvalidActionType(actionType);
+        if (address(factory) == address(0)) revert FactoryNotSet();
         if (governanceParams.voteLockTime < governanceParams.proposalLifetime) {
             revert VoteLockShorterThanProposal(
                 governanceParams.voteLockTime,
                 governanceParams.proposalLifetime
             );
         }
-        bool executable;
 
-        if (action == address(0)) {
-            executable = false;
-        } else {
+        address action;
+        bool executable = actionType != 0;
+
+        if (executable) {
+            action = factory.createAction(actionType, actionParams);
+
             uint256 codeSize;
             assembly {
                 codeSize := extcodesize(action)
@@ -393,7 +412,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (codeSize == 0) {
                 revert InvalidActionContract(action);
             }
-            executable = true;
         }
 
         ISciManager sciManager = ISciManager(sciManagerAddress);
@@ -448,7 +466,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (votingRights >= governanceParams.votingRightsThreshold) {
             _recordVote(index, support, votingRights);
         } else {
-            revert votingRightsThresholdNotReached();
+            revert VotingRightsThresholdNotReached();
         }
     }
 
@@ -476,7 +494,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             uint256 actualVotes = Math.sqrt(votingRights / 10 ** 18) * 10 ** 18;
             _recordVote(index, support, actualVotes);
         } else {
-            revert votingRightsThresholdNotReached();
+            revert VotingRightsThresholdNotReached();
         }
     }
 
