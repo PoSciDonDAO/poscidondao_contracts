@@ -103,8 +103,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Updates the treasury wallet address and transfers admin role.
-     * @param newAdmin The address to be set as the new treasury wallet.
+     * @dev Updates the admin address and transfers admin role.
+     * @param newAdmin The address to be set as the new admin.
      */
     function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
