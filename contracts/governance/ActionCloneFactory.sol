@@ -5,6 +5,7 @@ import "../../lib/openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../interfaces/IAction.sol";
+
 contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     using Clones for address;
 
@@ -12,7 +13,7 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
 
     mapping(address => bool) public isFactoryAction;
     mapping(uint256 => ActionConfig) public actionConfigs;
-    uint256 public actionTypesCount;
+    uint256 public actionTypesCount = 1;
     address public admin;
 
     struct ActionConfig {
@@ -30,10 +31,38 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     event ActionConfigUpdated(uint256 indexed actionType, bool enabled);
     event AdminSet(address indexed user, address indexed newAddress);
 
-    constructor() {
+    constructor(
+        address transaction_,
+        address election_,
+        address impeachment_,
+        address parameterChange_
+    ) {
+        _addActionConfig("transaction", transaction_);
+        _addActionConfig("election", election_);
+        _addActionConfig("impeachment", impeachment_);
+        _addActionConfig("parameterChange", parameterChange_);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
+    /**
+     * @notice Adds a new action type configuration.
+     * @dev Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
+     * @param name A human-readable name for this action type.
+     * @param implementation The address of the contract that will serve as the clone’s implementation.
+     * Emits an {ActionConfigAdded} event.
+     */
+    function _addActionConfig(
+        string memory name,
+        address implementation
+    ) internal {
+        actionConfigs[actionTypesCount] = ActionConfig({
+            name: name,
+            enabled: true,
+            implementation: implementation
+        });
+        emit ActionConfigAdded(actionTypesCount, name, implementation);
+        actionTypesCount++;
+    }
     /**
      * @notice Adds a new action type configuration.
      * @dev Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
@@ -45,13 +74,7 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         string memory name,
         address implementation
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        actionConfigs[actionTypesCount] = ActionConfig({
-            name: name,
-            enabled: true,
-            implementation: implementation
-        });
-        emit ActionConfigAdded(actionTypesCount, name, implementation);
-        actionTypesCount++;
+        _addActionConfig(name, implementation);
     }
 
     /**

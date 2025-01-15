@@ -4,23 +4,24 @@ pragma solidity 0.8.19;
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 
-interface IGovernorRoleRevoke {
-    function revokeDueDiligenceRole(address[] memory members) external;
-    function checkDueDiligenceRole(address member) external returns (bool);
+interface IGovernorParams {
+    function setGovernanceParameter(bytes32 param, uint256 data) external;
 }
 
 /**
- * @title Impeachment
- * @dev Manages the impeachment of scientists that govern the research funding process.
+ * @title ParameterChange
+ * @dev Handles execution of changes to governance parameters.
  */
-contract Impeachment is ReentrancyGuard, AccessControl {
+contract ParameterChange is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
-    error AddressHasNotDDRole();
+    error InvalidParameter(bytes32 param);
     error AlreadyInitialized();
 
-    address[] internal _targetWallets;
-    address public governorResearch;
+    address public gov;
     address public governorExecutor;
+    uint256 public data;
+    bytes32 public param;
+    string public humanReadableParam;
     bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -31,13 +32,14 @@ contract Impeachment is ReentrancyGuard, AccessControl {
      * @dev Empty constructor for implementation contract
      */
     constructor() {
-        governorResearch = address(0);
+        gov = address(0);
         governorExecutor = address(0);
+        data = 0;
     }
 
     /**
-     * @dev Initializes the impeachment contract
-     * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
+     * @dev Initializes the parameter change contract
+     * @param params Encoded parameters (gov, governorExecutor, param string, data)
      */
     function initialize(bytes memory params) external {
         if (_initialized) {
@@ -45,54 +47,72 @@ contract Impeachment is ReentrancyGuard, AccessControl {
         }
 
         (
-            address[] memory targetWallets_,
-            address governorResearch_,
-            address governorExecutor_
-        ) = abi.decode(params, (address[], address, address));
+            address gov_,
+            address governorExecutor_,
+            string memory param_,
+            uint256 data_
+        ) = abi.decode(params, (address, address, string, uint256));
 
-        if (
-            governorResearch_ == address(0) ||
-            governorExecutor_ == address(0)
-        ) {
+        if (gov_ == address(0) || governorExecutor_ == address(0)) {
             revert CannotBeZeroAddress();
         }
 
-        for (uint256 i = 0; i < targetWallets_.length; i++) {
-            if (targetWallets_[i] == address(0)) {
-                revert CannotBeZeroAddress();
-            }
-            if (
-                !IGovernorRoleRevoke(governorResearch_).checkDueDiligenceRole(
-                    targetWallets_[i]
-                )
-            ) {
-                revert AddressHasNotDDRole();
-            }
-        }
-
-        _targetWallets = targetWallets_;
-        governorResearch = governorResearch_;
+        gov = gov_;
         governorExecutor = governorExecutor_;
+        param = _toBytes32(param_);
+        _checkValidParameter(param);
+        humanReadableParam = param_;
+        data = data_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
         
         _initialized = true;
     }
 
     /**
-     * @dev Returns all impeached wallets
+     * @dev Internal function to check if the parameter is valid.
+     * @param param_ The parameter to check.
      */
-    function getAllImpeachedWallets() public view returns (address[] memory) {
-        return _targetWallets;
+    function _checkValidParameter(bytes32 param_) internal pure {
+        if (
+            param_ != _toBytes32("proposalLifetime") &&
+            param_ != _toBytes32("quorum") &&
+            param_ != _toBytes32("voteLockTime") &&
+            param_ != _toBytes32("proposeLockTime") &&
+            param_ != _toBytes32("voteChangeTime") &&
+            param_ != _toBytes32("voteChangeCutOff") &&
+            param_ != _toBytes32("maxVotingStreak") &&
+            param_ != _toBytes32("opThreshold") &&
+            param_ != _toBytes32("ddThreshold") &&
+            param_ != _toBytes32("votingRightsThreshold")
+        ) {
+            revert InvalidParameter(param_);
+        }
     }
 
     /**
-     * @dev Execute the proposal to impeach a scientist
+     * @dev Convert a string to bytes32 format with padding.
+     * @param source The string to convert.
+     * @return result The bytes32 representation of the string.
+     */
+    function _toBytes32(
+        string memory source
+    ) internal pure returns (bytes32 result) {
+        bytes memory tempBytes = bytes(source);
+        if (tempBytes.length == 0) {
+            return 0x0;
+        }
+
+        assembly {
+            result := mload(add(tempBytes, 32))
+        }
+    }
+
+    /**
+     * @dev Execute the proposal to set a governance parameter
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        IGovernorRoleRevoke(governorResearch).revokeDueDiligenceRole(
-            _targetWallets
-        );
+        IGovernorParams(gov).setGovernanceParameter(param, data);
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
-        emit ActionExecuted(address(this), "Impeachment");
+        emit ActionExecuted(address(this), "ParameterChange");
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.19;
 
-import "../governance/ActionCloneFactory.sol";
+import "../interfaces/IActionCloneFactory.sol";
 import "./../interfaces/IPo.sol";
 import "./../interfaces/ISciManager.sol";
 import "./../interfaces/IGovernorExecution.sol";
@@ -106,7 +106,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _proposalIndex;
     GovernanceParameters public governanceParams;
-    ActionCloneFactory public factory;
+    IActionCloneFactory public factory;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
     mapping(address => uint256) private _lastClaimedProposal;
@@ -145,7 +145,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event AdminSet(address indexed user, address indexed newAddress);
-    event Claimed(address indexed claimer, uint256 amount);
+    event Claimed(address indexed user, uint256 amount);
+    event FactoryUpdated(address indexed user, address newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -182,13 +183,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address sciManager_,
         address admin_,
         address po_,
-        address signer_
+        address signer_,
+        address factory_
     ) {
         if (
             sciManager_ == address(0) ||
             admin_ == address(0) ||
             po_ == address(0) ||
-            signer_ == address(0)
+            signer_ == address(0) ||
+            factory_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -196,13 +199,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         admin = admin_;
         _po = IPo(po_);
         _signer = signer_;
+        factory = IActionCloneFactory(factory_);
 
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
-        governanceParams.proposalLifetime = 2 weeks;
-        governanceParams.voteLockTime = 2 weeks; //normally 2 weeks
-        governanceParams.proposeLockTime = 2 weeks; //normally 2 weeks
+        governanceParams.proposalLifetime = 30 minutes;
+        governanceParams.voteLockTime = 10 minutes; //normally 2 weeks
+        governanceParams.proposeLockTime = 0; //normally 2 weeks
         governanceParams.voteChangeTime = 12 hours; //normally 1 hour
         governanceParams.voteChangeCutOff = 3 days; //normally 2 days
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
@@ -236,6 +240,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
         sciManagerAddress = newSciManagerAddress;
         emit SciManagerUpdated(msg.sender, newSciManagerAddress);
+    }
+
+    /**
+     * @dev Sets the sciManager address
+     * @param newFactoryAddress The address to be set as the sci manager contract
+     */
+    function setFactoryAddress(
+        address newFactoryAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
+        factory = IActionCloneFactory(newFactoryAddress);
+        emit FactoryUpdated(msg.sender, newFactoryAddress);
     }
 
     /**
@@ -370,11 +386,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Proposes a change in DAO operations.
      * @param info IPFS hash containing proposal details
      * @param actionType Type of action to create:
-     *        0 = No action
-     *        1 = Election
-     *        2 = Impeachment
-     *        3 = ParameterChange
-     *        4 = Transaction
+     *        0 = No action / Not Executable
+     *        1 = Transaction
+     *        2 = Election
+     *        3 = Impeachment
+     *        4 = ParameterChange
      * @param actionParams Encoded parameters specific to the action type:
      *        Election: (address[] targetWallets, address governorResearch, address governorExecutor)
      *        Impeachment: (address[] targetWallets, address governorResearch, address governorExecutor)

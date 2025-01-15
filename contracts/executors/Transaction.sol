@@ -20,6 +20,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
 
     address public constant USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
     address public constant SCI = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
+    address public governorExecutor;
     address public targetWallet;
     uint256 public amountUsdc;
     uint256 public amountSci;
@@ -73,6 +74,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
         amountUsdc = amountUsdc_;
         amountSci = amountSci_;
         fundingWallet = fundingWallet_;
+        governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
 
         _initialized = true;
@@ -88,6 +90,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
         if (amountSci > 0) {
             _transferToken(SCI, fundingWallet, targetWallet, amountSci);
         }
+        _revokeRole(GOVERNOR_ROLE, governorExecutor);
         emit ActionExecuted(address(this), "Transaction");
     }
 

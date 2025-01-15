@@ -11,7 +11,7 @@ interface IGovernorRoleGrant {
 
 /**
  * @title Election
- * @dev Facilitates the election of scientists that govern the research funding process. 
+ * @dev Facilitates the election of scientists that govern the research funding process.
  */
 contract Election is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
@@ -51,8 +51,7 @@ contract Election is ReentrancyGuard, AccessControl {
         ) = abi.decode(params, (address[], address, address));
 
         if (
-            governorResearch_ == address(0) || 
-            governorExecutor_ == address(0)
+            governorResearch_ == address(0) || governorExecutor_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -74,7 +73,7 @@ contract Election is ReentrancyGuard, AccessControl {
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
-        
+
         _initialized = true;
     }
 
@@ -92,7 +91,7 @@ contract Election is ReentrancyGuard, AccessControl {
         IGovernorRoleGrant(governorResearch).grantDueDiligenceRole(
             _targetWallets
         );
-        emit ActionExecuted(address(this), "Election");
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
+        emit ActionExecuted(address(this), "Election");
     }
 }

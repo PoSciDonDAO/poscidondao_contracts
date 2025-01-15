@@ -77,7 +77,11 @@ export const getNetworkInfo = () => {
     governorResearch: '${deployedContracts.governorResearch}',
     governorExecutor: '${deployedContracts.governorExecutor}',
     governorGuard: '${deployedContracts.governorGuard}',
-    actionFactory: '${deployedContracts.actionFactory ?? ""}'
+    transaction: '${deployedContracts.transaction}',
+    election: '${deployedContracts.election}',
+    impeachment: '${deployedContracts.impeachment}',
+    parameterChange: '${deployedContracts.parameterChange}',
+    actionFactory: '${deployedContracts.actionFactory}',
   };
 };
 `;
@@ -221,22 +225,25 @@ function generateSolidityAddressFile(
   pragma solidity 0.8.19;
 
   library DeployedAddresses {
-      ${Object.entries(deployedContracts)
-        .map(([key, value]) => {
-          if (key === "providerUrl" || key === "explorerLink") {
-            return `string constant ${key} = ${JSON.stringify(value)};`;
-          } else if (ethers.utils.isAddress(value.toString())) {
-            const checksummedAddress: string = ethers.utils.getAddress(
-              value.toString()
-            );
-            return `address constant ${key} = ${checksummedAddress};`;
-          } else if (typeof value === "number") {
-            return `uint constant ${key} = ${value};`;
-          } else {
-            return `address constant ${key} = ${value};`;
-          }
-        })
-        .join("\n")}
+  ${Object.entries(deployedContracts)
+    .map(([key, value]) => {
+      if (!value) {
+        console.warn(`Warning: Value for ${key} is undefined`);
+        return `// Warning: Value for ${key} was undefined`;
+      }
+      
+      if (key === "providerUrl" || key === "explorerLink") {
+        return `string constant ${key} = ${JSON.stringify(value)};`;
+      } else if (typeof value === 'string' && ethers.utils.isAddress(value)) {
+        const checksummedAddress: string = ethers.utils.getAddress(value);
+        return `address constant ${key} = ${checksummedAddress};`;
+      } else if (typeof value === "number") {
+        return `uint constant ${key} = ${value};`;
+      } else {
+        return `address constant ${key} = ${value};`;
+      }
+    })
+    .join("\n")}
   }
   `;
 
@@ -278,12 +285,6 @@ async function main(): Promise<DeployedContracts> {
     addresses[contractKey] = contract.address;
   };
 
-  // ---------------------------
-  // DEPLOY THE ACTION FACTORY
-  // ---------------------------
-  await deployAndVerify("ActionCloneFactory", [], "actionFactory");
-
-  // Deploy the rest of your contracts
   await deployAndVerify("Don", [uri, admin], "don");
   await deployAndVerify(
     "Donation",
@@ -297,26 +298,6 @@ async function main(): Promise<DeployedContracts> {
     "poToSciExchange"
   );
   await deployAndVerify("SciManager", [admin, sci], "sciManager");
-  await deployAndVerify(
-    "GovernorOperations",
-    [addresses.sciManager, admin, addresses.po, signer],
-    "governorOperations"
-  );
-  await deployAndVerify(
-    "GovernorResearch",
-    [addresses.sciManager, admin, researchFundingWallet],
-    "governorResearch"
-  );
-  await deployAndVerify(
-    "GovernorExecutor",
-    [admin, 600, addresses.governorOperations, addresses.governorResearch],
-    "governorExecutor"
-  );
-  await deployAndVerify(
-    "GovernorGuard",
-    [admin, addresses.governorOperations, addresses.governorResearch],
-    "governorGuard"
-  );
   await deployAndVerify(
     "Transaction",
     [],
@@ -337,6 +318,31 @@ async function main(): Promise<DeployedContracts> {
     [],
     "parameterChange"
   );
+  await deployAndVerify(
+    "ActionCloneFactory",
+    [addresses.transaction, addresses.election, addresses.impeachment, addresses.parameterChange],
+    "actionCloneFactory"
+  );
+  await deployAndVerify(
+    "GovernorOperations",
+    [addresses.sciManager, admin, addresses.po, signer, addresses.actionCloneFactory],
+    "governorOperations"
+  );
+  await deployAndVerify(
+    "GovernorResearch",
+    [addresses.sciManager, admin, researchFundingWallet],
+    "governorResearch"
+  );
+  await deployAndVerify(
+    "GovernorExecutor",
+    [admin, 600, addresses.governorOperations, addresses.governorResearch],
+    "governorExecutor"
+  );
+  await deployAndVerify(
+    "GovernorGuard",
+    [admin, addresses.governorOperations, addresses.governorResearch],
+    "governorGuard"
+  );
 
   // Generate Solidity address file
   generateSolidityAddressFile({
@@ -350,7 +356,6 @@ async function main(): Promise<DeployedContracts> {
     researchFundingWallet: researchFundingWallet,
     usdc: usdc,
     sci: sci,
-    actionFactory: addresses.actionFactory,
     donation: addresses.donation,
     po: addresses.po,
     poToSciExchange: addresses.poToSciExchange,
@@ -359,6 +364,11 @@ async function main(): Promise<DeployedContracts> {
     governorResearch: addresses.governorResearch,
     governorExecutor: addresses.governorExecutor,
     governorGuard: addresses.governorGuard,
+    actionFactory: addresses.actionFactory,
+    transaction: addresses.transaction,
+    election: addresses.election,
+    impeachment: addresses.impeachment,
+    parameterChange: addresses.parameterChange
   });
 
   setupAbiAndBytecodeDirs();

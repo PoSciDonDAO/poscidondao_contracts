@@ -22,6 +22,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error CannotBeZero();
     error CannotBeZeroAddress();
     error CannotClaim();
+    error CannotLockDuringEmergency();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
@@ -155,7 +156,9 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         if (amount == 0) {
             revert CannotBeZero();
         }
-
+        if (emergency) {
+            revert CannotLockDuringEmergency();
+        }
         uint256 balanceBefore = IERC20(_sci).balanceOf(address(this));
 
         IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);

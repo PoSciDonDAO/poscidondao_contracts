@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.19;
 
+import "../interfaces/IActionCloneFactory.sol";
 import "./../interfaces/ISciManager.sol";
 import "./../interfaces/IGovernorExecution.sol";
 import "./../interfaces/IGovernorGuard.sol";
@@ -17,8 +18,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error CannotBeZeroAddress();
     error CannotComplete();
     error CannotExecute();
+    error FactoryNotSet();
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
+    error InvalidActionContract(address action);
+    error InvalidActionType(uint256 actionType);
     error InvalidInput();
     error InvalidGovernanceParameter();
     error ProposalLifetimePassed();
@@ -37,7 +41,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** STRUCTS ***///
     struct Proposal {
         string info;
-        uint256 startBlockNum;
+        uint256 startTimestamp;
         uint256 endTimestamp;
         ProposalStatus status;
         address action;
@@ -72,10 +76,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     address public admin;
     address public researchFundingWallet;
 
-    ///*** STORAGE & MAPPINGS ***///
+    ///*** STORAGE & MAPPINGS ***///s
     uint256 private _proposalIndex;
     uint256 constant _VOTE = 1;
     GovernanceParameters public governanceParams;
+    IActionCloneFactory public factory;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
@@ -114,6 +119,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     event AdminSet(address indexed user, address indexed newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
+    event FactoryUpdated(address indexed user, address newAddress);
     event Impeached(address indexed impeached);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -121,7 +127,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 indexed index,
         address indexed user,
         string info,
-        uint256 startBlockNum,
+        uint256 startTimestamp,
         uint256 endTimestamp,
         address action,
         bool executable
@@ -148,18 +154,21 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     constructor(
         address sciManager_,
         address admin_,
-        address researchFundingWallet_
+        address researchFundingWallet_,
+        address factory_
     ) {
         if (
             sciManager_ == address(0) ||
             admin_ == address(0) ||
-            researchFundingWallet_ == address(0)
+            researchFundingWallet_ == address(0) ||
+            factory_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
         sciManagerAddress = sciManager_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
+        factory = IActionCloneFactory(factory_);
 
         governanceParams.ddThreshold = 1000e18;
         governanceParams.proposalLifetime = 30 minutes;
@@ -196,6 +205,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         _govGuard = IGovernorGuard(newGovGuardAddress);
         _grantRole(GUARD_ROLE, newGovGuardAddress);
         emit GovGuardUpdated(msg.sender, newGovGuardAddress);
+    }
+
+    /**
+     * @dev Sets the sciManager address
+     * @param newFactoryAddress The address to be set as the sci manager contract
+     */
+    function setFactoryAddress(
+        address newFactoryAddress
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
+        factory = IActionCloneFactory(newFactoryAddress);
+        emit FactoryUpdated(msg.sender, newFactoryAddress);
     }
 
     /**
@@ -267,7 +288,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @param newAdmin_ The address to be set as the new admin.
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if(newAdmin_ == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
@@ -352,20 +373,34 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev proposes a research project in need of funding
      *      at least one option needs to be proposed
      * @param info ipfs hash of project proposal
-     * @param action the address of the smart contract executing the proposal
+     * @param actionType Type of action to create:
+     *        0 = No action / Not Executable
+     *        1 = Transaction
+     * @param actionParams Encoded parameters specific to the action type:
+     *        Transaction: (address fundingWallet, address targetWallet, uint256 amountUsdc, uint256 amountSci, address governorExecutor)
      */
     function propose(
         string memory info,
-        address action
+        uint256 actionType,
+        bytes memory actionParams
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
+        if (actionType > 2) revert InvalidActionType(actionType);
 
-        bool executable;
+        if (address(factory) == address(0)) revert FactoryNotSet();
+        address action;
+        bool executable = actionType != 0;
 
-        if (action == address(0)) {
-            executable = false;
-        } else {
-            executable = true;
+        if (executable) {
+            action = factory.createAction(actionType, actionParams);
+
+            uint256 codeSize;
+            assembly {
+                codeSize := extcodesize(action)
+            }
+            if (codeSize == 0) {
+                revert InvalidActionContract(action);
+            }
         }
 
         ISciManager sciManager = ISciManager(sciManagerAddress);
@@ -377,7 +412,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             currentIndex,
             msg.sender,
             _proposals[currentIndex].info,
-            _proposals[currentIndex].startBlockNum,
+            _proposals[currentIndex].startTimestamp,
             _proposals[currentIndex].endTimestamp,
             _proposals[currentIndex].action,
             _proposals[currentIndex].executable
@@ -553,7 +588,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         return
             Proposal(
                 _proposals[index].info,
-                _proposals[index].startBlockNum,
+                _proposals[index].startTimestamp,
                 _proposals[index].endTimestamp,
                 _proposals[index].status,
                 _proposals[index].action,
