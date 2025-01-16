@@ -19,7 +19,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
 
     address public constant USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
-    address public constant SCI = 0x8cC93105f240B4aBAF472e7cB2DeC836159AA311; //replace with mainnet address
+    address public constant SCI = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE; //replace with mainnet address
     address public governorExecutor;
     address public targetWallet;
     uint256 public amountUsdc;

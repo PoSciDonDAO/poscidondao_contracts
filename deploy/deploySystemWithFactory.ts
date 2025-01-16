@@ -81,7 +81,7 @@ export const getNetworkInfo = () => {
     election: '${deployedContracts.election}',
     impeachment: '${deployedContracts.impeachment}',
     parameterChange: '${deployedContracts.parameterChange}',
-    actionFactory: '${deployedContracts.actionFactory}',
+    actionFactory: '${deployedContracts.actionCloneFactory}',
   };
 };
 `;
@@ -330,7 +330,7 @@ async function main(): Promise<DeployedContracts> {
   );
   await deployAndVerify(
     "GovernorResearch",
-    [addresses.sciManager, admin, researchFundingWallet],
+    [addresses.sciManager, admin, researchFundingWallet, addresses.actionCloneFactory],
     "governorResearch"
   );
   await deployAndVerify(

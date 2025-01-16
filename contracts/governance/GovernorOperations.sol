@@ -205,7 +205,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
         governanceParams.proposalLifetime = 30 minutes;
-        governanceParams.voteLockTime = 10 minutes; //normally 2 weeks
+        governanceParams.voteLockTime = 31 minutes; //normally 2 weeks
         governanceParams.proposeLockTime = 0; //normally 2 weeks
         governanceParams.voteChangeTime = 12 hours; //normally 1 hour
         governanceParams.voteChangeCutOff = 3 days; //normally 2 days
