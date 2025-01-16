@@ -10,6 +10,7 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     using Clones for address;
 
     error CannotBeZeroAddress();
+    error ConfigDisabled();
 
     mapping(address => bool) public isFactoryAction;
     mapping(uint256 => ActionConfig) public actionConfigs;
@@ -37,10 +38,10 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         address impeachment_,
         address parameterChange_
     ) {
-        _addActionConfig("transaction", transaction_);
-        _addActionConfig("election", election_);
-        _addActionConfig("impeachment", impeachment_);
-        _addActionConfig("parameterChange", parameterChange_);
+        _addActionConfig("transaction", transaction_); //1
+        _addActionConfig("election", election_); //2 
+        _addActionConfig("impeachment", impeachment_); //3
+        _addActionConfig("parameterChange", parameterChange_); //4
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
@@ -107,7 +108,7 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         bytes memory params
     ) external returns (address) {
         ActionConfig memory config = actionConfigs[actionType];
-        require(config.enabled, "Action type not enabled");
+        if(!config.enabled) revert ConfigDisabled();
 
         address clone = config.implementation.clone();
         IAction(clone).initialize(params);

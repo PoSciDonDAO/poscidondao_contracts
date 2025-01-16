@@ -22,7 +22,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error IncorrectPhase(ProposalStatus);
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
     error InvalidActionContract(address action);
-    error InvalidActionType(uint256 actionType);
+    error InvalidActionType(uint256 actionType, uint256 limit);
     error InvalidInput();
     error InvalidGovernanceParameter();
     error ProposalLifetimePassed();
@@ -76,11 +76,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     address public admin;
     address public researchFundingWallet;
 
-    ///*** STORAGE & MAPPINGS ***///s
-    uint256 private _proposalIndex;
-    uint256 constant _VOTE = 1;
+    ///*** STORAGE & MAPPINGS ***///
     GovernanceParameters public governanceParams;
     IActionCloneFactory public factory;
+    uint256 private _actionTypeLimit;
+    uint256 private _proposalIndex;
+    uint256 constant _VOTE = 1;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
@@ -116,6 +117,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminSet(address indexed user, address indexed newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
@@ -169,6 +171,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
         factory = IActionCloneFactory(factory_);
+        _actionTypeLimit = 1;
 
         governanceParams.ddThreshold = 1000e18;
         governanceParams.proposalLifetime = 30 minutes;
@@ -187,7 +190,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev sets the GovernorExecution address
+     * @dev Sets the GovernorExecution address
      */
     function setGovExec(
         address newGovExecAddress
@@ -197,7 +200,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the GovernorGuard address
+     * @dev Sets the GovernorGuard address
      */
     function setGovGuard(
         address newGovGuardAddress
@@ -208,8 +211,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the sciManager address
-     * @param newFactoryAddress The address to be set as the sci manager contract
+     * @dev Sets the new factory contract address
+     * @param newFactoryAddress The address to be set as the factory contract
      */
     function setFactoryAddress(
         address newFactoryAddress
@@ -220,7 +223,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev grants Due Diligence role to members
+     * @dev Sets the new factory contract address
+     * @param newActionTypeLimit The address to be set as the factory contract
+     */
+    function setActionTypeLimit(
+        uint256 newActionTypeLimit
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _actionTypeLimit = newActionTypeLimit;
+        emit ActionTypeLimitUpdated(msg.sender, newActionTypeLimit);
+    }
+
+    /**
+     * @dev Grants Due Diligence role to members
      * @param members the addresses of the DAO members
      */
     function grantDueDiligenceRole(
@@ -235,7 +249,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev grants Due Diligence role to members
+     * @dev Grants Due Diligence role to members
      * @param members the addresses of the DAO members
      */
     function grantDueDiligenceRoleByAdmin(
@@ -250,7 +264,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev revokes Due Diligence role to member
+     * @dev Revokes Due Diligence role to member
      * @param members the address of the DAO member
      */
     function revokeDueDiligenceRole(
@@ -263,7 +277,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev revokes Due Diligence role to member
+     * @dev Revokes Due Diligence role to member
      * @param members the address of the DAO member
      */
     function revokeDueDiligenceRoleByAdmin(
@@ -276,7 +290,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev checks if user has the DD role
+     * @dev Checks if user has the DD role
      * @param member the address of the DAO member
      */
     function checkDueDiligenceRole(address member) public view returns (bool) {
@@ -297,7 +311,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the research funding wallet address
+     * @dev Sets the research funding wallet address
      */
     function setResearchFundingWallet(
         address newResearchFundingWallet
@@ -309,7 +323,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the sciManager address
+     * @dev Sets the sciManager address
      */
     function setSciManagerAddress(
         address newSciManagerAddress
@@ -320,7 +334,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the governance parameters given data
+     * @dev Sets the governance parameters given data
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
@@ -345,7 +359,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the governance parameters given data
+     * @dev Sets the governance parameters given data
      * @param param the parameter of interest
      * @param data the data assigned to the parameter
      */
@@ -370,8 +384,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev proposes a research project in need of funding
+     * @dev Proposes a research project in need of funding
      *      at least one option needs to be proposed
+     *      Can be
      * @param info ipfs hash of project proposal
      * @param actionType Type of action to create:
      *        0 = No action / Not Executable
@@ -385,8 +400,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes memory actionParams
     ) external nonReentrant onlyRole(DUE_DILIGENCE_ROLE) returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
-        if (actionType > 2) revert InvalidActionType(actionType);
-
+        if (actionType > _actionTypeLimit)
+            revert InvalidActionType(actionType, _actionTypeLimit);
         if (address(factory) == address(0)) revert FactoryNotSet();
         address action;
         bool executable = actionType != 0;
@@ -431,7 +446,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev vote for an of option of a given proposal
+     * @dev Vote for an of option of a given proposal
      *      using the rights from the most recent snapshot
      * @param index the index of the proposal
      * @param support true if in support of proposal
@@ -450,7 +465,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev finalizes the voting phase for a research proposal
+     * @dev Finalizes the voting phase for a research proposal
      * @param index the index of the proposal of interest
      */
     function schedule(
@@ -471,7 +486,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev executes the proposal
+     * @dev Executes the proposal
      * @param index the index of the proposal of interest
      */
     function execute(
@@ -492,7 +507,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev completes a non-executable proposal
+     * @dev Completes a non-executable proposal
      * @param index the _proposalIndex of the proposal of interest
      */
     function complete(
@@ -513,7 +528,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal
+     * @dev Cancels any proposal
      * @param index the _proposalIndex of the proposal of interest
      */
     function cancel(uint256 index) external nonReentrant onlyRole(GUARD_ROLE) {
@@ -531,8 +546,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev cancels the proposal
-     * @param index the index of the proposal of interest
+     * @dev Cancels rejected proposals
+     * @param index the _proposalIndex of the proposal of interest
      */
     function cancelRejected(
         uint256 index
@@ -557,10 +572,17 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev returns the proposal index
+     * @dev Returns the proposal index
      */
     function getProposalIndex() external view returns (uint256) {
         return _proposalIndex;
+    }
+
+    /**
+     * @dev Returns the set action type limit
+     */
+    function getActionTypeLimit() external view returns (uint256) {
+        return _actionTypeLimit;
     }
 
     /**

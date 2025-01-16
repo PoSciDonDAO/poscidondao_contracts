@@ -31,7 +31,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error ProposalInexistent();
     error IncorrectPhase(ProposalStatus);
     error InvalidActionContract(address action);
-    error InvalidActionType(uint256 actionType);
+    error InvalidActionType(uint256 actionType, uint256 limit);
     error InvalidInput();
     error InvalidGovernanceParameter();
     error InsufficientBalance(uint256 balance, uint256 requiredBalance);
@@ -105,6 +105,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     uint256 private _proposalIndex;
+    uint256 private _actionTypeLimit;
     GovernanceParameters public governanceParams;
     IActionCloneFactory public factory;
     mapping(uint256 => Proposal) private _proposals;
@@ -144,6 +145,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /*** EVENTS ***/
+    event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminSet(address indexed user, address indexed newAddress);
     event Claimed(address indexed user, uint256 amount);
     event FactoryUpdated(address indexed user, address newAddress);
@@ -200,15 +202,16 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _po = IPo(po_);
         _signer = signer_;
         factory = IActionCloneFactory(factory_);
+        _actionTypeLimit = 4;
 
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5;
-        governanceParams.proposalLifetime = 30 minutes;
-        governanceParams.voteLockTime = 31 minutes; //normally 2 weeks
-        governanceParams.proposeLockTime = 0; //normally 2 weeks
-        governanceParams.voteChangeTime = 12 hours; //normally 1 hour
-        governanceParams.voteChangeCutOff = 3 days; //normally 2 days
+        governanceParams.proposalLifetime = 30 minutes; //prod 2 weeks, test: 30 minutes
+        governanceParams.voteLockTime = 31 minutes; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
+        governanceParams.proposeLockTime = 0 weeks; //prod: 2 weeks, test: 0 minutes
+        governanceParams.voteChangeTime = 10 minutes; //prod: 1-12 hours, test: 10 minutes
+        governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
         governanceParams.votingDelay = 5 minutes; //5 minutes to prevent flash loan attacks
 
@@ -231,6 +234,17 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Sets the new factory contract address
+     * @param newActionTypeLimit The address to be set as the factory contract
+     */
+    function setActionTypeLimit(
+        uint256 newActionTypeLimit
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _actionTypeLimit = newActionTypeLimit;
+        emit ActionTypeLimitUpdated(msg.sender, newActionTypeLimit);
+    }
+
+    /**
      * @dev Sets the sciManager address
      * @param newSciManagerAddress The address to be set as the sci manager contract
      */
@@ -243,8 +257,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the sciManager address
-     * @param newFactoryAddress The address to be set as the sci manager contract
+     * @dev Sets the new factory contract address
+     * @param newFactoryAddress The address to be set as the factory contract
      */
     function setFactoryAddress(
         address newFactoryAddress
@@ -406,7 +420,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool quadraticVoting
     ) external nonReentrant returns (uint256) {
         if (bytes(info).length == 0) revert InvalidInput();
-        if (actionType > 4) revert InvalidActionType(actionType);
+        if (actionType > _actionTypeLimit)
+            revert InvalidActionType(actionType, _actionTypeLimit);
         if (address(factory) == address(0)) revert FactoryNotSet();
         if (governanceParams.voteLockTime < governanceParams.proposalLifetime) {
             revert VoteLockShorterThanProposal(
@@ -672,6 +687,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getPoToken() external view returns (address) {
         return address(_po);
+    }
+
+    /**
+     * @dev Returns the set action type limit
+     */
+    function getActionTypeLimit() external view returns (uint256) {
+        return _actionTypeLimit;
     }
 
     /**

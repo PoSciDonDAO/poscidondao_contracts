@@ -22,6 +22,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     uint256 public delay;
     address public admin;
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
     mapping(address => uint256) public scheduledTime;
 
@@ -144,6 +145,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Executes a scheduled action with a temporary `EXECUTOR_ROLE`.
+     *      This role needed to call functions such as setGovernanceParameters 
+     *      and grantDueDiligenceRole in GovernorOperations and GovernorResearch.
      * @param action The address of the action to execute.
      */
     function execution(
@@ -157,11 +160,15 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert TooEarly(block.timestamp, scheduled);
         }
 
+        _grantRole(EXECUTOR_ROLE, action);
+
         (bool success, ) = action.call(abi.encodeWithSignature("execute()"));
         if (!success) {
             revert ExecutionFailed();
         }
         scheduledTime[action] = 0;
+
+        _revokeRole(EXECUTOR_ROLE, action);
 
         emit Executed(action);
     }
