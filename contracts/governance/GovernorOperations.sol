@@ -722,7 +722,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Returns the _signer address
+     * @dev Returns the _signer address. Is a DAO-controlled address.
      */
     function getSigner()
         external

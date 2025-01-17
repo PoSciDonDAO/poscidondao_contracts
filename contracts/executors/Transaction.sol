@@ -34,12 +34,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
     /**
      * @dev Empty constructor for implementation contract
      */
-    constructor() {
-        targetWallet = address(0);
-        amountUsdc = 0;
-        amountSci = 0;
-        fundingWallet = address(0);
-    }
+    constructor() {}
 
     /**
      * @dev Initializes the transaction with required parameters

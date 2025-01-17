@@ -31,11 +31,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     /**
      * @dev Empty constructor for implementation contract
      */
-    constructor() {
-        gov = address(0);
-        governorExecutor = address(0);
-        data = 0;
-    }
+    constructor() {}
 
     /**
      * @dev Initializes the parameter change contract
@@ -64,7 +60,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         humanReadableParam = param_;
         data = data_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
-        
+
         _initialized = true;
     }
 

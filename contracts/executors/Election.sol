@@ -30,10 +30,7 @@ contract Election is ReentrancyGuard, AccessControl {
     /**
      * @dev Empty constructor for implementation contract
      */
-    constructor() {
-        governorResearch = address(0);
-        governorExecutor = address(0);
-    }
+    constructor() {}
 
     /**
      * @dev Initializes the election contract

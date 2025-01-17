@@ -30,10 +30,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     /**
      * @dev Empty constructor for implementation contract
      */
-    constructor() {
-        governorResearch = address(0);
-        governorExecutor = address(0);
-    }
+    constructor() {}
 
     /**
      * @dev Initializes the impeachment contract
@@ -51,8 +48,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
         ) = abi.decode(params, (address[], address, address));
 
         if (
-            governorResearch_ == address(0) ||
-            governorExecutor_ == address(0)
+            governorResearch_ == address(0) || governorExecutor_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -74,7 +70,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
         governorResearch = governorResearch_;
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
-        
+
         _initialized = true;
     }
 

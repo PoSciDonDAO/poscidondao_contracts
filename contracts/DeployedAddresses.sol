@@ -10,18 +10,18 @@ address constant admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 address constant researchFundingWallet = 0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF;
 address constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
 address constant sci = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE;
-address constant donation = 0xf9ac522E2aC22a7F8D7F07AD9e7A819194EB927D;
-address constant po = 0x09645FAdf640e63726D545b34279Bf7A3572C5cb;
-address constant poToSciExchange = 0xE215F05658f3F0df089B27A003C4cb5c1E993074;
-address constant sciManager = 0x5e56377CCA38482307B8f61ce6364A4790bD75F8;
-address constant governorOperations = 0x3E513F8E64546d9F529702b4d5163EC9A5A809b5;
-address constant governorResearch = 0xa053C89406f2C6f20c68a315395995C982590E20;
-address constant governorExecutor = 0x1054DAe4d79b138395FD0FD27a9B3f141C0900d6;
-address constant governorGuard = 0xd0Af825d475b21E545Bc5D1951ECD5922049d980;
+address constant donation = 0x9a2A21139d9c61A69351FA09060906FcA5175166;
+address constant po = 0x25fF6abe76295Cb2e26F27e6539E2a8298da1DBE;
+address constant poToSciExchange = 0x3c43fe7d639ABB3062CFF61902afF515Ad3973B0;
+address constant sciManager = 0xAa28ed6bA41bc616ec07b4B2EAE6A7034831C2f4;
+address constant governorOperations = 0x1Cd5CE19641f98bA2eDd554bB9CC5965d554AA3F;
+address constant governorResearch = 0x26f3CB724eB673FBb9aC03c17D11aFCe82a86a1a;
+address constant governorExecutor = 0xbb4ab607595B7b22e139AEC87deCD15510Ab68dC;
+address constant governorGuard = 0x461518A735C7f62F244C3A3661Fb89824141Ab44;
 // Warning: Value for actionFactory was undefined
-address constant transaction = 0xc92E5D313269F7c8198DA974c3ab979c19A2bf70;
-address constant election = 0x65E48e4Ac735d50ab326Ff228D068902c8FeF0F9;
-address constant impeachment = 0x30F5C3c378A30a87cB3E7D9De66678dCEd609154;
-address constant parameterChange = 0x59E681C0b5A32e5dd22dE23bb4a8869990F02A32;
+address constant transaction = 0xD620620DC55B755730Af39D74c766fe62cB23928;
+address constant election = 0x0D04976472d943e29fb5e495d539BC44804452a4;
+address constant impeachment = 0x79201aF53eb8AA4E619a56aBD4c48F989FeE39b9;
+address constant parameterChange = 0xb84030D60FBfd6fB7FB49CC3AC25B3b0E1F8CF4D;
   }
   
