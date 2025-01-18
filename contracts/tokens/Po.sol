@@ -6,9 +6,10 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1
 
 /**
  * @title Participation Token (PO)
- * @dev A soulbound token contract for participation tokens. These tokens are mintable, burnable,
- * but not transferable, adhering to the soulbound token concept where tokens are permanently associated
- * with a wallet. Inherits ERC1155 for multi-token standard support and ERC1155Burnable for burn functionality.
+ * @dev A soulbound token ERC1155 contract for participation tokens. These tokens are mintable, burnable,
+ * but not transferable (only admin can transfer), adhering to the soulbound token concept where tokens are permanently associated
+ * with a wallet. Can only mint one token id (0). ERC1155 was used to add an URI to the token. 
+ Inherits ERC1155Burnable for burn functionality.
  */
 contract Po is ERC1155Burnable, AccessControl {
     error CannotBeZeroAddress();
