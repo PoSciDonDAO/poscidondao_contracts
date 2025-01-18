@@ -209,8 +209,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
-        governanceParams.maxVotingStreak = 5;
-        governanceParams.proposalLifetime = 30 minutes; //prod 2 weeks, test: 30 minutes
+        governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
+        governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 minutes
         governanceParams.voteLockTime = 31 minutes; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
         governanceParams.proposeLockTime = 0 weeks; //prod: 2 weeks, test: 0 minutes
         governanceParams.voteChangeTime = 10 minutes; //prod: 1-12 hours, test: 10 minutes
@@ -238,63 +238,67 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Sets the new factory contract address
-     * @param newActionTypeLimit The address to be set as the factory contract
+     * @param newActionTypeLimit The new maximum action type ID allowed
+     * @notice Cannot be set lower than 4 to preserve core action types
+     *         Core action types: 0 = No action / Not Executable, 1 = Transaction, 2 = Election, 3 = Impeachment, 4 = ParameterChange
+     *         These can be disabled through the factory contract if needed
      */
     function setActionTypeLimit(
         uint256 newActionTypeLimit
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newActionTypeLimit < 4)
+            revert InvalidActionType(newActionTypeLimit, 4);
         _actionTypeLimit = newActionTypeLimit;
         emit ActionTypeLimitUpdated(msg.sender, newActionTypeLimit);
     }
 
     /**
      * @dev Sets the sciManager address
-     * @param newSciManagerAddress The address to be set as the sci manager contract
+     * @param newSciManager The address to be set as the sci manager contract
      */
     function setSciManagerAddress(
-        address newSciManagerAddress
+        address newSciManager
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
-        sciManagerAddress = newSciManagerAddress;
-        emit SciManagerUpdated(msg.sender, newSciManagerAddress);
+        if (newSciManager == address(0)) revert CannotBeZeroAddress();
+        sciManagerAddress = newSciManager;
+        emit SciManagerUpdated(msg.sender, newSciManager);
     }
 
     /**
-     * @dev Sets the new factory contract address
-     * @param newFactoryAddress The address to be set as the factory contract
+     * @dev Sets the new factory contract address for operations proposals
+     * @param newFactory The address to be set as the factory contract
      */
     function setFactory(
-        address newFactoryAddress
+        address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
-        _factory = IActionCloneFactory(newFactoryAddress);
-        emit FactoryUpdated(msg.sender, newFactoryAddress);
+        if (newFactory == address(0)) revert CannotBeZeroAddress();
+        _factory = IActionCloneFactory(newFactory);
+        emit FactoryUpdated(msg.sender, newFactory);
     }
 
     /**
      * @dev Sets the GovernorExecution address
-     * @param newGovExecAddress The address to be set as the governor executor
+     * @param newGovExec The address to be set as the governor executor
      */
     function setGovExec(
-        address newGovExecAddress
+        address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newGovExecAddress == address(0)) revert CannotBeZeroAddress();
-        _govExec = IGovernorExecution(newGovExecAddress);
-        emit GovExecUpdated(msg.sender, newGovExecAddress);
+        if (newGovExec == address(0)) revert CannotBeZeroAddress();
+        _govExec = IGovernorExecution(newGovExec);
+        emit GovExecUpdated(msg.sender, newGovExec);
     }
 
     /**
      * @dev Sets the GovernorGuard address
-     * @param newGovGuardAddress The address to be set as the governor guard
-
+     * @param newGovGuard The address to be set as the governor guard
      */
     function setGovGuard(
-        address newGovGuardAddress
+        address newGovGuard
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newGovGuardAddress == address(0)) revert CannotBeZeroAddress();
-        _govGuard = IGovernorGuard(newGovGuardAddress);
-        _grantRole(GUARD_ROLE, newGovGuardAddress);
-        emit GovGuardUpdated(msg.sender, newGovGuardAddress);
+        if (newGovGuard == address(0)) revert CannotBeZeroAddress();
+        _govGuard = IGovernorGuard(newGovGuard);
+        _grantRole(GUARD_ROLE, newGovGuard);
+        emit GovGuardUpdated(msg.sender, newGovGuard);
     }
 
     /**
@@ -891,7 +895,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Calculates a keccak256 hash for the given parameters.
      * @param user The user's Ethereum address.
      * @param isUnique Boolean flag representing whether the user's status is unique.
-     * @return The calculated keccak256 hash.
      */
     function _getMessageHash(
         address user,
@@ -905,7 +908,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param user The address of the user to verify.
      * @param isUnique Boolean flag to check along with the user address.
      * @param signature The signature to verify.
-     * @return True if the signature is valid, false otherwise.
      */
     function _verify(
         address user,
@@ -933,8 +935,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *
      * @param index The index of the proposal on which to vote.
      * @param voter the user that wants to vote on the given proposal index
-     *
-     *
      */
     function _votingChecks(uint256 index, address voter) internal view {
         if (index >= _proposalIndex) revert ProposalInexistent();

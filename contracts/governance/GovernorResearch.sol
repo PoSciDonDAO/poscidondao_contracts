@@ -189,44 +189,51 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Sets the GovernorExecution address
+     * @param newGovExec The address to be set as the governor executor
      */
     function setGovExec(
-        address newGovExecAddress
+        address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _govExec = IGovernorExecution(newGovExecAddress);
-        emit GovExecUpdated(msg.sender, newGovExecAddress);
+        _govExec = IGovernorExecution(newGovExec);
+        emit GovExecUpdated(msg.sender, newGovExec);
     }
 
     /**
      * @dev Sets the GovernorGuard address
+     * @param newGovGuard The address to be set as the governor guard
      */
     function setGovGuard(
-        address newGovGuardAddress
+        address newGovGuard
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _govGuard = IGovernorGuard(newGovGuardAddress);
-        _grantRole(GUARD_ROLE, newGovGuardAddress);
-        emit GovGuardUpdated(msg.sender, newGovGuardAddress);
+        _govGuard = IGovernorGuard(newGovGuard);
+        _grantRole(GUARD_ROLE, newGovGuard);
+        emit GovGuardUpdated(msg.sender, newGovGuard);
     }
 
     /**
-     * @dev Sets the new factory contract address
-     * @param newFactoryAddress The address to be set as the factory contract
+     * @dev Sets the new factory contract address for research funding proposals
+     * @param newFactory The address to be set as the factory contract
      */
     function setFactory(
-        address newFactoryAddress
+        address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
-        _factory = IActionCloneFactory(newFactoryAddress);
-        emit FactoryUpdated(msg.sender, newFactoryAddress);
+        if (newFactory == address(0)) revert CannotBeZeroAddress();
+        _factory = IActionCloneFactory(newFactory);
+        emit FactoryUpdated(msg.sender, newFactory);
     }
 
     /**
      * @dev Sets the new factory contract address
-     * @param newActionTypeLimit The address to be set as the factory contract
+     * @param newActionTypeLimit The new maximum action type ID allowed
+     * @notice Cannot be set lower than 2 to preserve core action types
+     *         Core action types: 0 = No action / Not Executable, 1 = Transaction
+     *         These can be disabled through the factory contract if needed
      */
     function setActionTypeLimit(
         uint256 newActionTypeLimit
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newActionTypeLimit < 2)
+            revert InvalidActionType(newActionTypeLimit, 2);
         _actionTypeLimit = newActionTypeLimit;
         emit ActionTypeLimitUpdated(msg.sender, newActionTypeLimit);
     }
@@ -627,16 +634,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             );
     }
 
-    /**
-     * @notice Retrieves voting data for a specific user on a specific proposal.
-     * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
-     *      If the proposal ID is invalid (greater than the current maximum index), it reverts with `ProposalInexistent`.
-     * @param user The address of the user whose voting data is being requested.
-     * @param index The unique identifier (index) of the proposal for which the user's voting data is being requested. This ID is sequentially assigned to proposals as they are created.
-     * @return voted A boolean indicating whether the user has voted on this proposal. `true` means the user has cast a vote, `false` means they have not.
-     * @return initialVoteTimestamp The timestamp of when the user last voted on this proposal. The value represents seconds since Unix epoch (block timestamp).
-     * @return previousSupport A boolean indicating whether the user supported the proposal in their last vote. `true` means they supported it, `false` means they opposed it.
-     */
+
     /**
      * @notice Retrieves voting data for a specific user on a specific proposal.
      * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.

@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity 0.8.19;
 
-import "../../lib/openzeppelin-contracts/contracts/proxy/Clones.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import "../interfaces/IAction.sol";
 
-contract ActionCloneFactory is AccessControl, ReentrancyGuard {
-    using Clones for address;
+abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
 
     error CannotBeZeroAddress();
     error ConfigDisabled();
@@ -21,8 +18,6 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     mapping(uint256 => ActionConfig) public actionConfigs;
     uint256 public actionTypesCount = 1;
     address public admin;
-    address public govOpsContract;
-    address public govResContract;
 
     struct ActionConfig {
         string name;
@@ -30,6 +25,7 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         address implementation;
     }
 
+    // Shared events
     event ActionCreated(address indexed action, string actionType);
     event ActionConfigAdded(
         uint256 indexed actionType,
@@ -38,32 +34,6 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     );
     event ActionConfigUpdated(uint256 indexed actionType, bool enabled);
     event AdminSet(address indexed user, address indexed newAddress);
-
-    constructor(
-        address transaction_,
-        address election_,
-        address impeachment_,
-        address parameterChange_,
-        address govOps_,
-        address govRes_
-    ) {
-        if (
-            govOps_ == address(0) ||
-            govRes_ == address(0) ||
-            transaction_ == address(0) ||
-            election_ == address(0) ||
-            impeachment_ == address(0) ||
-            parameterChange_ == address(0)
-        ) revert CannotBeZeroAddress();
-
-        govOpsContract = govOps_;
-        govResContract = govRes_;
-        _addActionConfig("transaction", transaction_); //1
-        _addActionConfig("election", election_); //2
-        _addActionConfig("impeachment", impeachment_); //3
-        _addActionConfig("parameterChange", parameterChange_); //4
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    }
 
     /**
      * @dev Creates a new action config with the given name and implementation.
@@ -94,11 +64,12 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         emit ActionConfigAdded(actionTypesCount, name, implementation);
         actionTypesCount++;
     }
+
     /**
      * @dev Adds a new action type configuration.
      *      Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
      * @param name A human-readable name for this action type.
-     * @param implementation The address of the contract that will serve as the clone’s implementation.
+     * @param implementation The address of the contract that will serve as the clone's implementation.
      */
     function addActionConfig(
         string memory name,
@@ -123,30 +94,6 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new action clone based on action type.
-     * @param actionType The identifier of the action type to clone (index in the `actionConfigs` mapping).
-     * @param params Initialization parameters passed to the action’s `initialize()` method.
-     * @return clone The address of the newly created clone contract.
-     */
-    function createAction(
-        uint256 actionType,
-        bytes memory params
-    ) external returns (address) {
-        if (!(msg.sender == govOpsContract || msg.sender == govResContract))
-            revert Unauthorized(msg.sender);
-            
-        ActionConfig memory config = actionConfigs[actionType];
-        if (!config.enabled) revert ConfigDisabled();
-
-        address clone = config.implementation.clone();
-        IAction(clone).initialize(params);
-        isFactoryAction[clone] = true;
-
-        emit ActionCreated(clone, config.name);
-        return clone;
-    }
-
-    /**
      * @dev Updates the admin address and transfers admin role.
      * @param newAdmin_ The address to be set as the new admin.
      */
@@ -158,4 +105,15 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         emit AdminSet(oldAdmin, newAdmin_);
     }
+
+    /**
+     * @notice Creates a new action clone based on action type.
+     * @param actionType The identifier of the action type to clone (index in the `actionConfigs` mapping).
+     * @param params Initialization parameters passed to the action's `initialize()` method.
+     * @return clone The address of the newly created clone contract.
+     */
+    function createAction(
+        uint256 actionType,
+        bytes memory params
+    ) external virtual returns (address);
 }

@@ -117,17 +117,20 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev sets the GovernorExecution contract address
+     * @dev Sets the GovernorExecution address
+     * @param newGovExec The address to be set as the governor executor
      */
     function setGovExec(
-        address newGovernorExec
+        address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _govExec = IGovernorExecution(newGovernorExec);
-        emit GovExecSet(msg.sender, newGovernorExec);
+        if (newGovExec == address(0)) revert CannotBeZeroAddress();
+        _govExec = IGovernorExecution(newGovExec);
+        emit GovExecSet(msg.sender, newGovExec);
     }
 
     /**
-     * @dev sets the GovernorOperations contract address
+     * @dev Sets the GovernorOperations address
+     * @param newGovOps The address to be set as the governor operations
      */
     function setGovOps(
         address newGovOps

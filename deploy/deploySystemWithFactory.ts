@@ -339,9 +339,14 @@ async function main(): Promise<DeployedContracts> {
     "parameterChange"
   );
   await deployAndVerify(
-    "ActionCloneFactory",
-    [addresses.transaction, addresses.election, addresses.impeachment, addresses.parameterChange, addresses.governorOperations, addresses.governorResearch],
-    "actionCloneFactory"
+    "ActionCloneFactoryResearch",
+    [addresses.governorResearch, addresses.transaction],
+    "actionCloneFactoryResearch"
+  );
+  await deployAndVerify(
+    "ActionCloneFactoryOperations",
+    [addresses.governorOperations, addresses.transaction, addresses.election, addresses.impeachment, addresses.parameterChange],
+    "actionCloneFactoryOperations"
   );
 
 
@@ -365,7 +370,8 @@ async function main(): Promise<DeployedContracts> {
     governorResearch: addresses.governorResearch,
     governorExecutor: addresses.governorExecutor,
     governorGuard: addresses.governorGuard,
-    actionFactory: addresses.actionCloneFactory,
+    actionFactoryResearch: addresses.actionCloneFactoryResearch,
+    actionFactoryOperations: addresses.actionCloneFactoryOperations ,
     transaction: addresses.transaction,
     election: addresses.election,
     impeachment: addresses.impeachment,
@@ -413,12 +419,12 @@ async function main(): Promise<DeployedContracts> {
     {
       to: addresses.governorOperations,
       value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactory),
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
     },
     {
       to: addresses.governorResearch,
       value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactory),
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryResearch),
     },
     {
       to: addresses.governorResearch,
