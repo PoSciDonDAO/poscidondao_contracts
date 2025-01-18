@@ -216,7 +216,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.voteChangeTime = 10 minutes; //prod: 1-12 hours, test: 10 minutes
         governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
-        governanceParams.votingDelay = 5 minutes; //5 minutes to prevent flash loan attacks
+        governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -302,12 +302,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the _signer address
+     * @dev Sets the _signer address used to sign off-chain messages. Signer's private key is DAO-controlled.
      * @param newSigner The address to be set as the _signer used to sign off-chain messages
      */
     function setSigner(
         address newSigner
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSigner == address(0)) revert CannotBeZeroAddress();
         _signer = newSigner;
         emit SignerUpdated(newSigner);
     }
@@ -317,6 +318,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param po_ the address of the PO token
      */
     function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (po_ == address(0)) revert CannotBeZeroAddress();
         _po = IPo(po_);
         emit PoUpdated(msg.sender, po_);
     }
