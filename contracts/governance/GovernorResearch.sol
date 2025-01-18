@@ -37,6 +37,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
+    error MultiplierTooLow(uint256 multiplier);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -65,6 +66,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool voted; // Whether the user has voted
         uint256 initialVoteTimestamp; // The timestamp of when the user first voted
         bool previousSupport; // Whether the user supported the last vote
+        uint256 previousVoteAmount; // The amount of votes cast in the last vote
     }
 
     ///*** INTERFACES ***///
@@ -82,9 +84,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     uint256 private _actionTypeLimit;
     uint256 private _proposalIndex;
-    uint256 constant _VOTE = 1;
+    uint256 private _baseVoteAmount;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
+    mapping(address => uint256) private _userMultipliers;
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
@@ -153,6 +156,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 votesAgainst,
         uint256 votesTotal
     );
+    event UserMultiplierSet(address indexed user, uint256 multiplier);
 
     constructor(
         address sciManager_,
@@ -170,6 +174,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
         _actionTypeLimit = 1;
+        _baseVoteAmount = 1; // Initialize with default value
 
         governanceParams.ddThreshold = 1000e18;
         governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 min
@@ -651,8 +656,30 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             UserVoteData(
                 _userVoteData[user][index].voted,
                 _userVoteData[user][index].initialVoteTimestamp,
-                _userVoteData[user][index].previousSupport
+                _userVoteData[user][index].previousSupport,
+                _userVoteData[user][index].previousVoteAmount
             );
+    }
+
+    /**
+     * @dev Sets the base vote amount
+     * @param newBaseVoteAmount The new base vote amount
+     */
+    function setBaseVoteAmount(uint256 newBaseVoteAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _baseVoteAmount = newBaseVoteAmount;
+    }
+
+    /**
+     * @dev Sets the multiplier for a specific user
+     * @param user The address of the user
+     * @param multiplier The new multiplier value
+     */
+    function setUserMultiplier(address user, uint256 multiplier) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (user == address(0)) revert CannotBeZeroAddress();
+        if (multiplier < 1) revert MultiplierTooLow(multiplier);
+        
+        _userMultipliers[user] = multiplier;
+        emit UserMultiplierSet(user, multiplier);
     }
 
     ///*** INTERNAL FUNCTIONS ***///
@@ -756,22 +783,25 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         if (voteData.voted) {
             if (voteData.previousSupport) {
-                _proposals[index].votesFor -= _VOTE;
+                _proposals[index].votesFor -= voteData.previousVoteAmount;
             } else {
-                _proposals[index].votesAgainst -= _VOTE;
+                _proposals[index].votesAgainst -= voteData.previousVoteAmount;
             }
-            _proposals[index].votesTotal -= _VOTE;
+            _proposals[index].votesTotal -= voteData.previousVoteAmount;
         }
 
+        uint256 voteAmount = _baseVoteAmount * (_userMultipliers[msg.sender] > 0 ? _userMultipliers[msg.sender] : 1);
+
         if (support) {
-            _proposals[index].votesFor += _VOTE;
+            _proposals[index].votesFor += voteAmount;
         } else {
-            _proposals[index].votesAgainst += _VOTE;
+            _proposals[index].votesAgainst += voteAmount;
         }
-        _proposals[index].votesTotal += _VOTE;
+        _proposals[index].votesTotal += voteAmount;
 
         voteData.voted = true;
         voteData.previousSupport = support;
+        voteData.previousVoteAmount = voteAmount;
 
         if (voteData.initialVoteTimestamp == 0) {
             voteData.initialVoteTimestamp = block.timestamp;
@@ -782,7 +812,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             block.timestamp + governanceParams.voteLockTime
         );
 
-        emit Voted(index, msg.sender, support, _VOTE);
+        emit Voted(index, msg.sender, support, voteAmount);
 
         emit VotesUpdated(
             index,
