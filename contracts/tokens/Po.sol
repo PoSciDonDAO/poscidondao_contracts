@@ -11,7 +11,6 @@ import "../../lib/openzeppelin-contracts/contracts/token/ERC1155/extensions/ERC1
  * with a wallet. Inherits ERC1155 for multi-token standard support and ERC1155Burnable for burn functionality.
  */
 contract Po is ERC1155Burnable, AccessControl {
-
     error CannotBeZeroAddress();
     error FunctionIsFrozen();
     error InvalidTokenId(uint256 id, uint256 participationTokenId);
@@ -20,8 +19,8 @@ contract Po is ERC1155Burnable, AccessControl {
 
     address public admin;
     address public govOpsAddress;
-    string public constant name = "Participation Token";
-    string public constant symbol = "PO";
+    string private constant _NAME = "Participation Token";
+    string private constant _SYMBOL = "PO";
     bool internal _frozenUri = false;
     bool internal _frozenGovOps = false;
     string private _uri;
@@ -47,7 +46,29 @@ contract Po is ERC1155Burnable, AccessControl {
     }
 
     /**
-     * @dev Sets the governance operations address.
+     * @dev Returns the name of the token.
+     */
+    function name() external pure returns (string memory) {
+        return _NAME;
+    }
+
+    /**
+     * @dev Returns the symbol of the token, usually a shorter version of the
+     * name.
+     */
+    function symbol() external pure returns (string memory) {
+        return _SYMBOL;
+    }
+
+    /**
+     * @dev Returns the total supply of the token.
+     */
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    /**
+     * @dev Sets the governance operations contract address.
      * @param newGovOpsAddress Address of the new governance operations.
      */
     function setGovOps(
@@ -75,13 +96,6 @@ contract Po is ERC1155Burnable, AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
         emit AdminSet(oldAdmin, newAdmin);
-    }
-
-    /**
-     * @dev See {IERC20-totalSupply}.
-     */
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
     }
 
     /**

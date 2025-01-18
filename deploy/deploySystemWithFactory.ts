@@ -14,7 +14,7 @@ interface DeployedContracts {
 const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
 const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 const sci = "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
-const researchFundingWallet = "0x695f64829F0764FE1e95Fa32CD5c794A1a5034AF";
+const researchFundingWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 
 const frontendAddressesFilePath =
   "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils/serverConfig.ts";
@@ -299,6 +299,26 @@ async function main(): Promise<DeployedContracts> {
   );
   await deployAndVerify("SciManager", [admin, sci], "sciManager");
   await deployAndVerify(
+    "GovernorOperations",
+    [addresses.sciManager, admin, addresses.po, signer],
+    "governorOperations"
+  );
+  await deployAndVerify(
+    "GovernorResearch",
+    [addresses.sciManager, admin, researchFundingWallet],
+    "governorResearch"
+  );
+  await deployAndVerify(
+    "GovernorExecutor",
+    [admin, 600, addresses.governorOperations, addresses.governorResearch],
+    "governorExecutor"
+  );
+  await deployAndVerify(
+    "GovernorGuard",
+    [admin, addresses.governorOperations, addresses.governorResearch],
+    "governorGuard"
+  );
+  await deployAndVerify(
     "Transaction",
     [],
     "transaction"
@@ -320,29 +340,10 @@ async function main(): Promise<DeployedContracts> {
   );
   await deployAndVerify(
     "ActionCloneFactory",
-    [addresses.transaction, addresses.election, addresses.impeachment, addresses.parameterChange],
+    [addresses.transaction, addresses.election, addresses.impeachment, addresses.parameterChange, addresses.governorOperations, addresses.governorResearch],
     "actionCloneFactory"
   );
-  await deployAndVerify(
-    "GovernorOperations",
-    [addresses.sciManager, admin, addresses.po, signer, addresses.actionCloneFactory],
-    "governorOperations"
-  );
-  await deployAndVerify(
-    "GovernorResearch",
-    [addresses.sciManager, admin, researchFundingWallet, addresses.actionCloneFactory],
-    "governorResearch"
-  );
-  await deployAndVerify(
-    "GovernorExecutor",
-    [admin, 600, addresses.governorOperations, addresses.governorResearch],
-    "governorExecutor"
-  );
-  await deployAndVerify(
-    "GovernorGuard",
-    [admin, addresses.governorOperations, addresses.governorResearch],
-    "governorGuard"
-  );
+
 
   // Generate Solidity address file
   generateSolidityAddressFile({
@@ -364,7 +365,7 @@ async function main(): Promise<DeployedContracts> {
     governorResearch: addresses.governorResearch,
     governorExecutor: addresses.governorExecutor,
     governorGuard: addresses.governorGuard,
-    actionFactory: addresses.actionFactory,
+    actionFactory: addresses.actionCloneFactory,
     transaction: addresses.transaction,
     election: addresses.election,
     impeachment: addresses.impeachment,
@@ -410,6 +411,16 @@ async function main(): Promise<DeployedContracts> {
       ),
     },
     {
+      to: addresses.governorOperations,
+      value: "0",
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactory),
+    },
+    {
+      to: addresses.governorResearch,
+      value: "0",
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactory),
+    },
+    {
       to: addresses.governorResearch,
       value: "0",
       data: encodeFunctionData(
@@ -437,7 +448,7 @@ async function main(): Promise<DeployedContracts> {
       to: addresses.sciManager,
       value: "0",
       data: encodeFunctionData("setGovRes(address)", addresses.governorResearch),
-    },
+    }
   ];
 
   const safeBatchTransaction = {

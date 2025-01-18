@@ -11,11 +11,18 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
 
     error CannotBeZeroAddress();
     error ConfigDisabled();
+    error ZeroAddressImplementation();
+    error EmptyActionName();
+    error MaxActionTypesReached();
+    error NotAContract(address implementation);
+    error Unauthorized(address caller);
 
     mapping(address => bool) public isFactoryAction;
     mapping(uint256 => ActionConfig) public actionConfigs;
     uint256 public actionTypesCount = 1;
     address public admin;
+    address public govOpsContract;
+    address public govResContract;
 
     struct ActionConfig {
         string name;
@@ -36,26 +43,49 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         address transaction_,
         address election_,
         address impeachment_,
-        address parameterChange_
+        address parameterChange_,
+        address govOps_,
+        address govRes_
     ) {
+        if (
+            govOps_ == address(0) ||
+            govRes_ == address(0) ||
+            transaction_ == address(0) ||
+            election_ == address(0) ||
+            impeachment_ == address(0) ||
+            parameterChange_ == address(0)
+        ) revert CannotBeZeroAddress();
+
+        govOpsContract = govOps_;
+        govResContract = govRes_;
         _addActionConfig("transaction", transaction_); //1
-        _addActionConfig("election", election_); //2 
+        _addActionConfig("election", election_); //2
         _addActionConfig("impeachment", impeachment_); //3
         _addActionConfig("parameterChange", parameterChange_); //4
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /**
-     * @notice Adds a new action type configuration.
-     * @dev Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
-     * @param name A human-readable name for this action type.
-     * @param implementation The address of the contract that will serve as the clone’s implementation.
-     * Emits an {ActionConfigAdded} event.
+     * @dev Creates a new action config with the given name and implementation.
+     *      Assigns an incremental ID, enables it by default, and emits ActionConfigAdded.
+     * @param name The name identifier for this action type
+     * @param implementation The contract to use as implementation for clones
      */
     function _addActionConfig(
         string memory name,
         address implementation
     ) internal {
+        if (implementation == address(0)) revert ZeroAddressImplementation();
+        if (bytes(name).length == 0) revert EmptyActionName();
+        if (actionTypesCount >= type(uint256).max)
+            revert MaxActionTypesReached();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(implementation)
+        }
+        if (size == 0) revert NotAContract(implementation);
+
         actionConfigs[actionTypesCount] = ActionConfig({
             name: name,
             enabled: true,
@@ -65,11 +95,10 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
         actionTypesCount++;
     }
     /**
-     * @notice Adds a new action type configuration.
-     * @dev Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
+     * @dev Adds a new action type configuration.
+     *      Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
      * @param name A human-readable name for this action type.
      * @param implementation The address of the contract that will serve as the clone’s implementation.
-     * Emits an {ActionConfigAdded} event.
      */
     function addActionConfig(
         string memory name,
@@ -94,21 +123,20 @@ contract ActionCloneFactory is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new action clone based on a specified action type.
+     * @notice Creates a new action clone based on action type.
      * @param actionType The identifier of the action type to clone (index in the `actionConfigs` mapping).
      * @param params Initialization parameters passed to the action’s `initialize()` method.
      * @return clone The address of the newly created clone contract.
-     * Requirements:
-     * - The action type must be enabled.
-     * - The cloned contract must implement an `initialize(bytes memory params)` function conforming to `IAction`.
-     * Emits an {ActionCreated} event.
      */
     function createAction(
         uint256 actionType,
         bytes memory params
     ) external returns (address) {
+        if (!(msg.sender == govOpsContract || msg.sender == govResContract))
+            revert Unauthorized(msg.sender);
+            
         ActionConfig memory config = actionConfigs[actionType];
-        if(!config.enabled) revert ConfigDisabled();
+        if (!config.enabled) revert ConfigDisabled();
 
         address clone = config.implementation.clone();
         IAction(clone).initialize(params);

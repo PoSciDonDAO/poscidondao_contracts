@@ -97,6 +97,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     IPo private _po;
     IGovernorExecution private _govExec;
     IGovernorGuard private _govGuard;
+    IActionCloneFactory private _factory;
 
     ///*** KEY ADDRESSES ***///
     address public sciManagerAddress;
@@ -107,7 +108,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     uint256 private _proposalIndex;
     uint256 private _actionTypeLimit;
     GovernanceParameters public governanceParams;
-    IActionCloneFactory public factory;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
     mapping(address => uint256) private _lastClaimedProposal;
@@ -181,19 +181,23 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votesTotal
     );
 
+    event VotingStreakUpdated(
+        address indexed user,
+        uint256 oldStreak,
+        uint256 newStreak
+    );
+
     constructor(
         address sciManager_,
         address admin_,
         address po_,
-        address signer_,
-        address factory_
+        address signer_
     ) {
         if (
             sciManager_ == address(0) ||
             admin_ == address(0) ||
             po_ == address(0) ||
-            signer_ == address(0) ||
-            factory_ == address(0)
+            signer_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
@@ -201,7 +205,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         admin = admin_;
         _po = IPo(po_);
         _signer = signer_;
-        factory = IActionCloneFactory(factory_);
         _actionTypeLimit = 4;
 
         governanceParams.opThreshold = 5000e18;
@@ -260,11 +263,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Sets the new factory contract address
      * @param newFactoryAddress The address to be set as the factory contract
      */
-    function setFactoryAddress(
+    function setFactory(
         address newFactoryAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
-        factory = IActionCloneFactory(newFactoryAddress);
+        _factory = IActionCloneFactory(newFactoryAddress);
         emit FactoryUpdated(msg.sender, newFactoryAddress);
     }
 
@@ -422,7 +425,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (bytes(info).length == 0) revert InvalidInput();
         if (actionType > _actionTypeLimit)
             revert InvalidActionType(actionType, _actionTypeLimit);
-        if (address(factory) == address(0)) revert FactoryNotSet();
+        if (address(_factory) == address(0)) revert FactoryNotSet();
         if (governanceParams.voteLockTime < governanceParams.proposalLifetime) {
             revert VoteLockShorterThanProposal(
                 governanceParams.voteLockTime,
@@ -434,7 +437,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool executable = actionType != 0;
 
         if (executable) {
-            action = factory.createAction(actionType, actionParams);
+            action = _factory.createAction(actionType, actionParams);
 
             uint256 codeSize;
             assembly {
@@ -722,6 +725,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Returns the factory address
+     */
+    function getFactory() external view returns (address) {
+        return address(_factory);
+    }
+
+    /**
      * @dev Returns the _signer address. Is a DAO-controlled address.
      */
     function getSigner()
@@ -983,16 +993,21 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _proposals[index].votesTotal += actualVotes;
 
         if (!voteData.voted) {
+            uint256 oldStreak = _votingStreak[msg.sender];
+            uint256 newStreak;
+
             if (index > 0 && _userVoteData[msg.sender][index - 1].voted) {
-                _votingStreak[msg.sender] = _votingStreak[msg.sender] >=
+                newStreak = _votingStreak[msg.sender] >=
                     governanceParams.maxVotingStreak
                     ? governanceParams.maxVotingStreak
                     : _votingStreak[msg.sender] + 1;
             } else {
-                _votingStreak[msg.sender] = 1;
+                newStreak = 1;
             }
 
-            voteData.votingStreakAtVote = _votingStreak[msg.sender];
+            _votingStreak[msg.sender] = newStreak;
+            emit VotingStreakUpdated(msg.sender, oldStreak, newStreak);
+            voteData.votingStreakAtVote = newStreak;
         }
 
         voteData.voted = true;

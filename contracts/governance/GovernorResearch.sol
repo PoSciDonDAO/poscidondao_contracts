@@ -70,6 +70,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** INTERFACES ***///
     IGovernorExecution private _govExec;
     IGovernorGuard private _govGuard;
+    IActionCloneFactory private _factory;
 
     ///*** KEY ADDRESSES ***///
     address public sciManagerAddress;
@@ -78,7 +79,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     ///*** STORAGE & MAPPINGS ***///
     GovernanceParameters public governanceParams;
-    IActionCloneFactory public factory;
+
     uint256 private _actionTypeLimit;
     uint256 private _proposalIndex;
     uint256 constant _VOTE = 1;
@@ -156,21 +157,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     constructor(
         address sciManager_,
         address admin_,
-        address researchFundingWallet_,
-        address factory_
+        address researchFundingWallet_
     ) {
         if (
             sciManager_ == address(0) ||
             admin_ == address(0) ||
-            researchFundingWallet_ == address(0) ||
-            factory_ == address(0)
+            researchFundingWallet_ == address(0)
         ) {
             revert CannotBeZeroAddress();
         }
         sciManagerAddress = sciManager_;
         admin = admin_;
         researchFundingWallet = researchFundingWallet_;
-        factory = IActionCloneFactory(factory_);
         _actionTypeLimit = 1;
 
         governanceParams.ddThreshold = 1000e18;
@@ -214,11 +212,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Sets the new factory contract address
      * @param newFactoryAddress The address to be set as the factory contract
      */
-    function setFactoryAddress(
+    function setFactory(
         address newFactoryAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactoryAddress == address(0)) revert CannotBeZeroAddress();
-        factory = IActionCloneFactory(newFactoryAddress);
+        _factory = IActionCloneFactory(newFactoryAddress);
         emit FactoryUpdated(msg.sender, newFactoryAddress);
     }
 
@@ -402,12 +400,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (bytes(info).length == 0) revert InvalidInput();
         if (actionType > _actionTypeLimit)
             revert InvalidActionType(actionType, _actionTypeLimit);
-        if (address(factory) == address(0)) revert FactoryNotSet();
+        if (address(_factory) == address(0)) revert FactoryNotSet();
         address action;
         bool executable = actionType != 0;
 
         if (executable) {
-            action = factory.createAction(actionType, actionParams);
+            action = _factory.createAction(actionType, actionParams);
 
             uint256 codeSize;
             assembly {
@@ -578,11 +576,19 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         return _proposalIndex;
     }
 
+
     /**
      * @dev Returns the set action type limit
      */
     function getActionTypeLimit() external view returns (uint256) {
         return _actionTypeLimit;
+    }
+
+    /**
+     * @dev Returns the factory address
+     */
+    function getFactory() external view returns (address) {
+        return address(_factory);
     }
 
     /**
@@ -816,7 +822,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) internal returns (uint256) {
         Proposal memory proposal = Proposal(
             info,
-            block.number,
+            block.timestamp,
             block.timestamp + governanceParams.proposalLifetime,
             ProposalStatus.Active,
             action,
