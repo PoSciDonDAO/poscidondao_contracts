@@ -123,8 +123,8 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         if (newAdmin_ == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         emit AdminSet(oldAdmin, newAdmin_);
     }
 

@@ -240,8 +240,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         if (newAdmin == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         emit AdminSet(oldAdmin, newAdmin);
     }
 
@@ -642,7 +642,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param support User's choice to support a proposal or not
      * @param isUnique The status of the uniqueness of the account casting the vote
      * @param timestamp The timestamp when the signature was created
-     * @param signature The signature of the data related to the account's uniqueness
+     * @param signature The signature of the data related to the account's uniqueness. Is signed off-chain by the DAO-controlled signer.
      */
     function voteQV(
         uint256 index,

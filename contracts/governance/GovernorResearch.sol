@@ -40,7 +40,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
-    error ContractAlreadySet();
     error InvalidInterface();
     error NotAContract(address contractAddress);
 
@@ -91,8 +90,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     uint256 private _proposalIndex;
     uint256 private _baseVoteAmount;
     mapping(uint256 => Proposal) private _proposals;
-    mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
     mapping(address => uint256) private _userMultipliers;
+    mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
@@ -333,7 +332,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Checks if user has the DD role
      * @param member the address of the DAO member
      */
-    function checkDueDiligenceRole(address member) external view returns (bool) {
+    function checkDueDiligenceRole(
+        address member
+    ) external view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
     }
 
@@ -347,8 +348,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         address oldAdmin = admin;
         admin = newAdmin_;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
         emit AdminSet(oldAdmin, newAdmin_);
     }
 
@@ -372,7 +373,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
         if (newSciManagerAddress == sciManagerAddress) revert SameAddress();
-        if (sciManagerAddress != address(0)) revert ContractAlreadySet();
 
         uint256 size;
         assembly {

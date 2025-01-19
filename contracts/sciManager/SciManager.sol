@@ -114,8 +114,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         if (newAdmin == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin;
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         emit AdminSet(oldAdmin, newAdmin);
     }
 

@@ -46,8 +46,8 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         if (newRewardWallet == address(0)) revert CannotBeZeroAddress();
         address oldRewardWallet = rewardWallet;
         rewardWallet = newRewardWallet;
-        _grantRole(DEFAULT_ADMIN_ROLE, newRewardWallet);
         _revokeRole(DEFAULT_ADMIN_ROLE, oldRewardWallet);
+        _grantRole(DEFAULT_ADMIN_ROLE, newRewardWallet);
         emit RewardWalletSet(oldRewardWallet, newRewardWallet);
     }
 
