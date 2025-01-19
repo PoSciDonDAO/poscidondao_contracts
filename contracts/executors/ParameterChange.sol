@@ -18,6 +18,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
     error FactoryAlreadySet();
+    error FactoryNotSet();
     error NotAContract(address);
     error Unauthorized(address caller);
 
@@ -48,9 +49,10 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (gov, governorExecutor, param string, data)
      */
     function initialize(bytes memory params) external {
-        if (_initialized) revert AlreadyInitialized();
         if (msg.sender != factory) revert Unauthorized(msg.sender);
-
+        if (factory == address(0)) revert FactoryNotSet();
+        if (_initialized) revert AlreadyInitialized();
+        
         (address gov_, address governorExecutor_, string memory param_, uint256 data_) = 
             abi.decode(params, (address, address, string, uint256));
 

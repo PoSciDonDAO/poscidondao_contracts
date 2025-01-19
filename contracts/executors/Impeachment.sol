@@ -18,6 +18,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     error AddressHasNotDDRole();
     error AlreadyInitialized();
     error FactoryAlreadySet();
+    error FactoryNotSet();
     error NotAContract(address);
     error Unauthorized(address caller);
 
@@ -50,9 +51,9 @@ contract Impeachment is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (_initialized) revert AlreadyInitialized();
         if (msg.sender != factory) revert Unauthorized(msg.sender);
-
+        if (factory == address(0)) revert FactoryNotSet();
+        if (_initialized) revert AlreadyInitialized();
         (
             address[] memory targetWallets_,
             address governorResearch_,

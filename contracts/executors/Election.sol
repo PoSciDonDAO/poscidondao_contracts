@@ -18,7 +18,10 @@ contract Election is ReentrancyGuard, AccessControl {
     error AlreadyInitialized();
     error CannotBeZeroAddress();
     error FactoryAlreadySet();
+    error FactoryNotSet();
     error NotAContract(address);
+    error Unauthorized(address caller);
+
     address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
@@ -30,7 +33,11 @@ contract Election is ReentrancyGuard, AccessControl {
 
     event ActionExecuted(address indexed action, string indexed contractName);
     event FactorySet(address indexed user, address newAddress);
-
+    event Initialized(
+        address[] targetWallets,
+        address governorResearch,
+        address governorExecutor
+    );
     /**
      * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
      */
@@ -62,10 +69,9 @@ contract Election is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (_initialized) {
-            revert AlreadyInitialized();
-        }
-
+        if (msg.sender != factory) revert Unauthorized(msg.sender);
+        if (factory == address(0)) revert FactoryNotSet();
+        if (_initialized) revert AlreadyInitialized();
         (
             address[] memory targetWallets_,
             address governorResearch_,
@@ -97,6 +103,7 @@ contract Election is ReentrancyGuard, AccessControl {
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
 
         _initialized = true;
+        emit Initialized(targetWallets_, governorResearch_, governorExecutor_);
     }
 
     /**

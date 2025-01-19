@@ -208,7 +208,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovExec == address(0)) revert CannotBeZeroAddress();
         if (newGovExec == address(_govExec)) revert SameAddress();
-        if (address(_govExec) != address(0)) revert ContractAlreadySet();
 
         uint256 size;
         assembly {
@@ -229,13 +228,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovGuard == address(0)) revert CannotBeZeroAddress();
         if (newGovGuard == address(_govGuard)) revert SameAddress();
-        if (address(_govGuard) != address(0)) revert ContractAlreadySet();
-
         uint256 size;
         assembly {
             size := extcodesize(newGovGuard)
         }
         if (size == 0) revert NotAContract(newGovGuard);
+        _revokeRole(GUARD_ROLE, address(_govGuard));
         _govGuard = IGovernorGuard(newGovGuard);
         _grantRole(GUARD_ROLE, newGovGuard);
         emit GovGuardUpdated(msg.sender, newGovGuard);
@@ -250,7 +248,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         if (newFactory == address(_factory)) revert SameAddress();
-
         uint256 size;
         assembly {
             size := extcodesize(newFactory)
@@ -336,7 +333,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      * @dev Checks if user has the DD role
      * @param member the address of the DAO member
      */
-    function checkDueDiligenceRole(address member) public view returns (bool) {
+    function checkDueDiligenceRole(address member) external view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
     }
 

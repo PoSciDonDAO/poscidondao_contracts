@@ -18,12 +18,13 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZero();
     error CannotBeZeroAddress();
     error FactoryAlreadySet();
+    error FactoryNotSet();
     error NotAContract(address);
     error Unauthorized(address user);
 
-    address public constant USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
-    address public constant SCI = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE; //replace with mainnet address
-    address public constant ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
+    address public immutable USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
+    address public immutable SCI = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE; //replace with mainnet address
+    address public immutable ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     address public governorExecutor;
     address public targetWallet;
@@ -57,11 +58,17 @@ contract Transaction is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (fundingWallet, targetWallet, amountUsdc, amountSci, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (_initialized) revert AlreadyInitialized();
         if (msg.sender != factory) revert Unauthorized(msg.sender);
+        if (factory == address(0)) revert FactoryNotSet();
+        if (_initialized) revert AlreadyInitialized();
 
-        (address fundingWallet_, address targetWallet_, uint256 amountUsdc_, uint256 amountSci_, address governorExecutor_) = 
-            abi.decode(params, (address, address, uint256, uint256, address));
+        (
+            address fundingWallet_,
+            address targetWallet_,
+            uint256 amountUsdc_,
+            uint256 amountSci_,
+            address governorExecutor_
+        ) = abi.decode(params, (address, address, uint256, uint256, address));
 
         if (
             fundingWallet_ == address(0) ||
@@ -82,7 +89,13 @@ contract Transaction is ReentrancyGuard, AccessControl {
         governorExecutor = governorExecutor_;
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
         _initialized = true;
-        emit Initialized(fundingWallet_, targetWallet_, amountUsdc_, amountSci_, governorExecutor_);
+        emit Initialized(
+            fundingWallet_,
+            targetWallet_,
+            amountUsdc_,
+            amountSci_,
+            governorExecutor_
+        );
     }
 
     /**

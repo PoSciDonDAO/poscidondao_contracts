@@ -62,6 +62,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error NotQuadraticVotingProposal();
     error InvalidParameterValue(bytes32 param, uint256 value, string reason);
     error NotAContract(address contractAddress);
+    error SignatureExpired(uint256 validUntilBlock, uint256 currentBlock);
+    error SignatureNotYetValid(uint256 validFromBlock, uint256 currentBlock);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -120,7 +122,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(address => uint256) private _latestVoteTimestamp;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
     mapping(address => uint256) private _userNonces;
-    uint256 public constant SIGNATURE_VALIDITY_PERIOD = 1 hours;
+    uint256 public constant SIGNATURE_VALID_FOR_BLOCKS = 40; // ~10 minutes with 15s block time
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
@@ -265,7 +267,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Sets the sciManager address
      * @param newSciManager The address to be set as the sci manager contract
      */
-    function setSciManagerAddress(
+    function setSciManager(
         address newSciManager
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSciManager == address(0)) revert CannotBeZeroAddress();
@@ -641,14 +643,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param index The index of the proposal
      * @param support User's choice to support a proposal or not
      * @param isUnique The status of the uniqueness of the account casting the vote
-     * @param timestamp The timestamp when the signature was created
+     * @param validFromBlock The block number when the signature is valid from
      * @param signature The signature of the data related to the account's uniqueness
      */
     function voteQV(
         uint256 index,
         bool support,
         bool isUnique,
-        uint256 timestamp,
+        uint256 validFromBlock,
         bytes memory signature
     ) external nonReentrant {
         _votingChecks(index, msg.sender);
@@ -657,13 +659,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert NotQuadraticVotingProposal();
         }
 
-        bool verified = _verify(
-            msg.sender,
-            isUnique,
-            timestamp,
-            index,
-            signature
-        );
+        bool verified = _verify(msg.sender, isUnique, validFromBlock, index, signature);
         if (!verified) revert InvalidSignatureProvided();
         if (!isUnique) revert UserNotUnique();
 
@@ -673,7 +669,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             .getLatestUserRights(msg.sender);
 
         if (votingRights >= governanceParams.votingRightsThreshold) {
-            uint256 actualVotes = Math.sqrt(votingRights / 10 ** 18) * 10 ** 18;
+            uint256 actualVotes = Math.sqrt(votingRights * 10 ** 18); // sqrt(x * 10^18) to maintain 18 decimals
             _recordVote(index, support, actualVotes);
         } else {
             revert VotingRightsThresholdNotReached();
@@ -1026,14 +1022,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @param user The user's Ethereum address.
      * @param isUnique Boolean flag representing whether the user's status is unique.
      * @param nonce The user's current nonce.
-     * @param timestamp The timestamp when the signature was created.
+     * @param validFromBlock The block number when the signature is valid from
      * @param proposalIndex The index of the proposal being voted on.
      */
     function _getMessageHash(
         address user,
         bool isUnique,
         uint256 nonce,
-        uint256 timestamp,
+        uint256 validFromBlock,
         uint256 proposalIndex
     ) internal pure returns (bytes32) {
         return
@@ -1042,7 +1038,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     user,
                     isUnique,
                     nonce,
-                    timestamp,
+                    validFromBlock,
                     proposalIndex
                 )
             );
@@ -1052,42 +1048,35 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      * @dev Verifies if a given signature is valid for the specified parameters.
      * @param user The address of the user to verify.
      * @param isUnique Boolean flag to check along with the user address.
-     * @param timestamp The timestamp when the signature was created.
+     * @param validFromBlock The block number when the signature is valid from
      * @param proposalIndex The index of the proposal being voted on.
      * @param signature The signature to verify.
      */
     function _verify(
         address user,
         bool isUnique,
-        uint256 timestamp,
+        uint256 validFromBlock,
         uint256 proposalIndex,
         bytes memory signature
     ) internal view returns (bool) {
-        // Check timestamp validity
-        if (
-            timestamp + SIGNATURE_VALIDITY_PERIOD < block.timestamp ||
-            timestamp > block.timestamp
-        ) {
-            return false;
+        // Check block number validity
+        if (block.number > validFromBlock + SIGNATURE_VALID_FOR_BLOCKS) {
+            revert SignatureExpired(validFromBlock + SIGNATURE_VALID_FOR_BLOCKS, block.number);
+        }
+        if (block.number < validFromBlock) {
+            revert SignatureNotYetValid(validFromBlock, block.number);
         }
 
         bytes32 messageHash = _getMessageHash(
             user,
             isUnique,
             _userNonces[user],
-            timestamp,
+            validFromBlock,
             proposalIndex
         );
-        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
-            messageHash
-        );
+        bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(messageHash);
 
-        return
-            SignatureChecker.isValidSignatureNow(
-                _signer,
-                ethSignedMessageHash,
-                signature
-            );
+        return SignatureChecker.isValidSignatureNow(_signer, ethSignedMessageHash, signature);
     }
 
     /**
