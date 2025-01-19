@@ -3,7 +3,6 @@ pragma solidity 0.8.19;
 
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
-import "../../lib/openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
 interface IGovernorRoleRevoke {
     function revokeDueDiligenceRole(address[] memory members) external;
