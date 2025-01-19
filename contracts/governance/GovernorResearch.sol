@@ -26,6 +26,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidActionType(uint256 actionType, uint256 limit);
     error InvalidInput();
     error InvalidGovernanceParameter();
+    error MultiplierTooLow(uint256 multiplier);
     error ProposalLifetimePassed();
     error ProposalNotPassed();
     error ProposalOngoing(
@@ -34,11 +35,14 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 endBlock
     );
     error ProposalInexistent();
+    error SameAddress();
     error QuorumNotReached(uint256 index, uint256 votesTotal, uint256 quorum);
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
-    error MultiplierTooLow(uint256 multiplier);
+    error ContractAlreadySet();
+    error InvalidInterface();
+    error NotAContract(address contractAddress);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -125,7 +129,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminSet(address indexed user, address indexed newAddress);
     event BaseVoteAmountSet(uint256 newBaseVoteAmount);
-    event GovExecUpdated(address indexed user, address indexed newAddress);
+    event GovExecSet(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
     event FactorySet(address indexed user, address newAddress);
     event Impeached(address indexed impeached);
@@ -202,8 +206,18 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function setGovExec(
         address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovExec == address(0)) revert CannotBeZeroAddress();
+        if (newGovExec == address(_govExec)) revert SameAddress();
+        if (address(_govExec) != address(0)) revert ContractAlreadySet();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovExec)
+        }
+        if (size == 0) revert NotAContract(newGovExec);
+
         _govExec = IGovernorExecution(newGovExec);
-        emit GovExecUpdated(msg.sender, newGovExec);
+        emit GovExecSet(msg.sender, newGovExec);
     }
 
     /**
@@ -213,6 +227,15 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     function setGovGuard(
         address newGovGuard
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovGuard == address(0)) revert CannotBeZeroAddress();
+        if (newGovGuard == address(_govGuard)) revert SameAddress();
+        if (address(_govGuard) != address(0)) revert ContractAlreadySet();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovGuard)
+        }
+        if (size == 0) revert NotAContract(newGovGuard);
         _govGuard = IGovernorGuard(newGovGuard);
         _grantRole(GUARD_ROLE, newGovGuard);
         emit GovGuardUpdated(msg.sender, newGovGuard);
@@ -226,6 +249,13 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
+        if (newFactory == address(_factory)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
         _factory = IActionCloneFactory(newFactory);
         emit FactorySet(msg.sender, newFactory);
     }
@@ -316,6 +346,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin_ == msg.sender) revert SameAddress();
+
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
@@ -342,8 +374,23 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address newSciManagerAddress
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
-        sciManagerAddress = newSciManagerAddress;
-        emit SciManagerUpdated(msg.sender, newSciManagerAddress);
+        if (newSciManagerAddress == sciManagerAddress) revert SameAddress();
+        if (sciManagerAddress != address(0)) revert ContractAlreadySet();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newSciManagerAddress)
+        }
+        if (size == 0) revert NotAContract(newSciManagerAddress);
+
+        try
+            ISciManager(newSciManagerAddress).getLockedSci(address(this))
+        returns (uint256) {
+            sciManagerAddress = newSciManagerAddress;
+            emit SciManagerUpdated(msg.sender, newSciManagerAddress);
+        } catch {
+            revert InvalidInterface();
+        }
     }
 
     /**

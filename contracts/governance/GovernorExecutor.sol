@@ -13,14 +13,18 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     error AddressIsNotGovernor();
     error CannotBeZero();
     error CannotBeZeroAddress();
+    error DelayTooShort();
     error ExecutionFailed();
     error GovernorNotFound(address governor);
     error GovernorAlreadyExists(address governor);
     error NotScheduled(address action);
+    error SameAddress();
     error TooEarly(uint256 currentTime, uint256 scheduledTime);
 
     uint256 public delay;
+    uint256 public minimumDelay;
     address public admin;
+
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
 
@@ -50,6 +54,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert CannotBeZero();
         }
 
+        minimumDelay = 12 hours;
         delay = delay_;
         admin = admin_;
 
@@ -67,8 +72,19 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     function updateDelay(
         uint56 newDelay
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newDelay < minimumDelay) revert DelayTooShort();
         delay = newDelay;
         emit DelayUpdated(newDelay);
+    }
+
+    /**
+     * @dev Sets the minimum delay for the delay function
+     * @param newMinimumDelay the new minimum delay
+     */
+    function setMinimumDelay(
+        uint256 newMinimumDelay
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        minimumDelay = newMinimumDelay;
     }
 
     /**
@@ -77,6 +93,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin_ == msg.sender) revert SameAddress();
+
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
@@ -109,7 +127,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         if (!hasRole(GOVERNOR_ROLE, formerGovernor))
             revert GovernorAlreadyExists(formerGovernor);
 
-        _grantRole(GOVERNOR_ROLE, formerGovernor);
+        _revokeRole(GOVERNOR_ROLE, formerGovernor);
 
         emit GovernorRemoved(msg.sender, formerGovernor);
     }
@@ -145,7 +163,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Executes a scheduled action with a temporary `EXECUTOR_ROLE`.
-     *      This role needed to call functions such as setGovernanceParameters 
+     *      This role needed to call functions such as setGovernanceParameters
      *      and grantDueDiligenceRole in GovernorOperations and GovernorResearch.
      * @param action The address of the action to execute.
      */
@@ -160,15 +178,20 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert TooEarly(block.timestamp, scheduled);
         }
 
+        scheduledTime[action] = 0;
+
         _grantRole(EXECUTOR_ROLE, action);
 
-        (bool success, ) = action.call(abi.encodeWithSignature("execute()"));
+        bool success;
+        {
+            (success, ) = action.call(abi.encodeWithSignature("execute()"));
+        }
+
+        _revokeRole(EXECUTOR_ROLE, action);
+
         if (!success) {
             revert ExecutionFailed();
         }
-        scheduledTime[action] = 0;
-
-        _revokeRole(EXECUTOR_ROLE, action);
 
         emit Executed(action);
     }

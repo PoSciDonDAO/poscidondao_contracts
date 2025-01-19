@@ -15,11 +15,12 @@ contract Po is ERC1155Burnable, AccessControl {
     error CannotBeZeroAddress();
     error FunctionIsFrozen();
     error InvalidTokenId(uint256 id, uint256 participationTokenId);
-
+    error NotAContract(address);
+    error SameAddress();
     error Unauthorized(address user);
 
     address public admin;
-    address public govOpsAddress;
+    address public govOpsContract;
     string private constant _NAME = "Participation Token";
     string private constant _SYMBOL = "PO";
     bool internal _frozenUri = false;
@@ -70,20 +71,25 @@ contract Po is ERC1155Burnable, AccessControl {
 
     /**
      * @dev Sets the governance operations contract address.
-     * @param newGovOpsAddress Address of the new governance operations.
+     * @param newGovOps Address of the new governance operations.
      */
     function setGovOps(
-        address newGovOpsAddress
+        address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_frozenGovOps) revert FunctionIsFrozen();
-        if (newGovOpsAddress == address(0)) revert CannotBeZeroAddress();
-        if (govOpsAddress != address(0)) {
-            _revokeRole(MINTER_ROLE, govOpsAddress);
+        if (newGovOps == address(0)) revert CannotBeZeroAddress();
+        if (govOpsContract != address(0)) {
+            _revokeRole(MINTER_ROLE, govOpsContract);
         }
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovOps)
+        }
+        if (size == 0) revert NotAContract(newGovOps);
 
-        govOpsAddress = newGovOpsAddress;
-        _grantRole(MINTER_ROLE, govOpsAddress);
-        emit GovOpsSet(msg.sender, newGovOpsAddress);
+        govOpsContract = newGovOps;
+        _grantRole(MINTER_ROLE, govOpsContract);
+        emit GovOpsSet(msg.sender, newGovOps);
     }
 
     /**
@@ -92,6 +98,7 @@ contract Po is ERC1155Burnable, AccessControl {
      */
     function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);

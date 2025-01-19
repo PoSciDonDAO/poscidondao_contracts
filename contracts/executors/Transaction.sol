@@ -18,6 +18,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZero();
     error CannotBeZeroAddress();
     error FactoryAlreadySet();
+    error NotAContract(address);
     error Unauthorized(address user);
 
     address public constant USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
@@ -93,6 +94,12 @@ contract Transaction is ReentrancyGuard, AccessControl {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         if (factory != address(0)) revert FactoryAlreadySet();
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
+
         factory = newFactory;
         emit FactorySet(msg.sender, newFactory);
     }

@@ -48,6 +48,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     error ProposalNotPassed();
     error ProposalTooNew();
     error QuorumNotReached(uint256 index, uint256 votesTotal, uint256 quorum);
+    error SameAddress();
     error Unauthorized(address caller);
     error VoteChangeNotAllowedAfterCutOff();
     error VoteChangeWindowExpired();
@@ -56,6 +57,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 proposalLifetime
     );
     error VotingRightsThresholdNotReached();
+    error InvalidSignatureProvided();
+    error UserNotUnique();
+    error NotQuadraticVotingProposal();
+    error InvalidParameterValue(bytes32 param, uint256 value, string reason);
+    error NotAContract(address contractAddress);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -100,7 +106,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     IActionCloneFactory private _factory;
 
     ///*** KEY ADDRESSES ***///
-    address public sciManagerAddress;
+    address public sciManagerContract;
     address public admin;
     address private _signer;
 
@@ -113,6 +119,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(address => uint256) private _lastClaimedProposal;
     mapping(address => uint256) private _latestVoteTimestamp;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
+    mapping(address => uint256) private _userNonces;
+    uint256 public constant SIGNATURE_VALIDITY_PERIOD = 1 hours;
 
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
@@ -201,7 +209,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         ) {
             revert CannotBeZeroAddress();
         }
-        sciManagerAddress = sciManager_;
+        sciManagerContract = sciManager_;
         admin = admin_;
         _po = IPo(po_);
         _signer = signer_;
@@ -229,6 +237,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
@@ -260,7 +269,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newSciManager
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSciManager == address(0)) revert CannotBeZeroAddress();
-        sciManagerAddress = newSciManager;
+        if (newSciManager == sciManagerContract) revert SameAddress();
+        uint256 size;
+        assembly {
+            size := extcodesize(newSciManager)
+        }
+        if (size == 0) revert NotAContract(newSciManager);
+        sciManagerContract = newSciManager;
         emit SciManagerUpdated(msg.sender, newSciManager);
     }
 
@@ -272,6 +287,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
+        if (newFactory == address(_factory)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
+
         _factory = IActionCloneFactory(newFactory);
         emit FactorySet(msg.sender, newFactory);
     }
@@ -284,6 +307,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovExec == address(0)) revert CannotBeZeroAddress();
+        if (newGovExec == address(_govExec)) revert SameAddress();
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovExec)
+        }
+        if (size == 0) revert NotAContract(newGovExec);
+
         _govExec = IGovernorExecution(newGovExec);
         emit GovExecUpdated(msg.sender, newGovExec);
     }
@@ -296,6 +326,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         address newGovGuard
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovGuard == address(0)) revert CannotBeZeroAddress();
+        if (newGovGuard == address(_govGuard)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovGuard)
+        }
+        if (size == 0) revert NotAContract(newGovGuard);
+
         _govGuard = IGovernorGuard(newGovGuard);
         _grantRole(GUARD_ROLE, newGovGuard);
         emit GovGuardUpdated(msg.sender, newGovGuard);
@@ -319,6 +357,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function setPoToken(address po_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (po_ == address(0)) revert CannotBeZeroAddress();
+        if (po_ == address(_po)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(po_)
+        }
+        if (size == 0) revert NotAContract(po_);
         _po = IPo(po_);
         emit PoUpdated(msg.sender, po_);
     }
@@ -333,6 +378,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 data
     ) external onlyExecutor {
         if (param == "proposalLifetime") {
+            // Ensure proposal lifetime is reasonable (between 1 day and 30 days)
+            if (data < 1 days || data > 30 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 30 days"
+                );
+            }
             if (data > governanceParams.voteLockTime)
                 revert VoteLockShorterThanProposal(
                     governanceParams.voteLockTime,
@@ -340,25 +393,98 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 );
             governanceParams.proposalLifetime = data;
         } else if (param == "voteLockTime") {
+            // Vote lock time must be at least 1 day and not more than 60 days
+            if (data < 1 days || data > 60 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 60 days"
+                );
+            }
             if (data < governanceParams.proposalLifetime)
                 revert VoteLockShorterThanProposal(
                     data,
                     governanceParams.proposalLifetime
                 );
             governanceParams.voteLockTime = data;
-        } else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "proposeLockTime")
+        } else if (param == "quorum") {
+            // Quorum must be at least 0.1% of total supply
+            if (data < 18910e18) {
+                // 0.1% of 18.91M total supply
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 0.1% of total supply"
+                );
+            }
+            governanceParams.quorum = data;
+        } else if (param == "proposeLockTime") {
+            // Propose lock time must be at least 1 day and not more than 30 days
+            if (data < 1 days || data > 30 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 30 days"
+                );
+            }
             governanceParams.proposeLockTime = data;
-        else if (param == "voteChangeTime")
+        } else if (param == "voteChangeTime") {
+            // Vote change window must be at least 1 hour and not more than proposal lifetime
+            if (data < 1 hours || data > governanceParams.proposalLifetime) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 hour and proposal lifetime"
+                );
+            }
             governanceParams.voteChangeTime = data;
-        else if (param == "voteChangeCutOff")
+        } else if (param == "voteChangeCutOff") {
+            // Vote change cutoff must be at least 1 hour and not more than proposal lifetime
+            if (data < 1 hours || data > governanceParams.proposalLifetime) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 hour and proposal lifetime"
+                );
+            }
             governanceParams.voteChangeCutOff = data;
-        else if (param == "opThreshold") governanceParams.opThreshold = data;
-        else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
+        } else if (param == "opThreshold") {
+            // Operations threshold must be at least 1000 SCI
+            if (data < 1000e18) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 1000 SCI"
+                );
+            }
+            governanceParams.opThreshold = data;
+        } else if (param == "maxVotingStreak") {
+            // Max voting streak must be at least 1
+            if (data < 1) {
+                revert InvalidParameterValue(param, data, "Must be at least 1");
+            }
             governanceParams.maxVotingStreak = data;
-        else if (param == "votingRightsThreshold")
+        } else if (param == "votingRightsThreshold") {
+            // Voting rights threshold must be at least 1 SCI
+            if (data < 1e18) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 1 SCI"
+                );
+            }
             governanceParams.votingRightsThreshold = data;
-        else revert InvalidGovernanceParameter();
+        } else if (param == "votingDelay") {
+            // Voting delay must be at least 1 minute
+            if (data < 1 minutes) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 1 minute"
+                );
+            }
+            governanceParams.votingDelay = data;
+        } else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
     }
@@ -454,7 +580,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
         }
 
-        ISciManager sciManager = ISciManager(sciManagerAddress);
+        ISciManager sciManager = ISciManager(sciManagerContract);
 
         _validateLockingRequirements(sciManager, msg.sender);
 
@@ -500,7 +626,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         if (_proposals[index].quadraticVoting) revert CannotVoteOnQVProposals();
 
-        uint256 votingRights = ISciManager(sciManagerAddress)
+        uint256 votingRights = ISciManager(sciManagerContract)
             .getLatestUserRights(msg.sender);
 
         if (votingRights >= governanceParams.votingRightsThreshold) {
@@ -511,23 +637,39 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Vote for an option of a given proposal
-     *      using the rights from the most recent snapshot
-     * @param index the _proposalIndex of the proposal
-     * @param support user's choice to support a proposal or not
-     * @param isUnique The status of the uniqueness of the account casting the vote.
-     * @param signature The signature of the data related to the account's uniqueness.
+     * @dev Vote for an option of a given proposal using quadratic voting
+     * @param index The index of the proposal
+     * @param support User's choice to support a proposal or not
+     * @param isUnique The status of the uniqueness of the account casting the vote
+     * @param timestamp The timestamp when the signature was created
+     * @param signature The signature of the data related to the account's uniqueness
      */
     function voteQV(
-        uint index,
+        uint256 index,
         bool support,
         bool isUnique,
+        uint256 timestamp,
         bytes memory signature
     ) external nonReentrant {
         _votingChecks(index, msg.sender);
-        _uniquenessCheck(index, msg.sender, isUnique, signature);
 
-        uint256 votingRights = ISciManager(sciManagerAddress)
+        if (!_proposals[index].quadraticVoting) {
+            revert NotQuadraticVotingProposal();
+        }
+
+        bool verified = _verify(
+            msg.sender,
+            isUnique,
+            timestamp,
+            index,
+            signature
+        );
+        if (!verified) revert InvalidSignatureProvided();
+        if (!isUnique) revert UserNotUnique();
+
+        _userNonces[msg.sender]++;
+
+        uint256 votingRights = ISciManager(sciManagerContract)
             .getLatestUserRights(msg.sender);
 
         if (votingRights >= governanceParams.votingRightsThreshold) {
@@ -808,6 +950,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             );
     }
 
+    /**
+     * @dev Returns the current nonce for a user
+     * @param user The address of the user
+     */
+    function getUserNonce(address user) external view returns (uint256) {
+        return _userNonces[user];
+    }
+
     ///*** INTERNAL FUNCTIONS ***///
 
     /**
@@ -872,51 +1022,62 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Performs validation checks for quadratic voting actions.
-     *      This function validates the presence of Holonym's SBT in the user's account
-     *      to ensure the account is unique.
-     *
-     * @param index The index of the proposal on which to vote.
-     * @param isUnique The status of the uniqueness of the account casting the vote.
-     * @param signature The signature of the data related to the account's uniqueness.
-     */
-    function _uniquenessCheck(
-        uint256 index,
-        address user,
-        bool isUnique,
-        bytes memory signature
-    ) internal view {
-        if (_proposals[index].quadraticVoting) {
-            bool verified = _verify(user, isUnique, signature);
-            require(verified, "Invalid signature");
-            require(isUnique, "User does not have a valid SBT");
-        }
-    }
-
-    /**
      * @dev Calculates a keccak256 hash for the given parameters.
      * @param user The user's Ethereum address.
      * @param isUnique Boolean flag representing whether the user's status is unique.
+     * @param nonce The user's current nonce.
+     * @param timestamp The timestamp when the signature was created.
+     * @param proposalIndex The index of the proposal being voted on.
      */
     function _getMessageHash(
         address user,
-        bool isUnique
+        bool isUnique,
+        uint256 nonce,
+        uint256 timestamp,
+        uint256 proposalIndex
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(user, isUnique));
+        return
+            keccak256(
+                abi.encodePacked(
+                    user,
+                    isUnique,
+                    nonce,
+                    timestamp,
+                    proposalIndex
+                )
+            );
     }
 
     /**
-     * @dev Verifies if a given signature is valid for the specified user and uniqueness.
+     * @dev Verifies if a given signature is valid for the specified parameters.
      * @param user The address of the user to verify.
      * @param isUnique Boolean flag to check along with the user address.
+     * @param timestamp The timestamp when the signature was created.
+     * @param proposalIndex The index of the proposal being voted on.
      * @param signature The signature to verify.
      */
     function _verify(
         address user,
         bool isUnique,
+        uint256 timestamp,
+        uint256 proposalIndex,
         bytes memory signature
     ) internal view returns (bool) {
-        bytes32 messageHash = _getMessageHash(user, isUnique);
+        // Check timestamp validity
+        if (
+            timestamp + SIGNATURE_VALIDITY_PERIOD < block.timestamp ||
+            timestamp > block.timestamp
+        ) {
+            return false;
+        }
+
+        bytes32 messageHash = _getMessageHash(
+            user,
+            isUnique,
+            _userNonces[user],
+            timestamp,
+            proposalIndex
+        );
         bytes32 ethSignedMessageHash = ECDSA.toEthSignedMessageHash(
             messageHash
         );
@@ -1022,7 +1183,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
         _latestVoteTimestamp[msg.sender] = block.timestamp;
 
-        ISciManager(sciManagerAddress).voted(
+        ISciManager(sciManagerContract).voted(
             msg.sender,
             block.timestamp + governanceParams.voteLockTime
         );

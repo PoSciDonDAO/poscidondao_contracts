@@ -18,6 +18,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
     error FactoryAlreadySet();
+    error NotAContract(address);
     error Unauthorized(address caller);
 
     address public gov;
@@ -34,7 +35,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     event ActionExecuted(address indexed action, string indexed contractName);
     event Initialized(address gov, address governorExecutor, string param, uint256 data);
     event FactorySet(address indexed user, address newAddress);
-    
+
     /**
      * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
      */
@@ -117,6 +118,12 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         if (factory != address(0)) revert FactoryAlreadySet();
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
+
         factory = newFactory;
         emit FactorySet(msg.sender, newFactory);
     }

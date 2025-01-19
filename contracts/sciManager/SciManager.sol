@@ -26,6 +26,8 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
+    error NotAContract(address);
+    error SameAddress();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
 
@@ -109,6 +111,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
      */
     function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
@@ -124,18 +127,33 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovExec
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovExec == address(0)) revert CannotBeZeroAddress();
+        if (newGovExec == address(_govExec)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovExec)
+        }
+        if (size == 0) revert NotAContract(newGovExec);
+
         _govExec = IGovernorExecution(newGovExec);
         emit GovExecSet(msg.sender, newGovExec);
     }
 
     /**
-     * @dev Sets the GovernorOperations address
-     * @param newGovOps The address to be set as the governor operations
+     * @dev Sets the governance operations contract address.
+     * @param newGovOps Address of the new governance operations.
      */
     function setGovOps(
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovOps == address(0)) revert CannotBeZeroAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovOps)
+        }
+        if (size == 0) revert NotAContract(newGovOps);
+
         govOpsContract = newGovOps;
         emit GovOpsSet(msg.sender, newGovOps);
     }
@@ -147,6 +165,13 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovRes
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovRes == address(0)) revert CannotBeZeroAddress();
+        if (newGovRes == address(govResContract)) revert SameAddress();
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovRes)
+        }
+        if (size == 0) revert NotAContract(newGovRes);
+
         govResContract = newGovRes;
         emit GovResSet(msg.sender, newGovRes);
     }

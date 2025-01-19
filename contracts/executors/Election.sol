@@ -18,7 +18,7 @@ contract Election is ReentrancyGuard, AccessControl {
     error AlreadyInitialized();
     error CannotBeZeroAddress();
     error FactoryAlreadySet();
-
+    error NotAContract(address);
     address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
@@ -47,6 +47,12 @@ contract Election is ReentrancyGuard, AccessControl {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         if (factory != address(0)) revert FactoryAlreadySet();
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
+
         factory = newFactory;
         emit FactorySet(msg.sender, newFactory);
     }

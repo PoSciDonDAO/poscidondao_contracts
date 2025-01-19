@@ -7,7 +7,7 @@ import "../interfaces/IAction.sol";
 
 contract ActionCloneFactoryResearch is ActionCloneFactoryBase {
     using Clones for address;
-    address public govResContract;
+    address public immutable govResContract;
 
     constructor(address govRes_, address transaction_) {
         if (govRes_ == address(0) || transaction_ == address(0))
@@ -35,7 +35,7 @@ contract ActionCloneFactoryResearch is ActionCloneFactoryBase {
 
         address clone = config.implementation.clone();
         IAction(clone).initialize(params);
-        isFactoryAction[clone] = true;
+        _registerAction(clone);
 
         emit ActionCreated(clone, config.name);
         return clone;

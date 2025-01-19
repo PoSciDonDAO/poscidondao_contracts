@@ -5,17 +5,19 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
 import "../../lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
 
 abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
-
+    error ActionTypeNotFound(uint256 actionType);
+    error ActionTypeAlreadyExists(string name);
     error CannotBeZeroAddress();
     error ConfigDisabled();
-    error ZeroAddressImplementation();
     error EmptyActionName();
-    error MaxActionTypesReached();
     error NotAContract(address implementation);
+    error SameAddress();
     error Unauthorized(address caller);
+    error ZeroAddressImplementation();
 
     mapping(address => bool) public isFactoryAction;
     mapping(uint256 => ActionConfig) public actionConfigs;
+    mapping(string => bool) private _actionNameExists;
     uint256 public actionTypesCount = 1;
     address public admin;
 
@@ -34,10 +36,11 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
     );
     event ActionConfigUpdated(uint256 indexed actionType, bool enabled);
     event AdminSet(address indexed user, address indexed newAddress);
+    event ActionRegistered(address indexed action);
 
     /**
      * @dev Creates a new action config with the given name and implementation.
-     *      Assigns an incremental ID, enables it by default, and emits ActionConfigAdded.
+     *      Assigns an incremental ID and enables it by default.
      * @param name The name identifier for this action type
      * @param implementation The contract to use as implementation for clones
      */
@@ -47,8 +50,7 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
     ) internal {
         if (implementation == address(0)) revert ZeroAddressImplementation();
         if (bytes(name).length == 0) revert EmptyActionName();
-        if (actionTypesCount >= type(uint256).max)
-            revert MaxActionTypesReached();
+        if (_actionNameExists[name]) revert ActionTypeAlreadyExists(name);
 
         uint256 size;
         assembly {
@@ -56,13 +58,14 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         }
         if (size == 0) revert NotAContract(implementation);
 
+        _actionNameExists[name] = true;
         actionConfigs[actionTypesCount] = ActionConfig({
             name: name,
             enabled: true,
             implementation: implementation
         });
-        emit ActionConfigAdded(actionTypesCount, name, implementation);
         actionTypesCount++;
+        emit ActionConfigAdded(actionTypesCount, name, implementation);
     }
 
     /**
@@ -83,14 +86,33 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
      * @dev Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
      * @param actionType The identifier of the action type (index in the `actionConfigs` mapping).
      * @param enabled A boolean indicating whether this action type should be marked as enabled or disabled.
-     * Emits an {ActionConfigUpdated} event.
      */
     function toggleActionConfig(
         uint256 actionType,
         bool enabled
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (bytes(actionConfigs[actionType].name).length == 0) {
+            revert ActionTypeNotFound(actionType);
+        }
         actionConfigs[actionType].enabled = enabled;
         emit ActionConfigUpdated(actionType, enabled);
+    }
+
+    /**
+     * @dev Internal function to register a new action clone
+     * @param action The address of the action to register
+     */
+    function _registerAction(address action) internal {
+        if (action == address(0)) revert CannotBeZeroAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(action)
+        }
+        if (size == 0) revert NotAContract(action);
+
+        isFactoryAction[action] = true;
+        emit ActionRegistered(action);
     }
 
     /**
@@ -99,6 +121,7 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
      */
     function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin_ == msg.sender) revert SameAddress();
         address oldAdmin = admin;
         admin = newAdmin_;
         _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);

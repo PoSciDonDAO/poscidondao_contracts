@@ -18,6 +18,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     error AddressHasNotDDRole();
     error AlreadyInitialized();
     error FactoryAlreadySet();
+    error NotAContract(address);
     error Unauthorized(address caller);
 
     address[] internal _targetWallets;
@@ -101,6 +102,11 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         if (factory != address(0)) revert FactoryAlreadySet();
+        uint256 size;
+        assembly {
+            size := extcodesize(newFactory)
+        }
+        if (size == 0) revert NotAContract(newFactory);
         factory = newFactory;
         emit FactorySet(msg.sender, newFactory);
     }
