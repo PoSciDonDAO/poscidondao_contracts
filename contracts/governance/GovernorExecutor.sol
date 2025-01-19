@@ -37,6 +37,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     event GovernorAdded(address indexed user, address indexed newGovernor);
     event GovernorRemoved(address indexed user, address indexed formerGovernor);
     event Scheduled(address indexed action);
+    event MinimumDelayUpdated(uint256 newMinimumDelay);
 
     constructor(
         address admin_,
@@ -85,6 +86,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
         uint256 newMinimumDelay
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         minimumDelay = newMinimumDelay;
+        emit MinimumDelayUpdated(newMinimumDelay);
     }
 
     /**
