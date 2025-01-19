@@ -321,7 +321,12 @@ async function main(): Promise<DeployedContracts> {
   await deployAndVerify(
     "Transaction",
     [],
-    "transaction"
+    "transactionResearch"
+  );
+  await deployAndVerify(
+    "Transaction",
+    [],
+    "transactionOperations"
   );
   await deployAndVerify(
     "Election",
@@ -371,8 +376,9 @@ async function main(): Promise<DeployedContracts> {
     governorExecutor: addresses.governorExecutor,
     governorGuard: addresses.governorGuard,
     actionFactoryResearch: addresses.actionCloneFactoryResearch,
-    actionFactoryOperations: addresses.actionCloneFactoryOperations ,
-    transaction: addresses.transaction,
+    actionFactoryOperations: addresses.actionCloneFactoryOperations,
+    transactionResearch: addresses.transactionResearch,
+    transactionOperations: addresses.transactionOperations,
     election: addresses.election,
     impeachment: addresses.impeachment,
     parameterChange: addresses.parameterChange
@@ -425,6 +431,16 @@ async function main(): Promise<DeployedContracts> {
       to: addresses.governorResearch,
       value: "0",
       data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryResearch),
+    },
+    {
+      to: addresses.transactionResearch,
+      value: "0",
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryResearch),
+    },
+    {
+      to: addresses.transactionOperations,
+      value: "0",
+      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
     },
     {
       to: addresses.governorResearch,

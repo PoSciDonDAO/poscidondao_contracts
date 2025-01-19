@@ -15,6 +15,7 @@ import "../../lib/openzeppelin-contracts/contracts/access/AccessControl.sol";
  */
 contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** ERRORS ***///
+    error CannotBeZero();
     error CannotBeZeroAddress();
     error CannotComplete();
     error CannotExecute();
@@ -123,9 +124,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     /*** EVENTS ***/
     event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminSet(address indexed user, address indexed newAddress);
+    event BaseVoteAmountSet(uint256 newBaseVoteAmount);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
-    event FactoryUpdated(address indexed user, address newAddress);
+    event FactorySet(address indexed user, address newAddress);
     event Impeached(address indexed impeached);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -144,6 +146,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address indexed user,
         address indexed setNewResearchFundingWallet
     );
+    event UserMultiplierSet(address indexed user, uint256 multiplier);
+
     event Voted(
         uint256 indexed index,
         address indexed user,
@@ -156,7 +160,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 votesAgainst,
         uint256 votesTotal
     );
-    event UserMultiplierSet(address indexed user, uint256 multiplier);
 
     constructor(
         address sciManager_,
@@ -178,7 +181,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
         governanceParams.ddThreshold = 1000e18;
         governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 min
-        governanceParams.quorum = 1; //set based on number of DD members 
+        governanceParams.quorum = 1; //set based on number of DD members
         governanceParams.voteLockTime = 10 minutes; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
         governanceParams.proposeLockTime = 10 minutes; //prod: 2 weeks, test: 30 minutes
         governanceParams.voteChangeTime = 10 minutes; //prod: 12 hours, test: 10 minutes
@@ -224,7 +227,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         _factory = IActionCloneFactory(newFactory);
-        emit FactoryUpdated(msg.sender, newFactory);
+        emit FactorySet(msg.sender, newFactory);
     }
 
     /**
@@ -341,6 +344,31 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         if (newSciManagerAddress == address(0)) revert CannotBeZeroAddress();
         sciManagerAddress = newSciManagerAddress;
         emit SciManagerUpdated(msg.sender, newSciManagerAddress);
+    }
+
+    /**
+     * @dev Sets the base vote amount
+     * @param newBaseVoteAmount The new base vote amount
+     */
+    function setBaseVoteAmount(
+        uint256 newBaseVoteAmount
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newBaseVoteAmount == 0) revert CannotBeZero();
+        _baseVoteAmount = newBaseVoteAmount;
+        emit BaseVoteAmountSet(newBaseVoteAmount);
+    }
+
+    /**
+     * @dev Sets the multiplier for a specific user
+     * @param user The address of the user
+     * @param multiplier The new multiplier value
+     */
+    function setUserMultiplier(
+        address user,
+        uint256 multiplier
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _userMultipliers[user] = multiplier;
+        emit UserMultiplierSet(user, multiplier);
     }
 
     /**
@@ -588,7 +616,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         return _proposalIndex;
     }
 
-
     /**
      * @dev Returns the set action type limit
      */
@@ -639,7 +666,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             );
     }
 
-
     /**
      * @notice Retrieves voting data for a specific user on a specific proposal.
      * @dev This function returns the user's voting data for a proposal identified by its unique ID. It ensures the proposal exists before fetching the data.
@@ -662,24 +688,10 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Sets the base vote amount
-     * @param newBaseVoteAmount The new base vote amount
+     * @dev Returns the base vote amount used in vote calculations
      */
-    function setBaseVoteAmount(uint256 newBaseVoteAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _baseVoteAmount = newBaseVoteAmount;
-    }
-
-    /**
-     * @dev Sets the multiplier for a specific user
-     * @param user The address of the user
-     * @param multiplier The new multiplier value
-     */
-    function setUserMultiplier(address user, uint256 multiplier) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (user == address(0)) revert CannotBeZeroAddress();
-        if (multiplier < 1) revert MultiplierTooLow(multiplier);
-        
-        _userMultipliers[user] = multiplier;
-        emit UserMultiplierSet(user, multiplier);
+    function getBaseVoteAmount() external view returns (uint256) {
+        return _baseVoteAmount;
     }
 
     ///*** INTERNAL FUNCTIONS ***///
@@ -790,7 +802,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             _proposals[index].votesTotal -= voteData.previousVoteAmount;
         }
 
-        uint256 voteAmount = _baseVoteAmount * (_userMultipliers[msg.sender] > 0 ? _userMultipliers[msg.sender] : 1);
+        uint256 voteAmount = _baseVoteAmount *
+            (
+                _userMultipliers[msg.sender] > 0
+                    ? _userMultipliers[msg.sender]
+                    : 1
+            );
 
         if (support) {
             _proposals[index].votesFor += voteAmount;

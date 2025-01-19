@@ -14,23 +14,42 @@ interface IGovernorRoleGrant {
  * @dev Facilitates the election of scientists that govern the research funding process.
  */
 contract Election is ReentrancyGuard, AccessControl {
-    error CannotBeZeroAddress();
     error AddressAlreadyHasDDRole();
     error AlreadyInitialized();
+    error CannotBeZeroAddress();
+    error FactoryAlreadySet();
 
     address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
+    address public factory;
     bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    address public constant ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     event ActionExecuted(address indexed action, string indexed contractName);
+    event FactorySet(address indexed user, address newAddress);
 
     /**
-     * @dev Empty constructor for implementation contract
+     * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
      */
-    constructor() {}
+    constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, ADMIN);
+    }
+
+    /**
+     * @dev Sets the new factory contract address for Election
+     * @param newFactory The address to be set as the factory contract
+     */
+    function setFactory(
+        address newFactory
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFactory == address(0)) revert CannotBeZeroAddress();
+        if (factory != address(0)) revert FactoryAlreadySet();
+        factory = newFactory;
+        emit FactorySet(msg.sender, newFactory);
+    }
 
     /**
      * @dev Initializes the election contract

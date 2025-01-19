@@ -13,41 +13,45 @@ interface IGovernorParams {
  * @dev Handles execution of changes to governance parameters.
  */
 contract ParameterChange is ReentrancyGuard, AccessControl {
+   
+    error AlreadyInitialized();
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
-    error AlreadyInitialized();
+    error FactoryAlreadySet();
+    error Unauthorized(address caller);
 
     address public gov;
     address public governorExecutor;
     uint256 public data;
     bytes32 public param;
     string public humanReadableParam;
+    address public factory;
     bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
+    address public constant ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     event ActionExecuted(address indexed action, string indexed contractName);
-
+    event Initialized(address gov, address governorExecutor, string param, uint256 data);
+    event FactorySet(address indexed user, address newAddress);
+    
     /**
-     * @dev Empty constructor for implementation contract
+     * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
      */
-    constructor() {}
+    constructor() {
+        _grantRole(DEFAULT_ADMIN_ROLE, ADMIN);
+    }
 
     /**
      * @dev Initializes the parameter change contract
      * @param params Encoded parameters (gov, governorExecutor, param string, data)
      */
     function initialize(bytes memory params) external {
-        if (_initialized) {
-            revert AlreadyInitialized();
-        }
+        if (_initialized) revert AlreadyInitialized();
+        if (msg.sender != factory) revert Unauthorized(msg.sender);
 
-        (
-            address gov_,
-            address governorExecutor_,
-            string memory param_,
-            uint256 data_
-        ) = abi.decode(params, (address, address, string, uint256));
+        (address gov_, address governorExecutor_, string memory param_, uint256 data_) = 
+            abi.decode(params, (address, address, string, uint256));
 
         if (gov_ == address(0) || governorExecutor_ == address(0)) {
             revert CannotBeZeroAddress();
@@ -62,6 +66,7 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         _grantRole(GOVERNOR_ROLE, governorExecutor_);
 
         _initialized = true;
+        emit Initialized(gov_, governorExecutor_, param_, data_);
     }
 
     /**
@@ -101,6 +106,19 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         assembly {
             result := mload(add(tempBytes, 32))
         }
+    }
+
+    /**
+     * @dev Sets the new factory contract address for ParameterChange
+     * @param newFactory The address to be set as the factory contract
+     */
+    function setFactory(
+        address newFactory
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFactory == address(0)) revert CannotBeZeroAddress();
+        if (factory != address(0)) revert FactoryAlreadySet();
+        factory = newFactory;
+        emit FactorySet(msg.sender, newFactory);
     }
 
     /**

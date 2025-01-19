@@ -148,7 +148,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminSet(address indexed user, address indexed newAddress);
     event Claimed(address indexed user, uint256 amount);
-    event FactoryUpdated(address indexed user, address newAddress);
+    event FactorySet(address indexed user, address newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
     event ParameterUpdated(bytes32 indexed param, uint256 data);
@@ -273,7 +273,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
         _factory = IActionCloneFactory(newFactory);
-        emit FactoryUpdated(msg.sender, newFactory);
+        emit FactorySet(msg.sender, newFactory);
     }
 
     /**
