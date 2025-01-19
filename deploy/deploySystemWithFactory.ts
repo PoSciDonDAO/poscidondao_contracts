@@ -454,44 +454,6 @@ async function main(): Promise<DeployedContracts> {
     });
   }
 
-  if (addresses.transactionResearch && addresses.actionCloneFactoryResearch) {
-    transactions.push({
-      to: addresses.transactionResearch,
-      value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryResearch),
-    });
-  }
-
-  if (addresses.transactionOperations && addresses.actionCloneFactoryOperations) {
-    transactions.push({
-      to: addresses.transactionOperations,
-      value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
-    });
-  }
-
-  if (addresses.election && addresses.actionCloneFactoryOperations) {
-    transactions.push({
-      to: addresses.election,
-      value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
-    });
-  }
-  if (addresses.impeachment && addresses.actionCloneFactoryOperations) {
-    transactions.push({
-      to: addresses.impeachment,
-      value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
-    });
-  }
-  if (addresses.parameterChange && addresses.actionCloneFactoryOperations) {
-    transactions.push({
-      to: addresses.parameterChange,
-      value: "0",
-      data: encodeFunctionData("setFactory(address)", addresses.actionCloneFactoryOperations),
-    });
-  }
-
   if (addresses.governorResearch && addresses.governorGuard) {
     transactions.push({
       to: addresses.governorResearch,

@@ -17,27 +17,23 @@ contract Election is ReentrancyGuard, AccessControl {
     error AddressAlreadyHasDDRole();
     error AlreadyInitialized();
     error CannotBeZeroAddress();
-    error FactoryNotSet();
-    error NotAContract(address);
-    error SameAddress();
     error Unauthorized(address caller);
 
     address[] internal _targetWallets;
     address public governorResearch;
     address public governorExecutor;
-    address public factory;
     bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
     address public constant ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     event ActionExecuted(address indexed action, string indexed contractName);
-    event FactorySet(address indexed user, address newAddress);
     event Initialized(
         address[] targetWallets,
         address governorResearch,
         address governorExecutor
     );
+
     /**
      * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
      */
@@ -46,32 +42,10 @@ contract Election is ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Sets the new factory contract address for Election
-     * @param newFactory The address to be set as the factory contract
-     */
-    function setFactory(
-        address newFactory
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newFactory == address(0)) revert CannotBeZeroAddress();
-        if (newFactory == address(factory)) revert SameAddress();
-
-        uint256 size;
-        assembly {
-            size := extcodesize(newFactory)
-        }
-        if (size == 0) revert NotAContract(newFactory);
-
-        factory = newFactory;
-        emit FactorySet(msg.sender, newFactory);
-    }
-
-    /**
      * @dev Initializes the election contract
      * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (!(msg.sender == factory)) revert Unauthorized(msg.sender);
-        if (factory == address(0)) revert FactoryNotSet();
         if (_initialized) revert AlreadyInitialized();
         (
             address[] memory targetWallets_,

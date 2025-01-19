@@ -16,9 +16,6 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     error AlreadyInitialized();
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
-    error FactoryNotSet();
-    error NotAContract(address);
-    error SameAddress();
     error Unauthorized(address caller);
 
     address public gov;
@@ -26,7 +23,6 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     uint256 public data;
     bytes32 public param;
     string public humanReadableParam;
-    address public factory;
     bool private _initialized;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -39,7 +35,6 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         string param,
         uint256 data
     );
-    event FactorySet(address indexed user, address newAddress);
 
     /**
      * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
@@ -53,8 +48,6 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (gov, governorExecutor, param string, data)
      */
     function initialize(bytes memory params) external {
-        if (!(msg.sender == factory)) revert Unauthorized(msg.sender);
-        if (factory == address(0)) revert FactoryNotSet();
         if (_initialized) revert AlreadyInitialized();
 
         (
@@ -117,26 +110,6 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         assembly {
             result := mload(add(tempBytes, 32))
         }
-    }
-
-    /**
-     * @dev Sets the new factory contract address for ParameterChange
-     * @param newFactory The address to be set as the factory contract
-     */
-    function setFactory(
-        address newFactory
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newFactory == address(0)) revert CannotBeZeroAddress();
-        if (newFactory == address(factory)) revert SameAddress();
-
-        uint256 size;
-        assembly {
-            size := extcodesize(newFactory)
-        }
-        if (size == 0) revert NotAContract(newFactory);
-
-        factory = newFactory;
-        emit FactorySet(msg.sender, newFactory);
     }
 
     /**
