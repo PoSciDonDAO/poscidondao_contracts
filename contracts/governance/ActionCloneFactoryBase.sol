@@ -27,7 +27,6 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         address implementation;
     }
 
-    // Shared events
     event ActionCreated(address indexed action, string actionType);
     event ActionConfigAdded(
         uint256 indexed actionType,

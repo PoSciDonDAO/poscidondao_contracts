@@ -17,9 +17,9 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error AlreadyInitialized();
     error CannotBeZero();
     error CannotBeZeroAddress();
-    error FactoryAlreadySet();
     error FactoryNotSet();
     error NotAContract(address);
+    error SameAddress();
     error Unauthorized(address user);
 
     address public immutable USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
@@ -58,7 +58,7 @@ contract Transaction is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (fundingWallet, targetWallet, amountUsdc, amountSci, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (msg.sender != factory) revert Unauthorized(msg.sender);
+        if (!(msg.sender == factory)) revert Unauthorized(msg.sender);
         if (factory == address(0)) revert FactoryNotSet();
         if (_initialized) revert AlreadyInitialized();
 
@@ -106,7 +106,8 @@ contract Transaction is ReentrancyGuard, AccessControl {
         address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
-        if (factory != address(0)) revert FactoryAlreadySet();
+        if (newFactory == address(factory)) revert SameAddress();
+
         uint256 size;
         assembly {
             size := extcodesize(newFactory)

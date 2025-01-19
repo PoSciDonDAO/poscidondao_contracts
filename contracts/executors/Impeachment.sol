@@ -17,9 +17,9 @@ contract Impeachment is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error AddressHasNotDDRole();
     error AlreadyInitialized();
-    error FactoryAlreadySet();
     error FactoryNotSet();
     error NotAContract(address);
+    error SameAddress();
     error Unauthorized(address caller);
 
     address[] internal _targetWallets;
@@ -51,7 +51,7 @@ contract Impeachment is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (targetWallets, governorResearch, governorExecutor)
      */
     function initialize(bytes memory params) external {
-        if (msg.sender != factory) revert Unauthorized(msg.sender);
+        if (!(msg.sender == factory)) revert Unauthorized(msg.sender);
         if (factory == address(0)) revert FactoryNotSet();
         if (_initialized) revert AlreadyInitialized();
         (
@@ -102,7 +102,8 @@ contract Impeachment is ReentrancyGuard, AccessControl {
         address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
-        if (factory != address(0)) revert FactoryAlreadySet();
+        if (newFactory == address(factory)) revert SameAddress();
+
         uint256 size;
         assembly {
             size := extcodesize(newFactory)

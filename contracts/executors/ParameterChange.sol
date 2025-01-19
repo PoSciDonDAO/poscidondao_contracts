@@ -13,13 +13,12 @@ interface IGovernorParams {
  * @dev Handles execution of changes to governance parameters.
  */
 contract ParameterChange is ReentrancyGuard, AccessControl {
-   
     error AlreadyInitialized();
     error CannotBeZeroAddress();
     error InvalidParameter(bytes32 param);
-    error FactoryAlreadySet();
     error FactoryNotSet();
     error NotAContract(address);
+    error SameAddress();
     error Unauthorized(address caller);
 
     address public gov;
@@ -34,7 +33,12 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
     address public constant ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     event ActionExecuted(address indexed action, string indexed contractName);
-    event Initialized(address gov, address governorExecutor, string param, uint256 data);
+    event Initialized(
+        address gov,
+        address governorExecutor,
+        string param,
+        uint256 data
+    );
     event FactorySet(address indexed user, address newAddress);
 
     /**
@@ -49,12 +53,16 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
      * @param params Encoded parameters (gov, governorExecutor, param string, data)
      */
     function initialize(bytes memory params) external {
-        if (msg.sender != factory) revert Unauthorized(msg.sender);
+        if (!(msg.sender == factory)) revert Unauthorized(msg.sender);
         if (factory == address(0)) revert FactoryNotSet();
         if (_initialized) revert AlreadyInitialized();
-        
-        (address gov_, address governorExecutor_, string memory param_, uint256 data_) = 
-            abi.decode(params, (address, address, string, uint256));
+
+        (
+            address gov_,
+            address governorExecutor_,
+            string memory param_,
+            uint256 data_
+        ) = abi.decode(params, (address, address, string, uint256));
 
         if (gov_ == address(0) || governorExecutor_ == address(0)) {
             revert CannotBeZeroAddress();
@@ -119,7 +127,8 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
         address newFactory
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newFactory == address(0)) revert CannotBeZeroAddress();
-        if (factory != address(0)) revert FactoryAlreadySet();
+        if (newFactory == address(factory)) revert SameAddress();
+
         uint256 size;
         assembly {
             size := extcodesize(newFactory)

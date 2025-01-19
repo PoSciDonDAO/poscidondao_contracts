@@ -8,8 +8,11 @@ import "../interfaces/IAction.sol";
 contract ActionCloneFactoryOperations is ActionCloneFactoryBase {
     using Clones for address;
 
-    address public immutable govOpsContract;
-
+    address public govOpsContract;
+    address public immutable ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
+    
+    event GovOpsSet(address indexed user, address indexed newAddress);
+    
     constructor(
         address govOps_,
         address transaction_,
@@ -30,7 +33,26 @@ contract ActionCloneFactoryOperations is ActionCloneFactoryBase {
         _addActionConfig("election", election_); //2
         _addActionConfig("impeachment", impeachment_); //3
         _addActionConfig("parameterChange", parameterChange_); //4
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, ADMIN);
+    }
+
+    /**
+     * @dev Sets the governance operations contract address.
+     * @param newGovOps Address of the new governance operations.
+     */
+    function setGovOps(
+        address newGovOps
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newGovOps == address(0)) revert CannotBeZeroAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(newGovOps)
+        }
+        if (size == 0) revert NotAContract(newGovOps);
+
+        govOpsContract = newGovOps;
+        emit GovOpsSet(msg.sender, newGovOps);
     }
 
     /**
@@ -43,7 +65,7 @@ contract ActionCloneFactoryOperations is ActionCloneFactoryBase {
         uint256 actionType,
         bytes memory params
     ) external override returns (address) {
-        if (msg.sender != govOpsContract) revert Unauthorized(msg.sender);
+        if (!(msg.sender == govOpsContract)) revert Unauthorized(msg.sender);
 
         ActionConfig memory config = actionConfigs[actionType];
         if (!config.enabled) revert ConfigDisabled();
