@@ -1050,6 +1050,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
 
     /**
      * @dev Verifies if a given signature is valid for the specified parameters.
+     *      Requires the signature to be signed off-chain by the DAO-controlled signer.
+     *      External call to Holonym's SBT balance of the user is deprecated. 
+     *      Holonym's SBTs are only on Optimism and Near not on Base, hence the current approach.
      * @param user The address of the user to verify.
      * @param isUnique Boolean flag to check along with the user address.
      * @param timestamp The timestamp when the signature was created.
