@@ -333,7 +333,7 @@ async function main(): Promise<DeployedContracts> {
 
     // Third wave - Depends on second wave
     if (addresses.governorOperations && addresses.governorResearch) {
-      await deployAndVerify("GovernorExecutor", [admin, 600, addresses.governorOperations, addresses.governorResearch], "governorExecutor");
+      await deployAndVerify("GovernorExecutor", [admin, 3600, addresses.governorOperations, addresses.governorResearch], "governorExecutor");
       await deployAndVerify("GovernorGuard", [admin, addresses.governorOperations, addresses.governorResearch], "governorGuard");
     }
 

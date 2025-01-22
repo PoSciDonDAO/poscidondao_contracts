@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "chainId": 84532,
-  "createdAt": 1737319255951,
+  "createdAt": 1737564789518,
   "meta": {
     "name": "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
     "description": "Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
@@ -9,57 +9,6 @@
     "createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
     "createdFromOwnerAddress": ""
   },
-  "transactions": [
-    {
-      "to": "0xbfFaA525A7596eCdC9d108d83cC3Efab6571C4B3",
-      "value": "0",
-      "data": "0x861228a200000000000000000000000042d772499edb94cb178ba598103cd91382909fef"
-    },
-    {
-      "to": "0x81b8693b8aAB8eb041Bc7984C3c02017540Ef4Be",
-      "value": "0",
-      "data": "0x861228a200000000000000000000000042d772499edb94cb178ba598103cd91382909fef"
-    },
-    {
-      "to": "0x156Cd6603f2B79d6EC2116085d2807712a98bedd",
-      "value": "0",
-      "data": "0x861228a200000000000000000000000042d772499edb94cb178ba598103cd91382909fef"
-    },
-    {
-      "to": "0x156Cd6603f2B79d6EC2116085d2807712a98bedd",
-      "value": "0",
-      "data": "0x613248b700000000000000000000000056d0dc2ce424291084b46c04996350f7f9cf8efb"
-    },
-    {
-      "to": "0x156Cd6603f2B79d6EC2116085d2807712a98bedd",
-      "value": "0",
-      "data": "0x5bb47808000000000000000000000000e3d063fc47eef70e1cc5def975ea86be4a9d9e4d"
-    },
-    {
-      "to": "0x81b8693b8aAB8eb041Bc7984C3c02017540Ef4Be",
-      "value": "0",
-      "data": "0x5bb478080000000000000000000000009af3f254c37d2aa96f76753eb79de32d4b1585f3"
-    },
-    {
-      "to": "0x81b8693b8aAB8eb041Bc7984C3c02017540Ef4Be",
-      "value": "0",
-      "data": "0x613248b700000000000000000000000056d0dc2ce424291084b46c04996350f7f9cf8efb"
-    },
-    {
-      "to": "0x0c15D90700e1c443E92148E27121DAC15a5C79cF",
-      "value": "0",
-      "data": "0xc1cc275e000000000000000000000000156cd6603f2b79d6ec2116085d2807712a98bedd"
-    },
-    {
-      "to": "0xbfFaA525A7596eCdC9d108d83cC3Efab6571C4B3",
-      "value": "0",
-      "data": "0xc1cc275e000000000000000000000000156cd6603f2b79d6ec2116085d2807712a98bedd"
-    },
-    {
-      "to": "0xbfFaA525A7596eCdC9d108d83cC3Efab6571C4B3",
-      "value": "0",
-      "data": "0x0a5db71500000000000000000000000081b8693b8aab8eb041bc7984c3c02017540ef4be"
-    }
-  ],
-  "checksum": "0xc09a97b56b72fe46fd458d8fae286c77607c94e7df975ab17f184ecb540234eb"
+  "transactions": [],
+  "checksum": "0x518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70"
 }

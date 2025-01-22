@@ -22,7 +22,6 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     error TooEarly(uint256 currentTime, uint256 scheduledTime);
 
     uint256 public delay;
-    uint256 public minimumDelay;
     address public admin;
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -32,12 +31,11 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
 
     event AdminSet(address indexed user, address indexed newAddress);
     event Canceled(address indexed action);
-    event DelayUpdated(uint256 newDelay);
+    event DelaySet(uint256 newDelay);
     event Executed(address indexed action);
     event GovernorAdded(address indexed user, address indexed newGovernor);
     event GovernorRemoved(address indexed user, address indexed formerGovernor);
     event Scheduled(address indexed action);
-    event MinimumDelayUpdated(uint256 newMinimumDelay);
 
     constructor(
         address admin_,
@@ -51,11 +49,7 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             govRes_ == address(0)
         ) revert CannotBeZeroAddress();
 
-        if (delay_ == 0) {
-            revert CannotBeZero();
-        }
-
-        minimumDelay = 12 hours;
+        if (delay_ < 1 hours || delay_ > 7 days) revert DelayTooShort();
         delay = delay_;
         admin = admin_;
 
@@ -67,26 +61,15 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Update delay time
-     * @param newDelay the updated time between proposal scheduling and execution
+     * @dev Sets delay time
+     * @param newDelay the time between proposal scheduling and execution
      */
-    function updateDelay(
+    function setDelay(
         uint56 newDelay
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newDelay < minimumDelay) revert DelayTooShort();
+        if (newDelay < 1 hours || newDelay > 7 days) revert DelayTooShort();
         delay = newDelay;
-        emit DelayUpdated(newDelay);
-    }
-
-    /**
-     * @dev Sets the minimum delay for the delay function
-     * @param newMinimumDelay the new minimum delay
-     */
-    function setMinimumDelay(
-        uint256 newMinimumDelay
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        minimumDelay = newMinimumDelay;
-        emit MinimumDelayUpdated(newMinimumDelay);
+        emit DelaySet(newDelay);
     }
 
     /**
