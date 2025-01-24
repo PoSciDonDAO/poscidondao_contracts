@@ -42,6 +42,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error VoteChangeWindowExpired();
     error InvalidInterface();
     error NotAContract(address contractAddress);
+    error InvalidParameterValue(bytes32 param, uint256 data, string message);
 
     ///*** STRUCTS ***///
     struct Proposal {
@@ -186,7 +187,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         governanceParams.proposalLifetime = 1 days; //prod: 2 weeks, test: 30 min
         governanceParams.quorum = 1; //set based on number of DD members
         governanceParams.voteLockTime = 1.1 days; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
-        governanceParams.proposeLockTime = 1.1 days; //prod: 2 weeks, test: 30 minutes
+        governanceParams.proposeLockTime = 0 days; //prod: 2 weeks, test: 30 minutes
         governanceParams.voteChangeTime = 3 hours; //prod: 12 hours, test: 10 minutes
         governanceParams.voteChangeCutOff = 6 hours; //prod: 3 days, test: 10 minutes
 
@@ -424,18 +425,77 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
-        if (param == "proposalLifetime")
+        if (param == "proposalLifetime") {
+            // Ensure proposal lifetime is reasonable (between 1 day and 30 days)
+            if (data < 1 days || data > 30 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 30 days"
+                );
+            }
             governanceParams.proposalLifetime = data;
-        else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
-        else if (param == "proposeLockTime")
+        } else if (param == "quorum") {
+            // Quorum must be at least 1 since it's for DD members
+            if (data < 1) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 1"
+                );
+            }
+            governanceParams.quorum = data;
+        } else if (param == "voteLockTime") {
+            // Vote lock time must be at least 1 day and not more than 60 days
+            if (data < 1 days || data > 60 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 60 days"
+                );
+            }
+            governanceParams.voteLockTime = data;
+        } else if (param == "proposeLockTime") {
+            // Propose lock time must be at least 1 day and not more than 30 days
+            if (data < 1 days || data > 30 days) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 30 days"
+                );
+            }
             governanceParams.proposeLockTime = data;
-        else if (param == "voteChangeTime")
+        } else if (param == "voteChangeTime") {
+            // Vote change window must be at least 1 hour and not more than proposal lifetime
+            if (data < 1 hours || data > governanceParams.proposalLifetime) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 hour and proposal lifetime"
+                );
+            }
             governanceParams.voteChangeTime = data;
-        else if (param == "voteChangeCutOff")
+        } else if (param == "voteChangeCutOff") {
+            // Vote change cutoff must be at least 1 hour and not more than proposal lifetime
+            if (data < 1 hours || data > governanceParams.proposalLifetime) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 hour and proposal lifetime"
+                );
+            }
             governanceParams.voteChangeCutOff = data;
-        else if (param == "ddThreshold") governanceParams.ddThreshold = data;
-        else revert InvalidGovernanceParameter();
+        } else if (param == "ddThreshold") {
+            // DD threshold must be at least 1000 SCI
+            if (data < 10e18) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 10 SCI"
+                );
+            }
+            governanceParams.ddThreshold = data;
+        } else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, data);
     }

@@ -220,7 +220,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
         governanceParams.proposalLifetime = 1 days; //prod: 2 weeks, test: 30 minutes
         governanceParams.voteLockTime = 1.1 days; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
-        governanceParams.proposeLockTime = 1.1 days; //prod: 2 weeks, test: 0 minutes
+        governanceParams.proposeLockTime = 0 days; //prod: 2 weeks, test: 0 minutes
         governanceParams.voteChangeTime = 3 hours; //prod: 1-12 hours, test: 10 minutes
         governanceParams.voteChangeCutOff = 6 hours; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
@@ -450,11 +450,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             governanceParams.voteChangeCutOff = data;
         } else if (param == "opThreshold") {
             // Operations threshold must be at least 1000 SCI
-            if (data < 1000e18) {
+            if (data < 10e18) {
                 revert InvalidParameterValue(
                     param,
                     data,
-                    "Must be at least 1000 SCI"
+                    "Must be at least 10 SCI"
                 );
             }
             governanceParams.opThreshold = data;
