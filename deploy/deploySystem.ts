@@ -468,6 +468,51 @@ async function main(): Promise<DeployedContracts> {
 		`Batch transaction JSON successfully generated and saved at: ${outputPath}`
 	);
 
+	// Update setEmergency.json with new sciManager address
+	const setEmergencyPath = path.join(outputDir, "setEmergency.json");
+	const setEmergencyTransaction = {
+		version: "1.0",
+		chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
+		createdAt: Date.now(),
+		meta: {
+			name: "Set Emergency",
+			description: "Set Emergency",
+			txBuilderVersion: "1.17.0",
+			createdFromSafeAddress: admin,
+			createdFromOwnerAddress: "",
+		},
+		transactions: [
+			{
+				to: addresses.sciManager,
+				value: "0",
+				data: "0x58afefcc"
+			}
+		],
+		checksum: ethers.utils.keccak256(
+			ethers.utils.toUtf8Bytes(JSON.stringify([{
+				to: addresses.sciManager,
+				value: "0",
+				data: "0x58afefcc"
+			}]))
+		),
+	};
+
+	// Remove existing setEmergency.json if it exists
+	if (fs.existsSync(setEmergencyPath)) {
+		fs.unlinkSync(setEmergencyPath);
+		console.log(`Existing file at ${setEmergencyPath} has been deleted.`);
+	}
+
+	// Write the updated setEmergency.json file
+	fs.writeFileSync(
+		setEmergencyPath,
+		JSON.stringify(setEmergencyTransaction, null, 2),
+		"utf8"
+	);
+	console.log(
+		`setEmergency.json successfully updated with new sciManager address at: ${setEmergencyPath}`
+	);
+
 	return addresses;
 }
 

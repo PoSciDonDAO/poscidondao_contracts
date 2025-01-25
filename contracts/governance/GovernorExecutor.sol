@@ -142,7 +142,6 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
             revert NotScheduled(action);
         }
         scheduledTime[action] = 0;
-
         emit Canceled(action);
     }
 
