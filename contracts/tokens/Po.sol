@@ -143,9 +143,9 @@ contract Po is ERC1155Burnable, AccessControl {
         uint256 amount
     ) external onlyRole(MINTER_ROLE) {
         uint256 oldSupply = _totalSupply;
-        _totalSupply += amount * users.length;
 
         for (uint256 i = 0; i < users.length; i++) {
+            _totalSupply += amount;
             _mint(users[i], _PARTICIPATION_TOKEN_ID, amount, "");
         }
         emit TotalSupplyUpdated(oldSupply, _totalSupply);
