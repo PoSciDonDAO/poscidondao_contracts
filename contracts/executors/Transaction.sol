@@ -19,9 +19,9 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error Unauthorized(address user);
 
-    address public immutable USDC = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
-    address public immutable SCI = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE; //replace with mainnet address
-    address public immutable ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
+    address public immutable usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246; //replace with mainnet address
+    address public immutable sci = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE; //replace with mainnet address
+    address public immutable admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     address public governorExecutor;
     address public targetWallet;
@@ -42,10 +42,10 @@ contract Transaction is ReentrancyGuard, AccessControl {
     );
 
     /**
-     * @dev Constructor that grants DEFAULT_ADMIN_ROLE to ADMIN address
+     * @dev Constructor that grants DEFAULT_ADMIN_ROLE to admin address
      */
     constructor() {
-        _grantRole(DEFAULT_ADMIN_ROLE, ADMIN);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /**
@@ -92,14 +92,14 @@ contract Transaction is ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Execute the proposal using ERC20 tokens (USDC or SCI)
+     * @dev Execute the proposal using ERC20 tokens (usdc or sci)
      */
     function execute() external nonReentrant onlyRole(GOVERNOR_ROLE) {
         if (amountUsdc > 0) {
-            _transferToken(USDC, fundingWallet, targetWallet, amountUsdc);
+            _transferToken(usdc, fundingWallet, targetWallet, amountUsdc);
         }
         if (amountSci > 0) {
-            _transferToken(SCI, fundingWallet, targetWallet, amountSci);
+            _transferToken(sci, fundingWallet, targetWallet, amountSci);
         }
         _revokeRole(GOVERNOR_ROLE, governorExecutor);
         emit ActionExecuted(address(this), "Transaction");

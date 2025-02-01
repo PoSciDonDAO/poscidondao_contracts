@@ -35,7 +35,7 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
     );
     event ActionConfigUpdated(uint256 indexed actionType, bool enabled);
     event AdminSet(address indexed user, address indexed newAddress);
-
+    event ActionRegistered(address indexed action);
 
     /**
      * @dev Creates a new action config with the given name and implementation.
@@ -95,6 +95,23 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         }
         actionConfigs[actionType].enabled = enabled;
         emit ActionConfigUpdated(actionType, enabled);
+    }
+
+    /**
+     * @dev Internal function to register a new action clone
+     * @param action The address of the action to register
+     */
+    function _registerAction(address action) internal {
+        if (action == address(0)) revert CannotBeZeroAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(action)
+        }
+        if (size == 0) revert NotAContract(action);
+
+        isFactoryAction[action] = true;
+        emit ActionRegistered(action);
     }
 
     /**
