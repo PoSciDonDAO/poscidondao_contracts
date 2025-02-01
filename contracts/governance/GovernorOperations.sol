@@ -116,7 +116,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     GovernanceParameters public governanceParams;
     mapping(uint256 => Proposal) private _proposals;
     mapping(address => uint256) private _votingStreak;
-    mapping(address => uint256) private _lastClaimedProposal;
     mapping(address => uint256) private _latestVoteTimestamp;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
     mapping(address => uint256) private _userNonces;
@@ -732,10 +731,13 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Completes off-chain execution proposals
+     * @dev Completes off-chain execution proposals. This function should only be called by admin
+     * when the actual deliverables described in the proposal have been implemented, not just when
+     * the governance process is complete. For example, if a proposal is to build a new product,
+     * this should only be called when the product is actually built, not when the proposal passes.
      * @param index the _proposalIndex of the proposal of interest
      */
-    function complete(uint256 index) external nonReentrant {
+    function complete(uint256 index) external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
         if (index > _proposalIndex) revert ProposalInexistent();
 
         if (_proposals[index].status != ProposalStatus.Scheduled)
@@ -800,10 +802,9 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function claimPo() external {
         uint256 totalPoToClaim = 0;
-        uint256 startIndex = _lastClaimedProposal[msg.sender];
         uint256 endIndex = _proposalIndex;
 
-        for (uint256 i = startIndex; i < endIndex; i++) {
+        for (uint256 i = 0; i < endIndex; i++) {
             UserVoteData storage voteData = _userVoteData[msg.sender][i];
 
             if (!voteData.voted || voteData.poClaimed) {
@@ -819,8 +820,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             if (quorumReached) {
                 totalPoToClaim += voteData.votingStreakAtVote;
                 voteData.poClaimed = true;
-
-                _lastClaimedProposal[msg.sender] = i + 1;
             }
         }
 
@@ -852,15 +851,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      */
     function getProposalIndex() external view returns (uint256) {
         return _proposalIndex;
-    }
-
-    /**
-     * @dev Returns the number of unclaimed tokens from the user
-     */
-    function getLastClaimedProposal(
-        address user
-    ) external view returns (uint256) {
-        return _lastClaimedProposal[user];
     }
 
     /**

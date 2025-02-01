@@ -154,6 +154,8 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     function execution(
         address action
     ) external nonReentrant onlyRole(GOVERNOR_ROLE) {
+        if (action == address(0)) revert CannotBeZeroAddress();
+        
         uint256 scheduled = scheduledTime[action];
         if (scheduled == 0) {
             revert NotScheduled(action);

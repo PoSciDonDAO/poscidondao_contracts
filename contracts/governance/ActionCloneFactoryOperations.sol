@@ -9,7 +9,6 @@ contract ActionCloneFactoryOperations is ActionCloneFactoryBase {
     using Clones for address;
 
     address public govOpsContract;
-    address public immutable ADMIN = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
     
     event GovOpsSet(address indexed user, address indexed newAddress);
     
@@ -33,7 +32,7 @@ contract ActionCloneFactoryOperations is ActionCloneFactoryBase {
         _addActionConfig("election", election_); //2
         _addActionConfig("impeachment", impeachment_); //3
         _addActionConfig("parameterChange", parameterChange_); //4
-        _grantRole(DEFAULT_ADMIN_ROLE, ADMIN);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /**
