@@ -215,15 +215,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _actionTypeLimit = 4;
 
         governanceParams.opThreshold = 5000e18;
-        governanceParams.quorum = 567300e18; // 3% of maximum supply of 18.91 million SCI
+        governanceParams.quorum = 367300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
-        governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 minutes
-        governanceParams.voteLockTime = 30 minutes; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
-        governanceParams.proposeLockTime = 0 days; //prod: 2 weeks, test: 0 minutes
-        governanceParams.voteChangeTime = 10 minutes; //prod: 1-12 hours, test: 10 minutes
-        governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
+        governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 minutes
+        governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
+        governanceParams.proposeLockTime = 14 days; //prod: 2 weeks, test: 0 minutes
+        governanceParams.voteChangeTime = 1 days; //prod: 1-24 hours, test: 10 minutes
+        governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
-        governanceParams.votingDelay = 2 minutes; //to prevent flash loan attacks
+        governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
