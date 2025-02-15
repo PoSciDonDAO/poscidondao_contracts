@@ -132,15 +132,12 @@ contract GovernorExecutor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Cancels a scheduled action.
+     * @dev Cancels an action.
      * @param action The address of the action to cancel.
      */
     function cancel(
         address action
     ) external nonReentrant onlyRole(GOVERNOR_ROLE) {
-        if (scheduledTime[action] == 0) {
-            revert NotScheduled(action);
-        }
         scheduledTime[action] = 0;
         emit Canceled(action);
     }

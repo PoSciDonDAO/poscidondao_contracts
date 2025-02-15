@@ -486,7 +486,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             }
             governanceParams.voteChangeCutOff = data;
         } else if (param == "ddThreshold") {
-            // DD threshold must be at least 1000 SCI
+            // DD threshold must be at least 10 SCI
             if (data < 10e18) {
                 revert InvalidParameterValue(
                     param,
