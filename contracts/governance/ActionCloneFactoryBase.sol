@@ -14,12 +14,15 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
     error SameAddress();
     error Unauthorized(address caller);
     error ZeroAddressImplementation();
+    error NoPendingAdmin();
+    error NotPendingAdmin(address caller);
 
     mapping(address => bool) public isFactoryAction;
     mapping(uint256 => ActionConfig) public actionConfigs;
     mapping(string => bool) private _actionNameExists;
     uint256 public actionTypesCount = 1;
     address public admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
+    address public pendingAdmin;
 
     struct ActionConfig {
         string name;
@@ -34,39 +37,17 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         address implementation
     );
     event ActionConfigUpdated(uint256 indexed actionType, bool enabled);
-    event AdminSet(address indexed user, address indexed newAddress);
+    event AdminTransferInitiated(
+        address indexed currentAdmin,
+        address indexed pendingAdmin
+    );
+    event AdminTransferAccepted(
+        address indexed oldAdmin,
+        address indexed newAdmin
+    );
     event ActionRegistered(address indexed action);
 
-    /**
-     * @dev Creates a new action config with the given name and implementation.
-     *      Assigns an incremental ID and enables it by default.
-     * @param name The name identifier for this action type
-     * @param implementation The contract to use as implementation for clones
-     */
-    function _addActionConfig(
-        string memory name,
-        address implementation
-    ) internal {
-        if (implementation == address(0)) revert ZeroAddressImplementation();
-        if (bytes(name).length == 0) revert EmptyActionName();
-        if (_actionNameExists[name]) revert ActionTypeAlreadyExists(name);
-
-        uint256 size;
-        assembly {
-            size := extcodesize(implementation)
-        }
-        if (size == 0) revert NotAContract(implementation);
-
-        _actionNameExists[name] = true;
-        actionConfigs[actionTypesCount] = ActionConfig({
-            name: name,
-            enabled: true,
-            implementation: implementation
-        });
-        actionTypesCount++;
-        emit ActionConfigAdded(actionTypesCount, name, implementation);
-    }
-
+    // External functions
     /**
      * @dev Adds a new action type configuration.
      *      Only callable by an address with the `DEFAULT_ADMIN_ROLE`.
@@ -98,6 +79,97 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Initiates the transfer of admin role to a new address.
+     * The new admin must accept the role by calling acceptAdmin().
+     * @param newAdmin The address to be set as the pending admin.
+     */
+    function transferAdmin(
+        address newAdmin
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
+        if (newAdmin == pendingAdmin) revert SameAddress();
+
+        pendingAdmin = newAdmin;
+        emit AdminTransferInitiated(msg.sender, newAdmin);
+    }
+
+    /**
+     * @dev Accepts the admin role transfer. Can only be called by the pending admin.
+     */
+    function acceptAdmin() external {
+        if (pendingAdmin == address(0)) revert NoPendingAdmin();
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin(msg.sender);
+
+        address oldAdmin = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
+        emit AdminTransferAccepted(oldAdmin, admin);
+    }
+
+    /**
+     * @notice Creates a new action clone based on action type.
+     * @param actionType The identifier of the action type to clone (index in the `actionConfigs` mapping).
+     * @param params Initialization parameters passed to the action's `initialize()` method.
+     * @return clone The address of the newly created clone contract.
+     */
+    function createAction(
+        uint256 actionType,
+        bytes memory params
+    ) external virtual returns (address);
+
+    // Public functions
+    /**
+     * @dev Overrides the renounceRole function to prevent renouncing the admin role.
+     * @param role The role being renounced
+     * @param account The account renouncing the role
+     */
+    function renounceRole(
+        bytes32 role,
+        address account
+    ) public virtual override {
+        if (role == DEFAULT_ADMIN_ROLE) {
+            revert Unauthorized(msg.sender);
+        }
+        super.renounceRole(role, account);
+    }
+
+    // Internal functions
+    /**
+     * @dev Creates a new action config with the given name and implementation.
+     *      Assigns an incremental ID and enables it by default.
+     * @param name The name identifier for this action type
+     * @param implementation The contract to use as implementation for clones
+     */
+    function _addActionConfig(
+        string memory name,
+        address implementation
+    ) internal {
+        if (implementation == address(0)) revert ZeroAddressImplementation();
+        if (bytes(name).length == 0) revert EmptyActionName();
+        if (_actionNameExists[name]) revert ActionTypeAlreadyExists(name);
+
+        uint256 size;
+        assembly {
+            size := extcodesize(implementation)
+        }
+        if (size == 0) revert NotAContract(implementation);
+
+        _actionNameExists[name] = true;
+        actionConfigs[actionTypesCount] = ActionConfig({
+            name: name,
+            enabled: true,
+            implementation: implementation
+        });
+        actionTypesCount++;
+        emit ActionConfigAdded(actionTypesCount, name, implementation);
+    }
+
+    /**
      * @dev Internal function to register a new action clone
      * @param action The address of the action to register
      */
@@ -113,29 +185,4 @@ abstract contract ActionCloneFactoryBase is AccessControl, ReentrancyGuard {
         isFactoryAction[action] = true;
         emit ActionRegistered(action);
     }
-
-    /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin_ The address to be set as the new admin.
-     */
-    function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
-        if (newAdmin_ == msg.sender) revert SameAddress();
-        address oldAdmin = admin;
-        admin = newAdmin_;
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
-        emit AdminSet(oldAdmin, newAdmin_);
-    }
-
-    /**
-     * @notice Creates a new action clone based on action type.
-     * @param actionType The identifier of the action type to clone (index in the `actionConfigs` mapping).
-     * @param params Initialization parameters passed to the action's `initialize()` method.
-     * @return clone The address of the newly created clone contract.
-     */
-    function createAction(
-        uint256 actionType,
-        bytes memory params
-    ) external virtual returns (address);
 }
