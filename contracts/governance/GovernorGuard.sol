@@ -13,14 +13,19 @@ interface IGovernorCancel {
  */
 contract GovernorGuard is AccessControl {
     error CannotBeZeroAddress();
+    error NoPendingAdmin();
+    error NotPendingAdmin(address caller);
     error ProposalAlreadyDropped(uint256 id);
     error SameAddress();
+    error Unauthorized(address user);
 
     address public admin;
+    address public pendingAdmin;
     IGovernorCancel public govOps;
     IGovernorCancel public govRes;
 
-    event AdminSet(address indexed user, address indexed newAdmin);
+    event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
+    event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
 
     constructor(address admin_, address govOps_, address govRes_) {
         if (
@@ -38,17 +43,46 @@ contract GovernorGuard is AccessControl {
     }
 
     /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin The address to be set as the new admin.
+     * @dev Overrides the renounceRole function to prevent renouncing the admin role.
+     * @param role The role being renounced
+     * @param account The account renouncing the role
      */
-    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function renounceRole(bytes32 role, address account) public virtual override {
+        if (role == DEFAULT_ADMIN_ROLE) {
+            revert Unauthorized(msg.sender);
+        }
+        super.renounceRole(role, account);
+    }
+
+    /**
+     * @dev Initiates the transfer of admin role to a new address.
+     * The new admin must accept the role by calling acceptAdmin().
+     * @param newAdmin The address to be set as the pending admin.
+     */
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
         if (newAdmin == msg.sender) revert SameAddress();
+        if (newAdmin == pendingAdmin) revert SameAddress();
+        
+        pendingAdmin = newAdmin;
+        emit AdminTransferInitiated(msg.sender, newAdmin);
+    }
+
+    /**
+     * @dev Accepts the admin role transfer. Can only be called by the pending admin.
+     */
+    function acceptAdmin() external {
+        if (pendingAdmin == address(0)) revert NoPendingAdmin();
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin(msg.sender);
+
         address oldAdmin = admin;
-        admin = newAdmin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
-        emit AdminSet(oldAdmin, newAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
+        emit AdminTransferAccepted(oldAdmin, admin);
     }
 
     /**

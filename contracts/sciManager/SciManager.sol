@@ -23,10 +23,13 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     error CannotBeZeroAddress();
     error CannotClaim();
     error CannotLockDuringEmergency();
+    error CannotLockMoreThanTotalSupply();
     error IncorrectBlockNumber();
     error IncorrectSnapshotIndex();
     error InsufficientBalance(uint256 currentDeposit, uint256 requestedAmount);
+    error NoPendingAdmin();
     error NotAContract(address);
+    error NotPendingAdmin(address caller);
     error SameAddress();
     error TokensStillLocked(uint256 voteLockEndStamp, uint256 currentTimeStamp);
     error Unauthorized(address user);
@@ -50,27 +53,26 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     }
 
     ///*** STORAGE & MAPPINGS ***///
+    // Constants
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-    bool public emergency = false;
-    address public admin;
-    address public govOpsContract;
-    address public govResContract;
-    IGovernorExecution _govExec;
-    uint256 private _totLocked;
     uint256 public constant TOTAL_SUPPLY_SCI = 18910000e18; //never changes
 
+    // Public state variables
+    address public admin;
+    bool public emergency = false;
+    address public govOpsContract;
+    address public govResContract;
+    address public pendingAdmin;
+
+    // Private state variables
+    IGovernorExecution private _govExec;
+    uint256 private _totLocked;
+
+    // Public mappings
     mapping(address => User) public users;
 
     ///*** MODIFIERS ***///
-    modifier onlyGov() {
-        if (!(msg.sender == govOpsContract || msg.sender == govResContract))
-            revert Unauthorized(msg.sender);
-        _;
-    }
 
-    /**
-     * @dev Modifier to check if the caller has the `EXECUTOR_ROLE` in `GovernorExecutor`.
-     */
     modifier onlyExecutor() {
         if (!_govExec.hasRole(EXECUTOR_ROLE, msg.sender)) {
             revert Unauthorized(msg.sender);
@@ -78,8 +80,16 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         _;
     }
 
+    modifier onlyGov() {
+        if (!(msg.sender == govOpsContract || msg.sender == govResContract))
+            revert Unauthorized(msg.sender);
+        _;
+    }
+
     /*** EVENTS ***/
     event AdminSet(address indexed user, address indexed newAddress);
+    event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
+    event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
     event EmergencySet(bool indexed emergency, uint256 timestamp);
     event Freed(address indexed user, address indexed asset, uint256 amount);
     event GovExecSet(address indexed user, address indexed newAddress);
@@ -106,17 +116,46 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     ///*** EXTERNAL FUNCTIONS ***///
 
     /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin The address to be set as the new admin.
+     * @dev Overrides the renounceRole function to prevent renouncing the admin role.
+     * @param role The role being renounced
+     * @param account The account renouncing the role
      */
-    function setAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function renounceRole(bytes32 role, address account) public virtual override {
+        if (role == DEFAULT_ADMIN_ROLE) {
+            revert Unauthorized(msg.sender);
+        }
+        super.renounceRole(role, account);
+    }
+
+    /**
+     * @dev Initiates the transfer of admin role to a new address.
+     * The new admin must accept the role by calling acceptAdmin().
+     * @param newAdmin The address to be set as the pending admin.
+     */
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAdmin == address(0)) revert CannotBeZeroAddress();
         if (newAdmin == msg.sender) revert SameAddress();
+        if (newAdmin == pendingAdmin) revert SameAddress();
+        
+        pendingAdmin = newAdmin;
+        emit AdminTransferInitiated(msg.sender, newAdmin);
+    }
+
+    /**
+     * @dev Accepts the admin role transfer. Can only be called by the pending admin.
+     */
+    function acceptAdmin() external {
+        if (pendingAdmin == address(0)) revert NoPendingAdmin();
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin(msg.sender);
+
         address oldAdmin = admin;
-        admin = newAdmin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+
         _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
-        emit AdminSet(oldAdmin, newAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
+        emit AdminTransferAccepted(oldAdmin, admin);
     }
 
     /**
@@ -147,6 +186,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         address newGovOps
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newGovOps == address(0)) revert CannotBeZeroAddress();
+        if (newGovOps == address(govOpsContract)) revert SameAddress();
 
         uint256 size;
         assembly {
@@ -187,6 +227,11 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         if (emergency) {
             revert CannotLockDuringEmergency();
         }
+
+        if (_totLocked + amount > TOTAL_SUPPLY_SCI) {
+            revert CannotLockMoreThanTotalSupply();
+        }
+
         uint256 balanceBefore = IERC20(_sci).balanceOf(address(this));
 
         IERC20(_sci).safeTransferFrom(msg.sender, address(this), amount);
@@ -261,7 +306,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev is called by gov contracts upon voting
      * @param user the user's address holding SCI tokens
-     * @param voteLockEnd the block number where the vote lock ends
+     * @param voteLockEnd the timestamp where the vote lock ends
      */
     function voted(
         address user,
@@ -278,7 +323,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev is called by gov contracts upon proposing
      * @param user the user's address holding SCI tokens
-     * @param proposeLockEnd the block number where the vote lock ends
+     * @param proposeLockEnd the timestamp where the vote lock ends
      */
     function proposed(
         address user,

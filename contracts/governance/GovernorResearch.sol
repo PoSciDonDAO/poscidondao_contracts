@@ -27,6 +27,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     error InvalidInput();
     error InvalidGovernanceParameter();
     error MultiplierTooLow(uint256 multiplier);
+    error NoPendingAdmin();
+    error NotPendingAdmin(address caller);
     error ProposalLifetimePassed();
     error ProposalNotPassed();
     error ProposalOngoing(
@@ -82,6 +84,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     ///*** KEY ADDRESSES ***///
     address public sciManagerAddress;
     address public admin;
+    address public pendingAdmin;
     address public researchFundingWallet;
 
     ///*** STORAGE & MAPPINGS ***///
@@ -127,7 +130,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
 
     /*** EVENTS ***/
     event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
-    event AdminSet(address indexed user, address indexed newAddress);
+    event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
+    event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
     event BaseVoteAmountSet(uint256 newBaseVoteAmount);
     event GovExecSet(address indexed user, address indexed newAddress);
     event Elected(address indexed elected);
@@ -337,21 +341,6 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address member
     ) external view returns (bool) {
         return hasRole(DUE_DILIGENCE_ROLE, member);
-    }
-
-    /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newAdmin_ The address to be set as the new admin.
-     */
-    function setAdmin(address newAdmin_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newAdmin_ == address(0)) revert CannotBeZeroAddress();
-        if (newAdmin_ == msg.sender) revert SameAddress();
-
-        address oldAdmin = admin;
-        admin = newAdmin_;
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
-        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin_);
-        emit AdminSet(oldAdmin, newAdmin_);
     }
 
     /**
@@ -985,5 +974,48 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         _proposals[currentIndex] = proposal;
 
         return currentIndex;
+    }
+
+    /**
+     * @dev Overrides the renounceRole function to prevent renouncing the admin role.
+     * @param role The role being renounced
+     * @param account The account renouncing the role
+     */
+    function renounceRole(bytes32 role, address account) public virtual override {
+        if (role == DEFAULT_ADMIN_ROLE) {
+            revert Unauthorized(msg.sender);
+        }
+        super.renounceRole(role, account);
+    }
+
+    /**
+     * @dev Initiates the transfer of admin role to a new address.
+     * The new admin must accept the role by calling acceptAdmin().
+     * @param newAdmin The address to be set as the pending admin.
+     */
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
+        if (newAdmin == pendingAdmin) revert SameAddress();
+        
+        pendingAdmin = newAdmin;
+        emit AdminTransferInitiated(msg.sender, newAdmin);
+    }
+
+    /**
+     * @dev Accepts the admin role transfer. Can only be called by the pending admin.
+     */
+    function acceptAdmin() external {
+        if (pendingAdmin == address(0)) revert NoPendingAdmin();
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin(msg.sender);
+
+        address oldAdmin = admin;
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
+        emit AdminTransferAccepted(oldAdmin, admin);
     }
 }
