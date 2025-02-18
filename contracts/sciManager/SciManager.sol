@@ -306,7 +306,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev is called by gov contracts upon voting
      * @param user the user's address holding SCI tokens
-     * @param voteLockEnd the timestamp where the vote lock ends
+     * @param voteLockEnd the timestamp until which the tokens will be locked due to voting
      */
     function voted(
         address user,
@@ -323,7 +323,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     /**
      * @dev is called by gov contracts upon proposing
      * @param user the user's address holding SCI tokens
-     * @param proposeLockEnd the timestamp where the vote lock ends
+     * @param proposeLockEnd the timestamp until which the tokens will be locked due to proposing
      */
     function proposed(
         address user,
