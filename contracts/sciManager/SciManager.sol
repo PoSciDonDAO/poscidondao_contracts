@@ -86,7 +86,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
         _;
     }
 
-    /*** EVENTS ***/
+    ///*** EVENTS ***///
     event AdminSet(address indexed user, address indexed newAddress);
     event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
     event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
