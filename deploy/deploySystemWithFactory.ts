@@ -12,9 +12,9 @@ interface DeployedContracts {
 }
 
 const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-const admin = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+const admin = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 const sci = "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
-const researchFundingWallet = "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+const researchFundingWallet = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
 
 const frontendAddressesFilePath =
   "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils/serverConfig.ts";

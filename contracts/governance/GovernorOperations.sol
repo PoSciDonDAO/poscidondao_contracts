@@ -653,11 +653,32 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
      *      using the rights from the most recent snapshot
      * @param index the _proposalIndex of the proposal
      * @param support user's choice to support a proposal or not
+     * @param isUnique The status of the uniqueness of the account casting the vote
+     * @param timestamp The timestamp when the signature was created
+     * @param signature The signature of the data related to the account's uniqueness. Is signed off-chain by the DAO-controlled signer.
      */
-    function voteStandard(uint index, bool support) external nonReentrant {
+    function voteStandard(
+        uint256 index,
+        bool support,
+        bool isUnique,
+        uint256 timestamp,
+        bytes memory signature
+    ) external nonReentrant {
         _votingChecks(index, msg.sender);
 
         if (_proposals[index].quadraticVoting) revert CannotVoteOnQVProposals();
+
+        bool verified = _verify(
+            msg.sender,
+            isUnique,
+            timestamp,
+            index,
+            signature
+        );
+        if (!verified) revert InvalidSignatureProvided();
+        if (!isUnique) revert UserNotUnique();
+
+        _userNonces[msg.sender]++;
 
         uint256 votingRights = ISciManager(sciManagerContract)
             .getLatestUserRights(msg.sender);

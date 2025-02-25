@@ -33,7 +33,7 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         rewardWallet = rewardWallet_;
         po = ERC1155Burnable(po_);
         sci = IERC20(sci_);
-        conversionRate = 2e18;
+        conversionRate = 1e18;
         _grantRole(DEFAULT_ADMIN_ROLE, rewardWallet_);
 
     }
