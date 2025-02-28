@@ -39,9 +39,8 @@ function generateFrontendAddressesFile(
 
 const ALCHEMY_KEY = process.env.ALCHEMY_KEY_PROTOCOL ?? '';
 const PRIVATE_KEY = process.env.PRIVATE_KEY ?? '';
-const graphApi = process.env.GRAPH_API_KEY ?? '';
 
-export const getRpcUrl = () => {
+export async function getRpcUrl() {
   ${
     hardhatArguments.network === "baseMainnet"
       ? "return `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`"
@@ -49,20 +48,12 @@ export const getRpcUrl = () => {
   };
 };
 
-export const getGraphGovOpsApi = () => {
-  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/4NTVzVzJGVsQhbMUcW7oJJfAwu5yTMPUuXqdMajadY3r\`\;
-}
-
-export const getGraphGovResApi = () => {
-  return \`\https://gateway.thegraph.com/api/\${graphApi}\/subgraphs/id/T6T8gJDMoivJAEg8u8cJjeYz8RzCynHt5RXaQ54d3KF\`\;
-}
-
-export const getPrivateKey = () => {
+export async function getPrivateKey() {
   return PRIVATE_KEY;
 };
 
-export const getNetworkInfo = () => {
-  const rpcUrl = getRpcUrl();
+export async function getNetworkInfo() {
+  const rpcUrl = await getRpcUrl();
   return {
     chainId: ${hardhatArguments.network === "baseMainnet" ? 8453 : 84532},
     providerUrl: \`\${rpcUrl}\`,
@@ -486,6 +477,26 @@ async function main(): Promise<DeployedContracts> {
     });
   }
 
+  // Create transaction descriptions for better readability
+  const transactionDescriptions = [
+    "Set GovernorExecutor for SciManager",
+    "Set GovernorExecutor for Research",
+    "Set GovernorExecutor for GovernorOperations",
+    "Set GovernorGuard for GovernorOperations",
+    "Set ActionCloneFactory for GovernorOperations",
+    "Set ActionCloneFactory for Research",
+    "Set GovernorGuard for Research",
+    "Set GovernorOperations for PO",
+    "Set GovernorOperations for SciManager",
+    "Set Research for SciManager"
+  ];
+
+  // Create transactions with descriptions for devWalletScripts
+  const transactionsWithDescriptions = transactions.map((tx, index) => ({
+    ...tx,
+    description: transactionDescriptions[index] || `Transaction ${index + 1}`
+  }));
+
   try {
     const safeBatchTransaction = {
       version: "1.0",
@@ -524,8 +535,132 @@ async function main(): Promise<DeployedContracts> {
     console.log(
       `Batch transaction JSON successfully generated and saved at: ${outputPath}`
     );
+
+    // Update the executeTransactions.js file in devWalletScripts
+    const devWalletScriptsDir = path.join(__dirname, "../scripts/devWalletScripts");
+    const executeTransactionsPath = path.join(devWalletScriptsDir, "executeTransactions.js");
+    
+    // Create the executeTransactions.js content
+    const executeTransactionsContent = `// Script to execute the same transactions as in safeBatchTransaction.json but using an EOA wallet
+// This script uses ethers.js v5
+
+const { ethers } = require('ethers');
+require('dotenv').config();
+
+async function main() {
+  // Configuration
+  const PRIVATE_KEY = process.env.PRIVATE_KEY;
+  if (!PRIVATE_KEY) {
+    console.error('Please set your PRIVATE_KEY in a .env file');
+    process.exit(1);
+  }
+
+  // Base Chain (Chain ID: ${hardhatArguments.network === "baseMainnet" ? 8453 : 84532})
+  const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL || '${
+    hardhatArguments.network === "baseMainnet"
+      ? "https://base-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+      : "https://base-sepolia.g.alchemy.com/v2/YOUR_API_KEY"
+  }');
+  const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+  
+  console.log(\`Using wallet address: \${wallet.address}\`);
+  
+  // Transaction data from safeBatchTransaction.json
+  const transactions = ${JSON.stringify(transactionsWithDescriptions, null, 2)};
+
+  // Execute transactions sequentially
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i];
+    console.log(\`\\nExecuting transaction \${i + 1}/\${transactions.length}: \${tx.description}\`);
+    console.log(\`Target: \${tx.to}\`);
+    
+    try {
+      // Get current nonce
+      const nonce = await wallet.getTransactionCount();
+      
+      // Get gas price
+      const gasPrice = await provider.getGasPrice();
+      
+      // Estimate gas limit
+      const gasLimit = await provider.estimateGas({
+        from: wallet.address,
+        to: tx.to,
+        data: tx.data,
+        value: ethers.utils.parseEther(tx.value || "0")
+      }).catch(error => {
+        console.warn(\`Gas estimation failed: \${error.message}\`);
+        return ethers.BigNumber.from(300000); // Fallback gas limit
+      });
+      
+      // Prepare transaction
+      const transaction = {
+        from: wallet.address,
+        to: tx.to,
+        data: tx.data,
+        value: ethers.utils.parseEther(tx.value || "0"),
+        nonce: nonce,
+        gasLimit: gasLimit.mul(ethers.BigNumber.from(12)).div(ethers.BigNumber.from(10)), // Add 20% buffer
+        gasPrice: gasPrice,
+        chainId: ${hardhatArguments.network === "baseMainnet" ? 8453 : 84532} // Base Chain
+      };
+      
+      console.log(\`Gas limit: \${transaction.gasLimit.toString()}\`);
+      
+      // Sign and send transaction
+      const signedTx = await wallet.signTransaction(transaction);
+      const txResponse = await provider.sendTransaction(signedTx);
+      
+      console.log(\`Transaction sent: \${txResponse.hash}\`);
+      console.log(\`Waiting for confirmation...\`);
+      
+      // Wait for transaction to be mined
+      const receipt = await txResponse.wait();
+      console.log(\`Transaction confirmed in block \${receipt.blockNumber}\`);
+      console.log(\`Gas used: \${receipt.gasUsed.toString()}\`);
+    } catch (error) {
+      console.error(\`Error executing transaction \${i + 1}: \${error.message}\`);
+      console.error(error);
+      
+      // Ask user if they want to continue with the next transaction
+      const readline = require('readline').createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      const answer = await new Promise(resolve => {
+        readline.question('Continue with next transaction? (y/n): ', resolve);
+      });
+      
+      readline.close();
+      
+      if (answer.toLowerCase() !== 'y') {
+        console.log('Execution stopped by user.');
+        process.exit(1);
+      }
+    }
+  }
+  
+  console.log('\\nAll transactions executed successfully!');
+}
+
+// Execute the script
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });`;
+
+    // Write the executeTransactions.js file
+    if (!fs.existsSync(devWalletScriptsDir)) {
+      fs.mkdirSync(devWalletScriptsDir, { recursive: true });
+      console.log(`Directory created: ${devWalletScriptsDir}`);
+    }
+
+    fs.writeFileSync(executeTransactionsPath, executeTransactionsContent, "utf8");
+    console.log(`executeTransactions.js has been updated at: ${executeTransactionsPath}`);
   } catch (error) {
-    console.error("Error generating safe batch transaction:", error);
+    console.error("Error generating transaction files:", error);
   }
 
   return addresses;

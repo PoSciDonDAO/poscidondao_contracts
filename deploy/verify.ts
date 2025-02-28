@@ -1,5 +1,6 @@
-import { ethers, run } from "hardhat";
+import { ethers, run, hardhatArguments } from "hardhat";
 import dotenv from "dotenv";
+import { shouldSkipVerification } from "./utils";
 
 dotenv.config();
 
@@ -11,6 +12,12 @@ async function main() {
 		throw new Error(
 			"⛔️ Private key not detected! Add it to the .env file!"
 		);
+	}
+
+	// Check if we should skip verification
+	if (shouldSkipVerification(hardhatArguments.network)) {
+		console.log(`Skipping verification on Base Sepolia network`);
+		return;
 	}
 
 	const wallet = new ethers.Wallet(privateKey, ethers.provider);

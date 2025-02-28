@@ -163,7 +163,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event FactorySet(address indexed user, address newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
-    event ParameterUpdated(bytes32 indexed param, uint256 data);
+    event ParameterUpdated(bytes32 indexed param, uint256 oldValue, uint256 newValue);
     event Proposed(
         uint256 indexed index,
         address indexed user,
@@ -219,16 +219,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _signer = signer_;
         _actionTypeLimit = 4;
 
+        // governanceParams.opThreshold = 5000e18;
+        // governanceParams.quorum = 367300e18; // 3% of maximum supply of 18.91 million SCI
+        // governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
+        // governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 minutes
+        // governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
+        // governanceParams.proposeLockTime = 14 days; //prod: 2 weeks, test: 0 minutes
+        // governanceParams.voteChangeTime = 1 days; //prod: 1-24 hours, test: 10 minutes
+        // governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+        // governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
+        // governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
+
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 367300e18; // 3% of maximum supply of 18.91 million SCI
         governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
-        governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 minutes
-        governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
-        governanceParams.proposeLockTime = 14 days; //prod: 2 weeks, test: 0 minutes
-        governanceParams.voteChangeTime = 1 days; //prod: 1-24 hours, test: 10 minutes
-        governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+        governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 minutes
+        governanceParams.voteLockTime = 31 minutes; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
+        governanceParams.proposeLockTime = 0; //prod: 2 weeks, test: 0 minutes
+        governanceParams.voteChangeTime = 10 minutes; //prod: 1-24 hours, test: 10 minutes
+        governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
-        governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
+        governanceParams.votingDelay = 1 minutes; //to prevent flash loan attacks
+
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -410,6 +422,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
+        uint256 oldValue;
+        
         if (param == "proposalLifetime") {
             // Ensure proposal lifetime is reasonable (between 1 day and 30 days)
             if (data < 1 days || data > 30 days) {
@@ -424,6 +438,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     governanceParams.voteLockTime,
                     data
                 );
+            oldValue = governanceParams.proposalLifetime;
             governanceParams.proposalLifetime = data;
         } else if (param == "voteLockTime") {
             // Vote lock time must be at least 1 day and not more than 60 days
@@ -439,6 +454,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     data,
                     governanceParams.proposalLifetime
                 );
+            oldValue = governanceParams.voteLockTime;
             governanceParams.voteLockTime = data;
         } else if (param == "quorum") {
             // Quorum must be at least 0.1% of total supply
@@ -450,6 +466,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be at least 0.1% of total supply"
                 );
             }
+            oldValue = governanceParams.quorum;
             governanceParams.quorum = data;
         } else if (param == "proposeLockTime") {
             // Propose lock time must be at least 1 day and not more than 30 days
@@ -460,6 +477,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be between 1 and 30 days"
                 );
             }
+            oldValue = governanceParams.proposeLockTime;
             governanceParams.proposeLockTime = data;
         } else if (param == "voteChangeTime") {
             // Vote change window must be at least 1 hour and not more than proposal lifetime
@@ -470,6 +488,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be between 1 hour and proposal lifetime"
                 );
             }
+            oldValue = governanceParams.voteChangeTime;
             governanceParams.voteChangeTime = data;
         } else if (param == "voteChangeCutOff") {
             // Vote change cutoff must be at least 1 hour and not more than proposal lifetime
@@ -480,6 +499,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be between 1 hour and proposal lifetime"
                 );
             }
+            oldValue = governanceParams.voteChangeCutOff;
             governanceParams.voteChangeCutOff = data;
         } else if (param == "opThreshold") {
             // Operations threshold must be at least 10 SCI
@@ -490,12 +510,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be at least 10 SCI"
                 );
             }
+            oldValue = governanceParams.opThreshold;
             governanceParams.opThreshold = data;
         } else if (param == "maxVotingStreak") {
             // Max voting streak must be at least 1
             if (data < 1) {
                 revert InvalidParameterValue(param, data, "Must be at least 1");
             }
+            oldValue = governanceParams.maxVotingStreak;
             governanceParams.maxVotingStreak = data;
         } else if (param == "votingRightsThreshold") {
             // Voting rights threshold must be at least 1 SCI
@@ -506,6 +528,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be at least 1 SCI"
                 );
             }
+            oldValue = governanceParams.votingRightsThreshold;
             governanceParams.votingRightsThreshold = data;
         } else if (param == "votingDelay") {
             // Voting delay must be at least 1 minute
@@ -516,10 +539,11 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     "Must be at least 1 minute"
                 );
             }
+            oldValue = governanceParams.votingDelay;
             governanceParams.votingDelay = data;
         } else revert InvalidGovernanceParameter();
 
-        emit ParameterUpdated(param, data);
+        emit ParameterUpdated(param, oldValue, data);
     }
 
     /**
@@ -531,12 +555,15 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 oldValue;
+        
         if (param == "proposalLifetime") {
             if (data > governanceParams.voteLockTime)
                 revert VoteLockShorterThanProposal(
                     governanceParams.voteLockTime,
                     data
                 );
+            oldValue = governanceParams.proposalLifetime;
             governanceParams.proposalLifetime = data;
         } else if (param == "voteLockTime") {
             if (data < governanceParams.proposalLifetime)
@@ -544,24 +571,35 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                     data,
                     governanceParams.proposalLifetime
                 );
+            oldValue = governanceParams.voteLockTime;
             governanceParams.voteLockTime = data;
-        } else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "proposeLockTime")
+        } else if (param == "quorum") {
+            oldValue = governanceParams.quorum;
+            governanceParams.quorum = data;
+        } else if (param == "proposeLockTime") {
+            oldValue = governanceParams.proposeLockTime;
             governanceParams.proposeLockTime = data;
-        else if (param == "voteChangeTime")
+        } else if (param == "voteChangeTime") {
+            oldValue = governanceParams.voteChangeTime;
             governanceParams.voteChangeTime = data;
-        else if (param == "voteChangeCutOff")
+        } else if (param == "voteChangeCutOff") {
+            oldValue = governanceParams.voteChangeCutOff;
             governanceParams.voteChangeCutOff = data;
-        else if (param == "opThreshold") governanceParams.opThreshold = data;
-        else if (param == "maxVotingStreak" && data <= 10 && data >= 1)
+        } else if (param == "opThreshold") {
+            oldValue = governanceParams.opThreshold;
+            governanceParams.opThreshold = data;
+        } else if (param == "maxVotingStreak" && data <= 10 && data >= 1) {
+            oldValue = governanceParams.maxVotingStreak;
             governanceParams.maxVotingStreak = data;
-        else if (param == "votingRightsThreshold")
+        } else if (param == "votingRightsThreshold") {
+            oldValue = governanceParams.votingRightsThreshold;
             governanceParams.votingRightsThreshold = data;
-        else if (param == "votingDelay")
+        } else if (param == "votingDelay") {
+            oldValue = governanceParams.votingDelay;
             governanceParams.votingDelay = data; //only by admin
-        else revert InvalidGovernanceParameter();
+        } else revert InvalidGovernanceParameter();
 
-        emit ParameterUpdated(param, data);
+        emit ParameterUpdated(param, oldValue, data);
     }
 
     /**

@@ -11,3 +11,15 @@ export function getEnv(name: string, def?: any): string {
 export function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+/**
+ * Checks if the current network is Base Sepolia and verification should be skipped
+ * @param networkName The name of the network from hardhat arguments
+ * @returns True if verification should be skipped, false otherwise
+ */
+export function shouldSkipVerification(networkName?: string): boolean {
+    if (!networkName) return false;
+    
+    const network = networkName.toString().toLowerCase();
+    return network.includes('basesepolia') || network.includes('base-sepolia');
+}

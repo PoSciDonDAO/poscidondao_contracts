@@ -138,7 +138,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
     event FactorySet(address indexed user, address newAddress);
     event Impeached(address indexed impeached);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
-    event ParameterUpdated(bytes32 indexed param, uint256 data);
+    event ParameterUpdated(bytes32 indexed param, uint256 oldValue, uint256 newValue);
     event Proposed(
         uint256 indexed index,
         address indexed user,
@@ -188,12 +188,20 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         _baseVoteAmount = 1; // Initialize with default value
 
         governanceParams.ddThreshold = 1000e18;
+        // governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 min
+        // governanceParams.quorum = 1; //set based on number of DD members
+        // governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
+        // governanceParams.proposeLockTime = 8 days; //prod: 2 weeks, test: 30 minutes
+        // governanceParams.voteChangeTime = 1 days; //prod: 12 hours, test: 10 minutes
+        // governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+
         governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 min
         governanceParams.quorum = 1; //set based on number of DD members
         governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
-        governanceParams.proposeLockTime = 14 days; //prod: 2 weeks, test: 30 minutes
+        governanceParams.proposeLockTime = 0; //prod: 2 weeks, test: 30 minutes
         governanceParams.voteChangeTime = 1 days; //prod: 12 hours, test: 10 minutes
         governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
@@ -414,6 +422,8 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyExecutor {
+        uint256 oldValue;
+        
         if (param == "proposalLifetime") {
             // Ensure proposal lifetime is reasonable (between 1 day and 30 days)
             if (data < 1 days || data > 30 days) {
@@ -423,6 +433,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be between 1 and 30 days"
                 );
             }
+            oldValue = governanceParams.proposalLifetime;
             governanceParams.proposalLifetime = data;
         } else if (param == "quorum") {
             // Quorum must be at least 1 since it's for DD members
@@ -433,6 +444,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be at least 1"
                 );
             }
+            oldValue = governanceParams.quorum;
             governanceParams.quorum = data;
         } else if (param == "voteLockTime") {
             // Vote lock time must be at least 1 day and not more than 60 days
@@ -443,6 +455,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be between 1 and 60 days"
                 );
             }
+            oldValue = governanceParams.voteLockTime;
             governanceParams.voteLockTime = data;
         } else if (param == "proposeLockTime") {
             // Propose lock time must be at least 1 day and not more than 30 days
@@ -453,6 +466,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be between 1 and 30 days"
                 );
             }
+            oldValue = governanceParams.proposeLockTime;
             governanceParams.proposeLockTime = data;
         } else if (param == "voteChangeTime") {
             // Vote change window must be at least 1 hour and not more than proposal lifetime
@@ -463,6 +477,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be between 1 hour and proposal lifetime"
                 );
             }
+            oldValue = governanceParams.voteChangeTime;
             governanceParams.voteChangeTime = data;
         } else if (param == "voteChangeCutOff") {
             // Vote change cutoff must be at least 1 hour and not more than proposal lifetime
@@ -473,6 +488,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be between 1 hour and proposal lifetime"
                 );
             }
+            oldValue = governanceParams.voteChangeCutOff;
             governanceParams.voteChangeCutOff = data;
         } else if (param == "ddThreshold") {
             // DD threshold must be at least 10 SCI
@@ -483,10 +499,11 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                     "Must be at least 10 SCI"
                 );
             }
+            oldValue = governanceParams.ddThreshold;
             governanceParams.ddThreshold = data;
         } else revert InvalidGovernanceParameter();
 
-        emit ParameterUpdated(param, data);
+        emit ParameterUpdated(param, oldValue, data);
     }
 
     /**
@@ -498,20 +515,32 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bytes32 param,
         uint256 data
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (param == "proposalLifetime")
+        uint256 oldValue;
+        
+        if (param == "proposalLifetime") {
+            oldValue = governanceParams.proposalLifetime;
             governanceParams.proposalLifetime = data;
-        else if (param == "quorum") governanceParams.quorum = data;
-        else if (param == "voteLockTime") governanceParams.voteLockTime = data;
-        else if (param == "proposeLockTime")
+        } else if (param == "quorum") {
+            oldValue = governanceParams.quorum;
+            governanceParams.quorum = data;
+        } else if (param == "voteLockTime") {
+            oldValue = governanceParams.voteLockTime;
+            governanceParams.voteLockTime = data;
+        } else if (param == "proposeLockTime") {
+            oldValue = governanceParams.proposeLockTime;
             governanceParams.proposeLockTime = data;
-        else if (param == "voteChangeTime")
+        } else if (param == "voteChangeTime") {
+            oldValue = governanceParams.voteChangeTime;
             governanceParams.voteChangeTime = data;
-        else if (param == "voteChangeCutOff")
+        } else if (param == "voteChangeCutOff") {
+            oldValue = governanceParams.voteChangeCutOff;
             governanceParams.voteChangeCutOff = data;
-        else if (param == "ddThreshold") governanceParams.ddThreshold = data;
-        else revert InvalidGovernanceParameter();
+        } else if (param == "ddThreshold") {
+            oldValue = governanceParams.ddThreshold;
+            governanceParams.ddThreshold = data;
+        } else revert InvalidGovernanceParameter();
 
-        emit ParameterUpdated(param, data);
+        emit ParameterUpdated(param, oldValue, data);
     }
 
     /**
