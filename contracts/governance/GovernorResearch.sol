@@ -195,12 +195,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         // governanceParams.voteChangeTime = 1 days; //prod: 12 hours, test: 10 minutes
         // governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
 
-        governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 min
+        governanceParams.proposalLifetime = 30 minutes; //prod: 2 weeks, test: 30 min
         governanceParams.quorum = 1; //set based on number of DD members
-        governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
+        governanceParams.voteLockTime = 31 minutes; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
         governanceParams.proposeLockTime = 0; //prod: 2 weeks, test: 30 minutes
-        governanceParams.voteChangeTime = 1 days; //prod: 12 hours, test: 10 minutes
-        governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+        governanceParams.voteChangeTime = 10 minutes; //prod: 12 hours, test: 10 minutes
+        governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
 
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);

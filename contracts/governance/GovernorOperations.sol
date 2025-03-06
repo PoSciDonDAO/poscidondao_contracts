@@ -91,6 +91,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 maxVotingStreak;
         uint256 votingRightsThreshold;
         uint256 votingDelay;
+        uint256 lockedTokenMultiplierBase; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards
+        uint256 maxLockedTokenMultiplier; // Maximum multiplier allowed for locked tokens
     }
 
     struct UserVoteData {
@@ -229,6 +231,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         // governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
         // governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
         // governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
+        // governanceParams.lockedTokenMultiplierBase = 5000e18; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards (aligned with opThreshold)
 
         governanceParams.opThreshold = 5000e18;
         governanceParams.quorum = 367300e18; // 3% of maximum supply of 18.91 million SCI
@@ -240,7 +243,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
         governanceParams.votingDelay = 1 minutes; //to prevent flash loan attacks
-
+        governanceParams.lockedTokenMultiplierBase = 5000e18; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards (aligned with opThreshold)
+        governanceParams.maxLockedTokenMultiplier = 50; // Maximum multiplier allowed for locked tokens
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -541,6 +545,28 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             }
             oldValue = governanceParams.votingDelay;
             governanceParams.votingDelay = data;
+        } else if (param == "lockedTokenMultiplierBase") {
+            // Maintain minimum safety threshold
+            if (data < 1000e18) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be at least 1000 SCI for safety"
+                );
+            }
+            oldValue = governanceParams.lockedTokenMultiplierBase;
+            governanceParams.lockedTokenMultiplierBase = data;
+        } else if (param == "maxLockedTokenMultiplier") {
+            // Ensure the maximum multiplier is reasonable (between 10 and 200)
+            if (data < 1 || data > 200) {
+                revert InvalidParameterValue(
+                    param,
+                    data,
+                    "Must be between 1 and 200 for reasonable rewards"
+                );
+            }
+            oldValue = governanceParams.maxLockedTokenMultiplier;
+            governanceParams.maxLockedTokenMultiplier = data;
         } else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, oldValue, data);
@@ -597,6 +623,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         } else if (param == "votingDelay") {
             oldValue = governanceParams.votingDelay;
             governanceParams.votingDelay = data; //only by admin
+        } else if (param == "lockedTokenMultiplierBase") {
+            oldValue = governanceParams.lockedTokenMultiplierBase;
+            governanceParams.lockedTokenMultiplierBase = data;
+        } else if (param == "maxLockedTokenMultiplier") {
+            oldValue = governanceParams.maxLockedTokenMultiplier;
+            governanceParams.maxLockedTokenMultiplier = data;
         } else revert InvalidGovernanceParameter();
 
         emit ParameterUpdated(param, oldValue, data);
@@ -893,11 +925,49 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
+     * @dev Calculates the PO token reward based on voting streak and locked tokens
+     * @param votingStreak The user's current voting streak
+     * @param lockedTokens The amount of tokens the user has locked
+     * @return The calculated PO token reward
+     * @notice This function intentionally uses integer division to round down the multiplier
+     * to ensure whole number PO token rewards. The minimum multiplier is 1.
+     */
+    function _calculatePoReward(uint256 votingStreak, uint256 lockedTokens) internal view returns (uint256) {
+        // Early return if either input is zero to save gas
+        if (votingStreak == 0) return 0;
+        
+        // Calculate the multiplier based on locked tokens using the governance parameter
+        // Division in Solidity automatically rounds down to the nearest integer
+        uint256 lockedTokenMultiplier;
+        
+        // Prevent division by zero if the base parameter hasn't been set
+        if (governanceParams.lockedTokenMultiplierBase == 0) {
+            lockedTokenMultiplier = 1;
+        } else {
+            lockedTokenMultiplier = lockedTokens / governanceParams.lockedTokenMultiplierBase;
+            
+            // If they have less than the base amount of tokens, they still get the base reward (multiplier = 1)
+            if (lockedTokenMultiplier == 0) {
+                lockedTokenMultiplier = 1;
+            }
+        }
+        
+        // Cap the multiplier at the maximum allowed by governance parameters
+        if (lockedTokenMultiplier > governanceParams.maxLockedTokenMultiplier) {
+            lockedTokenMultiplier = governanceParams.maxLockedTokenMultiplier;
+        }
+        
+        return votingStreak * lockedTokenMultiplier;
+    }
+
+    /**
      * @dev Allows a user to claim their accumulated unclaimed PO tokens earned through voting.
      */
     function claimPo() external {
         uint256 totalPoToClaim = 0;
         uint256 endIndex = _proposalIndex;
+        ISciManager sciManager = ISciManager(sciManagerContract);
+        uint256 lockedTokens = sciManager.getLockedSci(msg.sender);
 
         for (uint256 i = 0; i < endIndex; i++) {
             UserVoteData storage voteData = _userVoteData[msg.sender][i];
@@ -913,7 +983,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 : _proposals[i].votesTotal >= governanceParams.quorum;
 
             if (quorumReached) {
-                totalPoToClaim += voteData.votingStreakAtVote;
+                uint256 proposalReward = _calculatePoReward(voteData.votingStreakAtVote, lockedTokens);
+                totalPoToClaim += proposalReward;
                 voteData.poClaimed = true;
             }
         }
