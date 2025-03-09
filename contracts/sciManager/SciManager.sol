@@ -97,6 +97,7 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     event GovResSet(address indexed user, address indexed newAddress);
     event Locked(address indexed user, address indexed asset, uint256 amount);
     event ProposeLockEndTimeUpdated(address user, uint256 proposeLockEndTime);
+    event SciUpdated(address indexed user, address indexed newAddress);
     event Snapshotted(
         address indexed owner,
         uint256 votingRights,
@@ -214,6 +215,23 @@ contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
 
         govResContract = newGovRes;
         emit GovResSet(msg.sender, newGovRes);
+    }
+
+    /**
+     * @dev Sets the SCI token address and interface
+     * @param sci_ the address of the SCI token
+     */
+    function setSciToken(address sci_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (sci_ == address(0)) revert CannotBeZeroAddress();
+        if (sci_ == address(_sci)) revert SameAddress();
+
+        uint256 size;
+        assembly {
+            size := extcodesize(sci_)
+        }
+        if (size == 0) revert NotAContract(sci_);
+        _sci = IERC20(sci_);
+        emit SciUpdated(msg.sender, sci_);
     }
 
     /**

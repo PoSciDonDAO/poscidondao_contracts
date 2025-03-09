@@ -88,7 +88,9 @@ contract ParameterChange is ReentrancyGuard, AccessControl {
             param_ != _toBytes32("maxVotingStreak") &&
             param_ != _toBytes32("opThreshold") &&
             param_ != _toBytes32("ddThreshold") &&
-            param_ != _toBytes32("votingRightsThreshold")
+            param_ != _toBytes32("votingRightsThreshold") &&
+            param_ != _toBytes32("lockedTokenMultiplierBase") &&
+            param_ != _toBytes32("maxLockedTokenMultiplier")
         ) {
             revert InvalidParameter(param_);
         }

@@ -125,6 +125,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     mapping(address => uint256) private _latestVoteTimestamp;
     mapping(address => mapping(uint256 => UserVoteData)) private _userVoteData;
     mapping(address => uint256) private _userNonces;
+    mapping(address => uint256) private _totalPoClaimed;
     uint256 public constant SIGNATURE_VALIDITY_PERIOD = 1 hours;
 
     ///*** ROLES ***///
@@ -161,7 +162,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     event ActionTypeLimitUpdated(address indexed user, uint256 newLimit);
     event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
     event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
-    event Claimed(address indexed user, uint256 amount);
+    event Claimed(address indexed user, uint256 amount, uint256 totalClaimed);
     event FactorySet(address indexed user, address newAddress);
     event GovExecUpdated(address indexed user, address indexed newAddress);
     event GovGuardUpdated(address indexed user, address indexed newAddress);
@@ -925,42 +926,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Calculates the PO token reward based on voting streak and locked tokens
-     * @param votingStreak The user's current voting streak
-     * @param lockedTokens The amount of tokens the user has locked
-     * @return The calculated PO token reward
-     * @notice This function intentionally uses integer division to round down the multiplier
-     * to ensure whole number PO token rewards. The minimum multiplier is 1.
-     */
-    function _calculatePoReward(uint256 votingStreak, uint256 lockedTokens) internal view returns (uint256) {
-        // Early return if either input is zero to save gas
-        if (votingStreak == 0) return 0;
-        
-        // Calculate the multiplier based on locked tokens using the governance parameter
-        // Division in Solidity automatically rounds down to the nearest integer
-        uint256 lockedTokenMultiplier;
-        
-        // Prevent division by zero if the base parameter hasn't been set
-        if (governanceParams.lockedTokenMultiplierBase == 0) {
-            lockedTokenMultiplier = 1;
-        } else {
-            lockedTokenMultiplier = lockedTokens / governanceParams.lockedTokenMultiplierBase;
-            
-            // If they have less than the base amount of tokens, they still get the base reward (multiplier = 1)
-            if (lockedTokenMultiplier == 0) {
-                lockedTokenMultiplier = 1;
-            }
-        }
-        
-        // Cap the multiplier at the maximum allowed by governance parameters
-        if (lockedTokenMultiplier > governanceParams.maxLockedTokenMultiplier) {
-            lockedTokenMultiplier = governanceParams.maxLockedTokenMultiplier;
-        }
-        
-        return votingStreak * lockedTokenMultiplier;
-    }
-
-    /**
      * @dev Allows a user to claim their accumulated unclaimed PO tokens earned through voting.
      */
     function claimPo() external {
@@ -993,9 +958,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             revert NoTokensToClaim();
         }
 
+        // Update the total claimed amount for this user
+        _totalPoClaimed[msg.sender] += totalPoToClaim;
+
         _po.mint(msg.sender, totalPoToClaim);
 
-        emit Claimed(msg.sender, totalPoToClaim);
+        emit Claimed(msg.sender, totalPoToClaim, _totalPoClaimed[msg.sender]);
     }
 
     /**
@@ -1114,7 +1082,51 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         return _userNonces[user];
     }
 
+    /**
+     * @dev Returns the total amount of PO tokens claimed by a user
+     * @param user The address of the user
+     */
+    function getTotalPoClaimed(address user) external view returns (uint256) {
+        return _totalPoClaimed[user];
+    }
+
     ///*** INTERNAL FUNCTIONS ***///
+
+    /**
+     * @dev Calculates the PO token reward based on voting streak and locked tokens
+     * @param votingStreak The user's current voting streak
+     * @param lockedTokens The amount of tokens the user has locked
+     * @return The calculated PO token reward
+     * @notice This function intentionally uses integer division to round down the multiplier
+     * to ensure whole number PO token rewards. The minimum multiplier is 1.
+     */
+    function _calculatePoReward(uint256 votingStreak, uint256 lockedTokens) internal view returns (uint256) {
+        // Early return if either input is zero to save gas
+        if (votingStreak == 0) return 0;
+        
+        // Calculate the multiplier based on locked tokens using the governance parameter
+        // Division in Solidity automatically rounds down to the nearest integer
+        uint256 lockedTokenMultiplier;
+        
+        // Prevent division by zero if the base parameter hasn't been set
+        if (governanceParams.lockedTokenMultiplierBase == 0) {
+            lockedTokenMultiplier = 1;
+        } else {
+            lockedTokenMultiplier = lockedTokens / governanceParams.lockedTokenMultiplierBase;
+            
+            // If they have less than the base amount of tokens, they still get the base reward (multiplier = 1)
+            if (lockedTokenMultiplier == 0) {
+                lockedTokenMultiplier = 1;
+            }
+        }
+        
+        // Cap the multiplier at the maximum allowed by governance parameters
+        if (lockedTokenMultiplier > governanceParams.maxLockedTokenMultiplier) {
+            lockedTokenMultiplier = governanceParams.maxLockedTokenMultiplier;
+        }
+        
+        return votingStreak * lockedTokenMultiplier;
+    }
 
     /**
      * @dev Internal function that performs checks to determine if a proposal can be scheduled.

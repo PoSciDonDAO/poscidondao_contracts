@@ -15,7 +15,7 @@ async function main() {
 
     // Ensure private key has the correct format
     const formattedPrivateKey = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
-    const contractAddress = "0xC7974b70B9577317426A19c788a69eA1aB29aaEb";
+    const contractAddress = "0x0b137458f21b44b990dA8721a7C6BE2CF46Dd620";
 
     // Connect to the network
     const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
