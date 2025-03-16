@@ -278,7 +278,7 @@ async function main(): Promise<DeployedContracts> {
   };
 
   const rpcUrl: string = getRpcUrl();
-  const uri = "https://baseURI.example/";
+  const uri = "https://red-improved-cod-476.mypinata.cloud/ipfs/bafkreibmrcsilc2ojbu636rl2gz2vhlsy7pyi3uvzroccqwc7b3qucszum";
   const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const addresses: { [key: string]: string | number | undefined } = {};
 

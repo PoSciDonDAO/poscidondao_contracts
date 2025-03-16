@@ -1,0 +1,38 @@
+{
+  "name": "Participation Token (PO)",
+  "description": "A soulbound token representing participation in PoSciDonDAO governance. This token measures contribution and cannot be transferred by regular users, reflecting the owner's participation and commitment to the DAO's initiatives.",
+  "image": "https://red-improved-cod-476.mypinata.cloud/ipfs/bafybeidddbqxj66hzgjhqfzgkrctfimfomm7imsfziuf7spgpsa26msdly",
+  "animation_url": "https://red-improved-cod-476.mypinata.cloud/ipfs/bafybeib6hirixvbzvl5jv727ca5ux5l6n6zdbchygfzgqjmwlwlogx6wem",
+  "external_url": "https://poscidondao.com",
+  "attributes": [
+    {
+      "trait_type": "Token Type",
+      "value": "Soulbound"
+    },
+    {
+      "trait_type": "Token Standard",
+      "value": "ERC1155"
+    },
+    {
+      "trait_type": "Category",
+      "value": "Governance"
+    }
+  ],
+  "properties": {
+    "tokenId": 0,
+    "collection": {
+      "name": "PoSciDonDAO Participation Tokens",
+      "family": "PoSciDonDAO"
+    },
+    "files": [
+      {
+        "uri": "https://red-improved-cod-476.mypinata.cloud/ipfs/bafybeidddbqxj66hzgjhqfzgkrctfimfomm7imsfziuf7spgpsa26msdly",
+        "type": "image/png"
+      },
+      {
+        "uri": "https://red-improved-cod-476.mypinata.cloud/ipfs/bafybeib6hirixvbzvl5jv727ca5ux5l6n6zdbchygfzgqjmwlwlogx6wem",
+        "type": "video/mp4"
+      }
+    ]
+  }
+} 

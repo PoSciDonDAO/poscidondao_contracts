@@ -1,0 +1,8 @@
+{
+  "name": "PoSciDonDAO Participation Tokens",
+  "description": "Participation Tokens (PO) are soulbound ERC1155 tokens that represent a contributor's participation in PoSciDonDAO governance. These tokens cannot be transferred between wallets except by administrators, ensuring they accurately reflect genuine participation.",
+  "image": "https://red-improved-cod-476.mypinata.cloud/ipfs/bafybeih5lgweerojk5vbzjcjgrk5z3ieva7uzlgzgk2gqgxsswlgr4tomi",
+  "external_link": "https://poscidondao.org",
+  "seller_fee_basis_points": 0,
+  "fee_recipient": "0x0000000000000000000000000000000000000000"
+} 

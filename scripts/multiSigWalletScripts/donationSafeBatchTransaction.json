@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "chainId": 84532,
+  "createdAt": "2025-03-12T16:08:59.592Z",
+  "meta": {
+    "name": "PoSciDonDAO Donation System Setup",
+    "description": "Transactions to configure the PoSciDonDAO Donation System"
+  },
+  "transactions": [
+    {
+      "to": "0x6Fe8b8dE939DEdC12A94819e6cfAecB71a2E6525",
+      "value": "0",
+      "data": "0x68e432b2000000000000000000000000d425a391be95bb5c4485036e3e49d1bdf1192f0d",
+      "operation": 0,
+      "safeTxGas": "0",
+      "baseGas": "0",
+      "gasPrice": "0",
+      "gasToken": "0x0000000000000000000000000000000000000000",
+      "refundReceiver": "0x0000000000000000000000000000000000000000",
+      "nonce": 0
+    }
+  ]
+}

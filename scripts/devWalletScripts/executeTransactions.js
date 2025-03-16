@@ -21,63 +21,63 @@ async function main() {
   // Transaction data from safeBatchTransaction.json
   const transactions = [
   {
-    "to": "0xA1591e7fd5c25eD657f265A1780E6ccEA3f04ECD",
+    "to": "0xCF245ea8A1f892e79453DcD884c87f91FEE8ab94",
     "value": "0",
-    "data": "0x861228a20000000000000000000000008286b98b8c59653ec282385dc7f3d835fb1caa44",
+    "data": "0x861228a20000000000000000000000009b974833d84263d6888e85c7ccf92aeb4bede203",
     "description": "Set GovernorExecutor for SciManager"
   },
   {
-    "to": "0x235bf747A0Ce3f2f2A6dAfd080C7577fba0A563e",
+    "to": "0x73be5508Fd3860A8A87507F27922EEcFC1d48a0b",
     "value": "0",
-    "data": "0x861228a20000000000000000000000008286b98b8c59653ec282385dc7f3d835fb1caa44",
+    "data": "0x861228a20000000000000000000000009b974833d84263d6888e85c7ccf92aeb4bede203",
     "description": "Set GovernorExecutor for Research"
   },
   {
-    "to": "0xc53F885B7121A6d44f02192eDEC77ebb8B35f5Ae",
+    "to": "0x8b557eEbe3B3e6563F6513D55C5B1ba7a6F9C39D",
     "value": "0",
-    "data": "0x861228a20000000000000000000000008286b98b8c59653ec282385dc7f3d835fb1caa44",
+    "data": "0x861228a20000000000000000000000009b974833d84263d6888e85c7ccf92aeb4bede203",
     "description": "Set GovernorExecutor for GovernorOperations"
   },
   {
-    "to": "0xc53F885B7121A6d44f02192eDEC77ebb8B35f5Ae",
+    "to": "0x8b557eEbe3B3e6563F6513D55C5B1ba7a6F9C39D",
     "value": "0",
-    "data": "0x613248b7000000000000000000000000e8414cf1730efdf7baa7a81eb7302fe7f025781d",
+    "data": "0x613248b7000000000000000000000000738bcb53863423111efa74f919d5eba952e0e6f1",
     "description": "Set GovernorGuard for GovernorOperations"
   },
   {
-    "to": "0xc53F885B7121A6d44f02192eDEC77ebb8B35f5Ae",
+    "to": "0x8b557eEbe3B3e6563F6513D55C5B1ba7a6F9C39D",
     "value": "0",
-    "data": "0x5bb4780800000000000000000000000044ea012a01b8ff7b5dd6e267fad60efdb3deba6e",
+    "data": "0x5bb47808000000000000000000000000b3bd7d83f5ee6b1cf058601b21abe86638fa6754",
     "description": "Set ActionCloneFactory for GovernorOperations"
   },
   {
-    "to": "0x235bf747A0Ce3f2f2A6dAfd080C7577fba0A563e",
+    "to": "0x73be5508Fd3860A8A87507F27922EEcFC1d48a0b",
     "value": "0",
-    "data": "0x5bb478080000000000000000000000004fab79796851a7b10c2ef1910d7945f1f3f7413a",
+    "data": "0x5bb478080000000000000000000000002b567a721c5944d1c1ef10ee63d3c6bc812f3c27",
     "description": "Set ActionCloneFactory for Research"
   },
   {
-    "to": "0x235bf747A0Ce3f2f2A6dAfd080C7577fba0A563e",
+    "to": "0x73be5508Fd3860A8A87507F27922EEcFC1d48a0b",
     "value": "0",
-    "data": "0x613248b7000000000000000000000000e8414cf1730efdf7baa7a81eb7302fe7f025781d",
+    "data": "0x613248b7000000000000000000000000738bcb53863423111efa74f919d5eba952e0e6f1",
     "description": "Set GovernorGuard for Research"
   },
   {
-    "to": "0x853532dD7A507074319c39BF2eD0cA09Efb53F77",
+    "to": "0x9f696aBEFA7f6de1225764eF6A4beDe97d74Dc2A",
     "value": "0",
-    "data": "0xc1cc275e000000000000000000000000c53f885b7121a6d44f02192edec77ebb8b35f5ae",
+    "data": "0xc1cc275e0000000000000000000000008b557eebe3b3e6563f6513d55c5b1ba7a6f9c39d",
     "description": "Set GovernorOperations for PO"
   },
   {
-    "to": "0xA1591e7fd5c25eD657f265A1780E6ccEA3f04ECD",
+    "to": "0xCF245ea8A1f892e79453DcD884c87f91FEE8ab94",
     "value": "0",
-    "data": "0xc1cc275e000000000000000000000000c53f885b7121a6d44f02192edec77ebb8b35f5ae",
+    "data": "0xc1cc275e0000000000000000000000008b557eebe3b3e6563f6513d55c5b1ba7a6f9c39d",
     "description": "Set GovernorOperations for SciManager"
   },
   {
-    "to": "0xA1591e7fd5c25eD657f265A1780E6ccEA3f04ECD",
+    "to": "0xCF245ea8A1f892e79453DcD884c87f91FEE8ab94",
     "value": "0",
-    "data": "0x0a5db715000000000000000000000000235bf747a0ce3f2f2a6dafd080c7577fba0a563e",
+    "data": "0x0a5db71500000000000000000000000073be5508fd3860a8a87507f27922eecfc1d48a0b",
     "description": "Set Research for SciManager"
   }
 ];

@@ -244,7 +244,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         governanceParams.voteChangeCutOff = 10 minutes; //prod: 3 days, test: 10 minutes
         governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
         governanceParams.votingDelay = 1 minutes; //to prevent flash loan attacks
-        governanceParams.lockedTokenMultiplierBase = 5000e18; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards (aligned with opThreshold)
+        governanceParams.lockedTokenMultiplierBase = 2500e18; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards (aligned with opThreshold)
         governanceParams.maxLockedTokenMultiplier = 50; // Maximum multiplier allowed for locked tokens
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);

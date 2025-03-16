@@ -7,6 +7,6 @@ pragma solidity 0.8.19;
  */
 library DeployedDonationAddresses {
     // Contract Addresses
-    address constant don = 0xFe2A2B80309e92Ef7Db8188e033b2649E3eD44bb;
-    address constant donation = 0xd74Ab2686617Db48582920ecd6D8f8A9e8eCF860;
+    address constant don = 0xe48d9903E9dc957A8f9c7f5FE13C5e722bB57AB1;
+    address constant donation = 0x65FC4b6A967c20E85B3870122C6cCaB4841bEAe7;
 }
