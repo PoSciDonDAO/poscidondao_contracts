@@ -19,12 +19,14 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     error SameAddress();
     error NoPendingAdmin();
     error NotPendingAdmin(address caller);
+    error EmergencyPaused();
 
     ERC1155Burnable public po;
     IERC20 public sci;
     address public rewardWallet;
     address public pendingAdmin;
     uint256 public conversionRate;
+    bool public emergency;
 
     event Exchanged(
         address user,
@@ -33,6 +35,8 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     );
     event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
     event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
+    event ConversionRateUpdated(uint256 oldRate, uint256 newRate);
+    event EmergencySet(bool emergency, uint256 timestamp);
 
     constructor(address rewardWallet_, address sci_, address po_) {
         rewardWallet = rewardWallet_;
@@ -40,6 +44,14 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         sci = IERC20(sci_);
         conversionRate = 2e18;
         _grantRole(DEFAULT_ADMIN_ROLE, rewardWallet_);
+    }
+
+    /**
+     * @dev toggles the `emergency` state, which pauses the exchange.
+     */
+    function setEmergency() external nonReentrant onlyRole(DEFAULT_ADMIN_ROLE) {
+        emergency = !emergency;
+        emit EmergencySet(emergency, block.timestamp);
     }
 
     /**
@@ -81,7 +93,9 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         if (rate == 0) {
             revert IncorrectInput();
         }
+        uint256 oldRate = conversionRate;
         conversionRate = rate;
+        emit ConversionRateUpdated(oldRate, rate);
     }
 
     /**
@@ -90,6 +104,7 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
      * @param poAmount The amount of PO tokens to exchange.
      */
     function exchangePoForSci(uint256 poAmount) external nonReentrant {
+        if (emergency) revert EmergencyPaused();
         if (poAmount == 0) {
             revert IncorrectInput();
         }
