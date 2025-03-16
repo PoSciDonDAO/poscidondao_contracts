@@ -16,10 +16,14 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
     
     error CannotBeZeroAddress();
     error IncorrectInput();
+    error SameAddress();
+    error NoPendingAdmin();
+    error NotPendingAdmin(address caller);
 
     ERC1155Burnable public po;
     IERC20 public sci;
     address public rewardWallet;
+    address public pendingAdmin;
     uint256 public conversionRate;
 
     event Exchanged(
@@ -27,7 +31,8 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         uint256 amount,
         uint256 amountSci
     );
-    event RewardWalletSet(address indexed user, address indexed newAddress);
+    event AdminTransferInitiated(address indexed currentAdmin, address indexed pendingAdmin);
+    event AdminTransferAccepted(address indexed oldAdmin, address indexed newAdmin);
 
     constructor(address rewardWallet_, address sci_, address po_) {
         rewardWallet = rewardWallet_;
@@ -35,20 +40,37 @@ contract PoToSciExchange is AccessControl, ReentrancyGuard {
         sci = IERC20(sci_);
         conversionRate = 2e18;
         _grantRole(DEFAULT_ADMIN_ROLE, rewardWallet_);
-
     }
 
     /**
-     * @dev Updates the admin address and transfers admin role.
-     * @param newRewardWallet The address to be set as the new admin.
+     * @dev Initiates the transfer of admin role to a new address.
+     * The new admin must accept the role by calling acceptAdmin().
+     * @param newAdmin The address to be set as the pending admin.
      */
-    function setRewardWallet(address newRewardWallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newRewardWallet == address(0)) revert CannotBeZeroAddress();
-        address oldRewardWallet = rewardWallet;
-        rewardWallet = newRewardWallet;
-        _revokeRole(DEFAULT_ADMIN_ROLE, oldRewardWallet);
-        _grantRole(DEFAULT_ADMIN_ROLE, newRewardWallet);
-        emit RewardWalletSet(oldRewardWallet, newRewardWallet);
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAdmin == address(0)) revert CannotBeZeroAddress();
+        if (newAdmin == msg.sender) revert SameAddress();
+        if (newAdmin == pendingAdmin) revert SameAddress();
+        
+        pendingAdmin = newAdmin;
+        emit AdminTransferInitiated(msg.sender, newAdmin);
+    }
+
+    /**
+     * @dev Accepts the admin role transfer. Can only be called by the pending admin.
+     */
+    function acceptAdmin() external {
+        if (pendingAdmin == address(0)) revert NoPendingAdmin();
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin(msg.sender);
+
+        address oldAdmin = rewardWallet;
+        rewardWallet = pendingAdmin;
+        pendingAdmin = address(0);
+
+        _revokeRole(DEFAULT_ADMIN_ROLE, oldAdmin);
+        _grantRole(DEFAULT_ADMIN_ROLE, rewardWallet);
+
+        emit AdminTransferAccepted(oldAdmin, rewardWallet);
     }
 
     /**
