@@ -34,3 +34,4 @@ deployment-order
 scripts/Setting GovernorOperations address to SciManager, GovernorResearch and PO token addresses.json
 scripts/Setting Gov Params.json
 abi
+flattened

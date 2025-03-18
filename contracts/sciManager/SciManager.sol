@@ -12,7 +12,7 @@ import "../../lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.s
 
 /**
  * @title SciManager
- * @dev Manages SCI token operations including locking and unlocking tokens and delegating voting power.
+ * @dev Manages SCI token operations including locking and unlocking tokens.
  */
 contract SciManager is ISciManager, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;

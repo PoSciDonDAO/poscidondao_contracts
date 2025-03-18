@@ -1,10 +1,9 @@
 import "@nomiclabs/hardhat-waffle";
 import { task } from "hardhat/config";
 import "hardhat-typechain";
-import { ethers } from "hardhat";
-require("dotenv").config();
-require("@nomiclabs/hardhat-waffle");
+// import { ethers } from "hardhat";
 import "@nomicfoundation/hardhat-verify";
+require("dotenv").config();
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -27,7 +26,7 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
-export default {
+const config = {
 	solidity: {
 		compilers: [
 			{
@@ -100,8 +99,28 @@ export default {
 			polygonAmoy: process.env.POLYGONSCAN_API_KEY,
 			optimismMainnet: process.env.OPTIMISMSCAN_API_KEY,
 			optimismTestnet: process.env.OPTIMISMSCAN_API_KEY,
-			base: process.env.BASESCAN_API_KEY,
-			baseSepolia: process.env.BASESCAN_API_KEY
+			baseMainnet: process.env.BASESCAN_API_KEY,
+			baseSepolia: process.env.BASESCAN_API_KEY,
 		},
+		customChains: [
+			{
+				network: "baseMainnet",
+				chainId: 8453,
+				urls: {
+					apiURL: "https://api.basescan.org/api",
+					browserURL: "https://basescan.org"
+				}
+			},
+			{
+				network: "baseSepolia",
+				chainId: 84532,
+				urls: {
+					apiURL: "https://api-sepolia.basescan.org/api",
+					browserURL: "https://sepolia.basescan.org"
+				}
+			}
+		]
 	},
 };
+
+export default config;

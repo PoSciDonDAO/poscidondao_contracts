@@ -1,23 +1,52 @@
 "use client";
 
-import { ethers, run, hardhatArguments } from "hardhat";
+import { ethers, hardhatArguments, run } from "hardhat";
 import { ContractFactory, Signer } from "ethers";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
+import { sleep, shouldSkipVerification } from "./utils";
 dotenv.config();
+
+// Environment variable validation and path setup
+const POSCIDONDAO_ROOT = process.env.POSCIDONDAO_ROOT;
+if (!POSCIDONDAO_ROOT) {
+  throw new Error("⛔️ POSCIDONDAO_ROOT environment variable not set! Add it to the .env file!");
+}
+
+// Validate the root directory exists
+if (!fs.existsSync(POSCIDONDAO_ROOT)) {
+  throw new Error(`⛔️ POSCIDONDAO_ROOT directory does not exist: ${POSCIDONDAO_ROOT}`);
+}
+
+// Setup paths relative to POSCIDONDAO_ROOT
+const FRONTEND_DIR = path.join(POSCIDONDAO_ROOT, "poscidondao_frontend");
+const CONTRACTS_DIR = path.join(POSCIDONDAO_ROOT, "poscidondao_contracts");
+
+// Validate project directories exist
+if (!fs.existsSync(FRONTEND_DIR)) {
+  throw new Error(`⛔️ Frontend directory does not exist: ${FRONTEND_DIR}`);
+}
+if (!fs.existsSync(CONTRACTS_DIR)) {
+  throw new Error(`⛔️ Contracts directory does not exist: ${CONTRACTS_DIR}`);
+}
+
+// Define all paths relative to project directories
+const frontendAddressesFilePath = path.join(FRONTEND_DIR, "src/app/utils/serverConfig.ts");
+const artifactsDir = path.join(CONTRACTS_DIR, "artifacts/contracts");
+const abiOutputDir = path.join(CONTRACTS_DIR, "abi");
+const bytecodeOutputDir = path.join(abiOutputDir, "bytecode");
+const frontendAbiDir = path.join(FRONTEND_DIR, "src/app/abi");
+const frontendBytecodeDir = path.join(frontendAbiDir, "bytecode");
 
 interface DeployedContracts {
   [key: string]: string | number | undefined;
 }
 
-const usdc = "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
-const admin = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-const sci = "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
-const researchFundingWallet = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
-
-const frontendAddressesFilePath =
-  "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/utils/serverConfig.ts";
+const usdc = hardhatArguments.network === "baseMainnet" ? "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" : "0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246";
+const admin = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+const sci = hardhatArguments.network === "baseMainnet" ? "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3" : "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
+const researchFundingWallet = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 
 function generateFrontendAddressesFile(
   usdc: string,
@@ -99,21 +128,6 @@ export async function getNetworkInfo() {
   );
 }
 
-// Paths for ABI and Bytecode directories
-const artifactsDir = path.join(
-  "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/artifacts/contracts"
-);
-const abiOutputDir = path.join(
-  "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_contracts/abi"
-);
-const bytecodeOutputDir = path.join(abiOutputDir, "bytecode");
-
-// Frontend paths for ABI and bytecode
-const frontendAbiDir = path.join(
-  "/Users/marcohuberts/Library/Mobile Documents/com~apple~CloudDocs/Documents/Blockchain/PoSciDonDAO/dApp/poscidondao_frontend/src/app/abi"
-);
-const frontendBytecodeDir = path.join(frontendAbiDir, "bytecode");
-
 // Ensure ABI and bytecode directories exist, remove old ones if necessary
 function setupAbiAndBytecodeDirs() {
   // Remove backend ABI and bytecode directories
@@ -151,12 +165,24 @@ function copyAbiFilesToFrontend() {
 // Copy bytecode files to frontend directory
 function copyBytecodeFilesToFrontend() {
   const bytecodeFiles = fs.readdirSync(bytecodeOutputDir);
+  const requiredFiles = ['Don.bytecode.json', 'Donation.bytecode.json'];
+  
   bytecodeFiles.forEach((file) => {
     const srcPath = path.join(bytecodeOutputDir, file);
     const destPath = path.join(frontendBytecodeDir, file);
     if (fs.lstatSync(srcPath).isFile()) {
       fs.copyFileSync(srcPath, destPath);
       console.log(`Copied bytecode ${file} to frontend directory`);
+    }
+  });
+
+  // Verify required files were copied
+  requiredFiles.forEach(file => {
+    const destPath = path.join(frontendBytecodeDir, file);
+    if (!fs.existsSync(destPath)) {
+      console.error(`⚠️ Warning: Required bytecode file ${file} was not copied to frontend`);
+    } else {
+      console.log(`✅ Verified ${file} was copied to frontend successfully`);
     }
   });
 }
@@ -260,6 +286,130 @@ const generateSolidityAddressFile = async (
   console.log(`DeployedAddresses.sol has been generated at ${outputPath}`);
 };
 
+// Add this function before main()
+async function flattenContracts(
+  contractNames: string[],
+  deploymentVars: {
+    uri: string;
+    admin: string;
+    sci: string;
+    usdc: string;
+    researchFundingWallet: string;
+    signer: string;
+  },
+  addresses: DeployedContracts
+): Promise<void> {
+  console.log("\nFlattening contracts for manual verification...");
+  
+  const flattenedDir = path.join(__dirname, "../flattened");
+  if (!fs.existsSync(flattenedDir)) {
+    fs.mkdirSync(flattenedDir, { recursive: true });
+  }
+
+  // Contract path mapping
+  const contractPaths: { [key: string]: string } = {
+    "Don": "tokens/Don.sol",
+    "Po": "tokens/Po.sol",
+    "SciManager": "sciManager/SciManager.sol",
+    "Donation": "donating/Donation.sol",
+    "PoToSciExchange": "exchange/PoToSciExchange.sol",
+    "GovernorOperations": "governance/GovernorOperations.sol",
+    "GovernorResearch": "governance/GovernorResearch.sol",
+    "GovernorExecutor": "governance/GovernorExecutor.sol",
+    "GovernorGuard": "governance/GovernorGuard.sol",
+    "Transaction": "executors/Transaction.sol",
+    "Election": "executors/Election.sol",
+    "Impeachment": "executors/Impeachment.sol",
+    "ParameterChange": "executors/ParameterChange.sol",
+    "ActionCloneFactoryResearch": "governance/ActionCloneFactoryResearch.sol",
+    "ActionCloneFactoryOperations": "governance/ActionCloneFactoryOperations.sol"
+  };
+
+  for (const contractName of contractNames) {
+    try {
+      const contractPath = contractPaths[contractName];
+      if (!contractPath) {
+        console.log(`⚠️ Path mapping not found for ${contractName}, skipping...`);
+        continue;
+      }
+      
+      const sourcePath = path.join(__dirname, "../contracts", contractPath);
+      if (!fs.existsSync(sourcePath)) {
+        console.log(`⚠️ Source file not found for ${contractName} at ${sourcePath}, skipping...`);
+        continue;
+      }
+
+      console.log(`Flattening ${contractName}...`);
+      const flattenedCode = await run("flatten:get-flattened-sources", {
+        files: [sourcePath],
+      });
+
+      // Remove duplicate SPDX license identifiers and pragma statements
+      const cleaned = flattenedCode
+        .split('\n')
+        .filter((line: string, index: number, arr: string[]) => {
+          if (line.includes('SPDX-License-Identifier')) {
+            return index === arr.findIndex((l: string) => l.includes('SPDX-License-Identifier'));
+          }
+          if (line.includes('pragma')) {
+            return index === arr.findIndex((l: string) => l.includes('pragma'));
+          }
+          return true;
+        })
+        .join('\n');
+
+      const outputPath = path.join(flattenedDir, `${contractName}_flattened.sol`);
+      fs.writeFileSync(outputPath, cleaned);
+      console.log(`✅ Flattened contract saved to: ${outputPath}`);
+      
+      // Also save the constructor arguments for easy reference
+      const constructorArgs = getConstructorArgs(contractName, deploymentVars, addresses);
+      if (constructorArgs) {
+        const argsPath = path.join(flattenedDir, `${contractName}_constructor_args.txt`);
+        fs.writeFileSync(argsPath, constructorArgs);
+        console.log(`✅ Constructor arguments saved to: ${argsPath}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error flattening ${contractName}:`, error);
+    }
+  }
+}
+
+// Helper function to get constructor arguments for each contract
+function getConstructorArgs(
+  contractName: string,
+  deploymentVars: {
+    uri: string;
+    admin: string;
+    sci: string;
+    usdc: string;
+    researchFundingWallet: string;
+    signer: string;
+  },
+  addresses: DeployedContracts
+): string | null {
+  const args: { [key: string]: any[] } = {
+    "Don": [deploymentVars.uri, deploymentVars.admin],
+    "Po": [deploymentVars.uri, deploymentVars.admin],
+    "SciManager": [deploymentVars.admin, deploymentVars.sci],
+    "Donation": [deploymentVars.researchFundingWallet, deploymentVars.admin, deploymentVars.usdc, addresses.don],
+    "PoToSciExchange": [deploymentVars.admin, deploymentVars.sci, addresses.po],
+    "GovernorOperations": [addresses.sciManager, deploymentVars.admin, addresses.po, deploymentVars.signer],
+    "GovernorResearch": [addresses.sciManager, deploymentVars.admin, deploymentVars.researchFundingWallet],
+    "GovernorExecutor": [deploymentVars.admin, 3600, addresses.governorOperations, addresses.governorResearch],
+    "GovernorGuard": [deploymentVars.admin, addresses.governorOperations, addresses.governorResearch],
+    "Transaction": [],
+    "Election": [],
+    "Impeachment": [],
+    "ParameterChange": [],
+    "ActionCloneFactoryResearch": [addresses.governorResearch, addresses.transactionResearch],
+    "ActionCloneFactoryOperations": [addresses.governorOperations, addresses.transactionOperations, addresses.election, addresses.impeachment, addresses.parameterChange]
+  };
+  
+  return args[contractName]?.join(", ") || null;
+}
+
+// Modify the main() function to include flattening at the end
 async function main(): Promise<DeployedContracts> {
   const PRIVATE_KEY: string = process.env.DEPLOYER_PRIVATE_KEY || "";
   if (!PRIVATE_KEY)
@@ -289,10 +439,42 @@ async function main(): Promise<DeployedContracts> {
   ): Promise<string | undefined> => {
     try {
       const Contract: ContractFactory = await ethers.getContractFactory(contractName);
+      
+      // Estimate contract deployment fee
+      const estimatedGas = await ethers.provider.estimateGas(
+        Contract.getDeployTransaction(...constructorArgs)
+      );
+
+      // Fetch current gas price
+      const gasPrice = await ethers.provider.getGasPrice();
+
+      // Calculate the estimated deployment cost
+      const estimatedCost = estimatedGas.mul(gasPrice);
+      console.log(`Estimated deployment cost for ${contractName}: ${ethers.utils.formatEther(estimatedCost)} ETH`);
+      
       const contract = await Contract.deploy(...constructorArgs);
       await contract.deployed();
       console.log(`${contractName} deployed at:`, contract.address);
       addresses[contractKey] = contract.address;
+
+      // Check if we should skip verification
+      if (shouldSkipVerification(hardhatArguments.network)) {
+        return contract.address;
+      }
+      
+      // Verify the contract on the block explorer
+      console.log(`Verifying ${contractName} in 1 minute...`);
+      await sleep(60000);
+      try {
+        await run("verify:verify", {
+          address: contract.address,
+          constructorArguments: constructorArgs,
+        });
+        console.log(`${contractName} verified successfully`);
+      } catch (error) {
+        console.error(`Error verifying ${contractName}:`, error);
+      }
+      
       return contract.address;
     } catch (error) {
       console.error(`Error deploying ${contractName}:`, error);
@@ -397,6 +579,14 @@ async function main(): Promise<DeployedContracts> {
   // Create transactions array only with successfully deployed contracts
   const transactions = [];
   
+  if (addresses.don && addresses.donation) {
+    transactions.push({
+      to: addresses.don,
+      value: "0",
+      data: encodeFunctionData("setDonation(address)", addresses.donation),
+    });
+  }
+
   if (addresses.sciManager && addresses.governorExecutor) {
     transactions.push({
       to: addresses.sciManager,
@@ -479,6 +669,7 @@ async function main(): Promise<DeployedContracts> {
 
   // Create transaction descriptions for better readability
   const transactionDescriptions = [
+    "Set Donation address in DON token",
     "Set GovernorExecutor for SciManager",
     "Set GovernorExecutor for Research",
     "Set GovernorExecutor for GovernorOperations",
@@ -661,6 +852,35 @@ main()
     console.log(`executeTransactions.js has been updated at: ${executeTransactionsPath}`);
   } catch (error) {
     console.error("Error generating transaction files:", error);
+  }
+
+  try {
+    // Add this at the end of the main function, just before returning addresses
+    console.log("\nPreparing flattened contracts for manual verification...");
+    await flattenContracts(
+      [
+        "Don",
+        "Po",
+        "SciManager",
+        "Donation",
+        "PoToSciExchange",
+        "GovernorOperations",
+        "GovernorResearch",
+        "GovernorExecutor",
+        "GovernorGuard",
+        "Transaction",
+        "Election",
+        "Impeachment",
+        "ParameterChange",
+        "ActionCloneFactoryResearch",
+        "ActionCloneFactoryOperations"
+      ],
+      { uri, admin, sci, usdc, researchFundingWallet, signer },
+      addresses
+    );
+    console.log("Contract flattening completed!");
+  } catch (error) {
+    console.error("Error during contract flattening:", error);
   }
 
   return addresses;
