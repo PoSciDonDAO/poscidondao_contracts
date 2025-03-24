@@ -19,8 +19,8 @@ contract Transaction is ReentrancyGuard, AccessControl {
     error CannotBeZeroAddress();
     error Unauthorized(address user);
 
-    address public immutable usdc = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    address public immutable sci = 0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3;
+    address public immutable usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
+    address public immutable sci = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE;
     address public immutable admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 
     address public governorExecutor;
