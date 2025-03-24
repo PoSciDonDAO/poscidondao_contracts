@@ -76,6 +76,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 votesTotal;
+        uint256 quorumSnapshot;
         bool executable;
         bool quadraticVoting;
     }
@@ -131,7 +132,6 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
     ///*** ROLES ***///
     bytes32 public constant GUARD_ROLE = keccak256("GUARD_ROLE");
     bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     ///*** ENUMERATORS ***///
 
@@ -222,18 +222,18 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         _signer = signer_;
         _actionTypeLimit = 4;
 
-        governanceParams.opThreshold = 5000e18;
-        governanceParams.quorum = 367300e18; // 3% of maximum supply of 18.91 million SCI
-        governanceParams.maxVotingStreak = 5; //can be adjusted based on community feedback
-        governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 minutes
-        governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 31 minutes (as long as voteLockTime > proposalLifetime)
-        governanceParams.proposeLockTime = 14 days; //prod: 2 weeks, test: 0 minutes
-        governanceParams.voteChangeTime = 1 days; //prod: 1-24 hours, test: 10 minutes
-        governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
-        governanceParams.votingRightsThreshold = 1e18; //at least 1 vote to prevent spamming
-        governanceParams.votingDelay = 5 minutes; //to prevent flash loan attacks
-        governanceParams.lockedTokenMultiplierBase = 2500e18; // Amount of tokens (in wei) that equals 1x multiplier for PO rewards (aligned with opThreshold)
-        governanceParams.maxLockedTokenMultiplier = 50; // Maximum multiplier allowed for locked tokens
+        governanceParams.opThreshold = 20000e18;
+        governanceParams.quorum = 200000e18; // 6% of circulating supply
+        governanceParams.maxVotingStreak = 5; 
+        governanceParams.proposalLifetime = 7 days;
+        governanceParams.voteLockTime = 8 days;  //must be longer than proposal lifetime
+        governanceParams.proposeLockTime = 14 days; 
+        governanceParams.voteChangeTime = 1 days; 
+        governanceParams.voteChangeCutOff = 2 days; 
+        governanceParams.votingRightsThreshold = 1e18; 
+        governanceParams.votingDelay = 5 minutes; 
+        governanceParams.lockedTokenMultiplierBase = 2500e18; 
+        governanceParams.maxLockedTokenMultiplier = 30; 
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -929,11 +929,8 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 continue;
             }
 
-            uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
-                10 ** 18;
-            bool quorumReached = _proposals[i].quadraticVoting
-                ? _proposals[i].votesTotal >= sqrtQuorum
-                : _proposals[i].votesTotal >= governanceParams.quorum;
+            // Use stored quorum value directly - transformation already applied if needed
+            bool quorumReached = _proposals[i].votesTotal >= _proposals[i].quorumSnapshot;
 
             if (quorumReached) {
                 uint256 proposalReward = _calculatePoReward(voteData.votingStreakAtVote, lockedTokens);
@@ -1057,6 +1054,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 _proposals[index].votesFor,
                 _proposals[index].votesAgainst,
                 _proposals[index].votesTotal,
+                _proposals[index].quorumSnapshot,
                 _proposals[index].executable,
                 _proposals[index].quadraticVoting
             );
@@ -1128,18 +1126,14 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         uint256 index,
         bool revertable
     ) internal view returns (bool) {
-        uint256 sqrtQuorum = Math.sqrt(governanceParams.quorum / 10 ** 18) *
-            10 ** 18;
-
         bool isProposalOngoing = block.timestamp <
             _proposals[index].endTimestamp;
 
         bool isProposalActive = _proposals[index].status ==
             ProposalStatus.Active;
 
-        bool quorumReached = _proposals[index].quadraticVoting
-            ? _proposals[index].votesTotal >= sqrtQuorum
-            : _proposals[index].votesTotal >= governanceParams.quorum;
+        // Use the stored quorum value directly - transformation is already applied if needed
+        bool quorumReached = _proposals[index].votesTotal >= _proposals[index].quorumSnapshot;
 
         bool isVotesForGreaterThanVotesAgainst = _proposals[index].votesFor >
             _proposals[index].votesAgainst;
@@ -1164,9 +1158,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
                 revert QuorumNotReached(
                     index,
                     _proposals[index].votesTotal,
-                    _proposals[index].quadraticVoting
-                        ? sqrtQuorum
-                        : governanceParams.quorum
+                    _proposals[index].quorumSnapshot
                 );
             }
             if (!isVotesForGreaterThanVotesAgainst) {
@@ -1389,6 +1381,12 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
         bool executable,
         ISciManager sciManager
     ) internal returns (uint256) {
+        // Calculate quorum based on quadratic voting setting
+        uint256 quorumValue = governanceParams.quorum;
+        if (quadraticVoting) {
+            quorumValue = Math.sqrt(quorumValue) * 10 ** 9;
+        }
+
         Proposal memory proposal = Proposal(
             info,
             block.timestamp,
@@ -1398,6 +1396,7 @@ contract GovernorOperations is AccessControl, ReentrancyGuard {
             0,
             0,
             0,
+            quorumValue,
             executable,
             quadraticVoting
         );

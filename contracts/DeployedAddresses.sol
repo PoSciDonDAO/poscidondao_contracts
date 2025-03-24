@@ -3,28 +3,28 @@
   pragma solidity 0.8.19;
 
   library DeployedAddresses {
-  uint constant chainId = 8453;
-string constant providerUrl = "https://base-mainnet.g.alchemy.com/v2/";
-string constant explorerLink = "https://basescan.org";
+  uint constant chainId = 84532;
+string constant providerUrl = "https://base-sepolia.g.alchemy.com/v2/";
+string constant explorerLink = "https://sepolia.basescan.org";
 address constant admin = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
 address constant researchFundingWallet = 0x96f67a852f8D3Bc05464C4F91F97aACE060e247A;
-address constant usdc = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-address constant sci = 0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3;
-address constant don = 0xF1B2a841C410a33ba4203E1042e02a458AcD835b;
-address constant donation = 0x5688CFece0aD0a797A2BB4EF574E60872c5069f7;
-address constant po = 0x418a1F35bB56FDd9bCcFb2ce7adD06faE447Cc54;
-address constant poToSciExchange = 0x7aa7F3ee80D69EaEA86e2D612F861548C243DE82;
-address constant sciManager = 0x032746d21e589f9c42b81d3EC77E389dbf4B96b2;
-address constant governorOperations = 0xEe1C6D7A3Db1e629b605Da94f9BDD6b93d45Ce6b;
-address constant governorResearch = 0x5a06b21D5AF5DEAfBFCF0Cd528F02DAEE9976aD6;
-address constant governorExecutor = 0x457dbd7DB724C550D62405c79d8cd7771A98b78c;
-address constant governorGuard = 0xFaD6De67728f623B6132fFcd0A80bdC70564da4A;
-address constant actionFactoryResearch = 0xb3AB2080A20462B4FA0f4b352514EB9cdEAf1A8A;
-address constant actionFactoryOperations = 0x9FF3C70d653aA760850235dd88b9485Ec9DeDF6d;
-address constant transactionResearch = 0xED044F668c136942c8A44e0A329e90aAa76b8b2c;
-address constant transactionOperations = 0x3E0270c0b83e1b9D7CAc49fEbF829596e8F35AB6;
-address constant election = 0x7489F2b7e997bEE4D8BFD771C29d0e300a2e2eEb;
-address constant impeachment = 0xA2cF37B3d04640b0e22bBe229148919d7eCf8Ac1;
-address constant parameterChange = 0x71308C317B645b2e77812482806b786E8766399a;
+address constant usdc = 0x08D39BBFc0F63668d539EA8BF469dfdeBAe58246;
+address constant sci = 0xff88CC162A919bdd3F8552D331544629A6BEC1BE;
+address constant don = 0xc9B6D9e461520BDCcF114a1D732c29DDa14571B7;
+address constant donation = 0xf4a9BfE64Bd1d25081b9A84df6B76681A0bD2B20;
+address constant po = 0x2bd09Da36560A71D2102c17eBE5bF4f7E211745A;
+address constant poToSciExchange = 0x2575F99c73a114cF9D2226b86748212b5a286097;
+address constant sciManager = 0x26E10Ca7Bbe1f25333F95Dc3c498F6f405F8F6B0;
+address constant governorOperations = 0xB9A5B1aF1EcbC23a11D1D06f9804c1debC7846bB;
+address constant governorResearch = 0x626ce45d43f136e0d775499F5b4E7e9086bd16B9;
+address constant governorExecutor = 0xED3f4cE4f426DFb5C33dD8e68c08c2002BB4Fafb;
+address constant governorGuard = 0x37b72311c318fdf0C3FB01f9D442C6E4e3C96fc9;
+address constant actionFactoryResearch = 0x7E2C25401eeE24D2b4C22e5289Af0dDD0Af5298E;
+address constant actionFactoryOperations = 0x2BAf41b1B36DB8b772Fe5af932a9610508379dbE;
+address constant transactionResearch = 0x2489F26c6da646C20bD0b3e245967aB6429261B9;
+address constant transactionOperations = 0xe32421Ce93947b2A830E9f4766672a428770E5f8;
+address constant election = 0x1E1daD8807bCC4DCa872108C09799bc9169796C0;
+address constant impeachment = 0x0696fa62BD463f6635388075ef9151795692a3A5;
+address constant parameterChange = 0x5129C749a33795745BD8065C60ced5E2A5371267;
   }
   

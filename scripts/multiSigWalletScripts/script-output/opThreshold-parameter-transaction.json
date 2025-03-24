@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "chainId": 8453,
+  "createdAt": 1742404717991,
+  "meta": {
+    "name": "Setting opThreshold Parameter for GovernorOperations",
+    "description": "Transaction to set the opThreshold parameter to 20,000 SCI tokens.",
+    "txBuilderVersion": "1.17.0",
+    "createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
+    "createdFromOwnerAddress": ""
+  },
+  "transactions": [
+    {
+      "to": "0xEe1C6D7A3Db1e629b605Da94f9BDD6b93d45Ce6b",
+      "value": "0",
+      "data": "0x987c4e316f705468726573686f6c6400000000000000000000000000000000000000000000000000000000000000000000000000000000000000043c33c1937564800000"
+    }
+  ],
+  "checksum": "0x868fc8dba4402d5844a6407db8f42de944f0cf21d1abe9b251b5046f2f0e9e3b"
+}

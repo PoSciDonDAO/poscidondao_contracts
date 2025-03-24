@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "chainId": 8453,
+  "createdAt": 1742693165072,
+  "meta": {
+    "name": "Update GovernorExecutor and GovernorGuard Addresses",
+    "description": "Batch transaction to update the GovernorExecutor and GovernorGuard addresses across the system",
+    "txBuilderVersion": "1.17.0",
+    "createdFromSafeAddress": "0x96f67a852f8d3bc05464c4f91f97aace060e247a",
+    "createdFromOwnerAddress": ""
+  },
+  "transactions": [
+    {
+      "to": "0x87B5DEf0Bc3A7563782b1037A5aB5Fd30F43013F",
+      "value": "0",
+      "data": "0x861228a2000000000000000000000000f13831a3b24e7886c5d70a47ef8a2dff483159a1",
+      "description": "Set new GovernorExecutor in GovernorOperations"
+    },
+    {
+      "to": "0x8b4757468DE4488C96D30D64d72c432f5Cc48997",
+      "value": "0",
+      "data": "0x861228a2000000000000000000000000f13831a3b24e7886c5d70a47ef8a2dff483159a1",
+      "description": "Set new GovernorExecutor in GovernorResearch"
+    },
+    {
+      "to": "0x032746d21e589f9c42b81d3EC77E389dbf4B96b2",
+      "value": "0",
+      "data": "0x861228a2000000000000000000000000f13831a3b24e7886c5d70a47ef8a2dff483159a1",
+      "description": "Set new GovernorExecutor in SciManager"
+    },
+    {
+      "to": "0x87B5DEf0Bc3A7563782b1037A5aB5Fd30F43013F",
+      "value": "0",
+      "data": "0x613248b70000000000000000000000009e55655fb56a4dfdc67b3c8067265f74dd56de9d",
+      "description": "Set new GovernorGuard in GovernorOperations"
+    },
+    {
+      "to": "0x8b4757468DE4488C96D30D64d72c432f5Cc48997",
+      "value": "0",
+      "data": "0x613248b70000000000000000000000009e55655fb56a4dfdc67b3c8067265f74dd56de9d",
+      "description": "Set new GovernorGuard in GovernorResearch"
+    }
+  ],
+  "checksum": "0xf9bcbca716a2498dac396cc8057a8b9fdf8d8113bbcd0fb7643404436c941166"
+}

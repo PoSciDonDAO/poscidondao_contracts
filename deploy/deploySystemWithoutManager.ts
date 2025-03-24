@@ -47,6 +47,8 @@ const usdc = hardhatArguments.network === "baseMainnet" ? "0x833589fCD6eDb6E08f4
 const admin = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
 const sci = hardhatArguments.network === "baseMainnet" ? "0x25E0A7767d03461EaF88b47cd9853722Fe05DFD3" : "0xff88CC162A919bdd3F8552D331544629A6BEC1BE";
 const researchFundingWallet = hardhatArguments.network === "baseMainnet" ? "0x96f67a852f8d3bc05464c4f91f97aace060e247a" : "0x96f67a852f8d3bc05464c4f91f97aace060e247a";
+// Use existing SciManager address instead of deploying a new one
+const sciManagerAddress = "0x032746d21e589f9c42b81d3EC77E389dbf4B96b2";
 
 function generateFrontendAddressesFile(
   usdc: string,
@@ -310,7 +312,6 @@ async function flattenContracts(
   const contractPaths: { [key: string]: string } = {
     "Don": "tokens/Don.sol",
     "Po": "tokens/Po.sol",
-    "SciManager": "sciManager/SciManager.sol",
     "Donation": "donating/Donation.sol",
     "PoToSciExchange": "exchange/PoToSciExchange.sol",
     "GovernorOperations": "governance/GovernorOperations.sol",
@@ -391,11 +392,10 @@ function getConstructorArgs(
   const args: { [key: string]: any[] } = {
     "Don": [deploymentVars.uri, deploymentVars.admin],
     "Po": [deploymentVars.uri, deploymentVars.admin],
-    "SciManager": [deploymentVars.admin, deploymentVars.sci],
     "Donation": [deploymentVars.researchFundingWallet, deploymentVars.admin, deploymentVars.usdc, addresses.don],
     "PoToSciExchange": [deploymentVars.admin, deploymentVars.sci, addresses.po],
-    "GovernorOperations": [addresses.sciManager, deploymentVars.admin, addresses.po, deploymentVars.signer],
-    "GovernorResearch": [addresses.sciManager, deploymentVars.admin, deploymentVars.researchFundingWallet],
+    "GovernorOperations": [sciManagerAddress, deploymentVars.admin, addresses.po, deploymentVars.signer],
+    "GovernorResearch": [sciManagerAddress, deploymentVars.admin, deploymentVars.researchFundingWallet],
     "GovernorExecutor": [deploymentVars.admin, 3600, addresses.governorOperations, addresses.governorResearch],
     "GovernorGuard": [deploymentVars.admin, addresses.governorOperations, addresses.governorResearch],
     "Transaction": [],
@@ -431,6 +431,10 @@ async function main(): Promise<DeployedContracts> {
   const uri = "https://red-improved-cod-476.mypinata.cloud/ipfs/bafkreibmrcsilc2ojbu636rl2gz2vhlsy7pyi3uvzroccqwc7b3qucszum";
   const signer = "0x690BF2dB31D39EE0a88fcaC89117b66a588E865a";
   const addresses: { [key: string]: string | number | undefined } = {};
+  
+  // Set the SciManager address in the addresses object
+  addresses["sciManager"] = sciManagerAddress;
+  console.log(`Using existing SciManager at address: ${sciManagerAddress}`);
 
   const deployAndVerify = async (
     contractName: string,
@@ -488,7 +492,7 @@ async function main(): Promise<DeployedContracts> {
     // First wave - No dependencies
     const donAddress = await deployAndVerify("Don", [uri, admin], "don");
     const poAddress = await deployAndVerify("Po", [uri, admin], "po");
-    const sciManagerAddress = await deployAndVerify("SciManager", [admin, sci], "sciManager");
+    // Skip SciManager deployment as we're using an existing one
 
     // Second wave - Depends on first wave
     if (donAddress) {
@@ -499,7 +503,8 @@ async function main(): Promise<DeployedContracts> {
       await deployAndVerify("PoToSciExchange", [admin, sci, poAddress], "poToSciExchange");
     }
 
-    if (sciManagerAddress && poAddress) {
+    // These contracts now use the existing sciManager address
+    if (poAddress) {
       await deployAndVerify("GovernorOperations", [sciManagerAddress, admin, poAddress, signer], "governorOperations");
       await deployAndVerify("GovernorResearch", [sciManagerAddress, admin, researchFundingWallet], "governorResearch");
     }
@@ -550,7 +555,7 @@ async function main(): Promise<DeployedContracts> {
       donation: addresses.donation,
       po: addresses.po,
       poToSciExchange: addresses.poToSciExchange,
-      sciManager: addresses.sciManager,
+      sciManager: sciManagerAddress, // Use existing sciManager address
       governorOperations: addresses.governorOperations,
       governorResearch: addresses.governorResearch,
       governorExecutor: addresses.governorExecutor,
@@ -587,9 +592,9 @@ async function main(): Promise<DeployedContracts> {
     });
   }
 
-  if (addresses.sciManager && addresses.governorExecutor) {
+  if (addresses.governorExecutor) {
     transactions.push({
-      to: addresses.sciManager,
+      to: sciManagerAddress, // Use existing sciManager address
       value: "0",
       data: encodeFunctionData("setGovExec(address)", addresses.governorExecutor),
     });
@@ -651,17 +656,17 @@ async function main(): Promise<DeployedContracts> {
     });
   }
 
-  if (addresses.sciManager && addresses.governorOperations) {
+  if (addresses.governorOperations) {
     transactions.push({
-      to: addresses.sciManager,
+      to: sciManagerAddress, // Use existing sciManager address
       value: "0",
       data: encodeFunctionData("setGovOps(address)", addresses.governorOperations),
     });
   }
 
-  if (addresses.sciManager && addresses.governorResearch) {
+  if (addresses.governorResearch) {
     transactions.push({
-      to: addresses.sciManager,
+      to: sciManagerAddress, // Use existing sciManager address
       value: "0",
       data: encodeFunctionData("setGovRes(address)", addresses.governorResearch),
     });
@@ -670,7 +675,7 @@ async function main(): Promise<DeployedContracts> {
   // Create transaction descriptions for better readability
   const transactionDescriptions = [
     "Set Donation address in DON token",
-    "Set GovernorExecutor for SciManager",
+    "Set GovernorExecutor for existing SciManager",
     "Set GovernorExecutor for Research",
     "Set GovernorExecutor for GovernorOperations",
     "Set GovernorGuard for GovernorOperations",
@@ -678,8 +683,8 @@ async function main(): Promise<DeployedContracts> {
     "Set ActionCloneFactory for Research",
     "Set GovernorGuard for Research",
     "Set GovernorOperations for PO",
-    "Set GovernorOperations for SciManager",
-    "Set Research for SciManager"
+    "Set GovernorOperations for existing SciManager",
+    "Set Research for existing SciManager"
   ];
 
   // Create transactions with descriptions for devWalletScripts
@@ -694,9 +699,9 @@ async function main(): Promise<DeployedContracts> {
       chainId: hardhatArguments.network === "baseMainnet" ? 8453 : 84532,
       createdAt: Date.now(),
       meta: {
-        name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for SciManager, Research, and PO Contracts",
+        name: "Setting GovernorExecutor, GovernorGuard, and GovernorOperations addresses for Existing SciManager, Research, and PO Contracts",
         description:
-          "Batch transaction to set the GovernorExecutor address across SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and SciManager contracts.",
+          "Batch transaction to set the GovernorExecutor address across existing SciManager, GovernorOperations, and Research contracts, set the GovernorGuard address for GovernorOperations and Research, and set the GovernorOperations address in the PO and existing SciManager contracts.",
         txBuilderVersion: "1.17.0",
         createdFromSafeAddress: admin,
         createdFromOwnerAddress: "",
@@ -713,7 +718,7 @@ async function main(): Promise<DeployedContracts> {
       console.log(`Directory created: ${outputDir}`);
     }
 
-    const outputPath = path.join(outputDir, "safeBatchTransaction.json");
+    const outputPath = path.join(outputDir, "safeBatchTransactionWithoutManager.json");
     if (fs.existsSync(outputPath)) {
       fs.unlinkSync(outputPath);
       console.log(`Existing file at ${outputPath} has been deleted.`);
@@ -729,10 +734,10 @@ async function main(): Promise<DeployedContracts> {
 
     // Update the executeTransactions.js file in devWalletScripts
     const devWalletScriptsDir = path.join(__dirname, "../scripts/devWalletScripts");
-    const executeTransactionsPath = path.join(devWalletScriptsDir, "executeTransactions.js");
+    const executeTransactionsPath = path.join(devWalletScriptsDir, "executeTransactionsWithoutManager.js");
     
     // Create the executeTransactions.js content
-    const executeTransactionsContent = `// Script to execute the same transactions as in safeBatchTransaction.json but using an EOA wallet
+    const executeTransactionsContent = `// Script to execute the same transactions as in safeBatchTransactionWithoutManager.json but using an EOA wallet
 // This script uses ethers.js v5
 
 const { ethers } = require('ethers');
@@ -849,19 +854,18 @@ main()
     }
 
     fs.writeFileSync(executeTransactionsPath, executeTransactionsContent, "utf8");
-    console.log(`executeTransactions.js has been updated at: ${executeTransactionsPath}`);
+    console.log(`executeTransactionsWithoutManager.js has been updated at: ${executeTransactionsPath}`);
   } catch (error) {
     console.error("Error generating transaction files:", error);
   }
 
   try {
-    // Add this at the end of the main function, just before returning addresses
+    // Update the list of contracts to flatten - remove SciManager
     console.log("\nPreparing flattened contracts for manual verification...");
     await flattenContracts(
       [
         "Don",
         "Po",
-        "SciManager",
         "Donation",
         "PoToSciExchange",
         "GovernorOperations",
@@ -886,10 +890,13 @@ main()
   return addresses;
 }
 
+// Update the generateFrontendAddressesFile call to use sciManagerAddress
 main()
   .then((deployedContracts) => {
     try {
       console.log("Deployment completed. Updated Object:", deployedContracts);
+      // Override the sciManager address to ensure it uses our existing one
+      deployedContracts.sciManager = sciManagerAddress;
       generateFrontendAddressesFile(
         usdc,
         sci,

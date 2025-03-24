@@ -56,6 +56,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         uint256 votesFor;
         uint256 votesAgainst;
         uint256 votesTotal;
+        uint256 quorumSnapshot;
         bool executable;
     }
 
@@ -188,12 +189,12 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         _baseVoteAmount = 1; // Initialize with default value
 
         governanceParams.ddThreshold = 1000e18;
-        governanceParams.proposalLifetime = 7 days; //prod: 2 weeks, test: 30 min
-        governanceParams.quorum = 1; //set based on number of DD members
-        governanceParams.voteLockTime = 8 days; //prod: 2 weeks, test: 10 minutes does not have to be longer than proposal lifetime as in GovOps
-        governanceParams.proposeLockTime = 8 days; //prod: 2 weeks, test: 30 minutes
-        governanceParams.voteChangeTime = 1 days; //prod: 12 hours, test: 10 minutes
-        governanceParams.voteChangeCutOff = 2 days; //prod: 3 days, test: 10 minutes
+        governanceParams.proposalLifetime = 7 days;
+        governanceParams.quorum = 1; 
+        governanceParams.voteLockTime = 8 days; //must be longer than proposal lifetime
+        governanceParams.proposeLockTime = 8 days; 
+        governanceParams.voteChangeTime = 1 days; 
+        governanceParams.voteChangeCutOff = 2 days; 
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
 
@@ -776,6 +777,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 _proposals[index].votesFor,
                 _proposals[index].votesAgainst,
                 _proposals[index].votesTotal,
+                _proposals[index].quorumSnapshot,
                 _proposals[index].executable
             );
     }
@@ -828,8 +830,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         bool isProposalActive = _proposals[index].status ==
             ProposalStatus.Active;
 
+        // Use the stored quorum value directly
         bool quorumReached = _proposals[index].votesTotal >=
-            governanceParams.quorum;
+            _proposals[index].quorumSnapshot;
 
         bool isVotesForGreaterThanVotesAgainst = _proposals[index].votesFor >
             _proposals[index].votesAgainst;
@@ -854,7 +857,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
                 revert QuorumNotReached(
                     index,
                     _proposals[index].votesTotal,
-                    governanceParams.quorum
+                    _proposals[index].quorumSnapshot
                 );
             }
             if (!isVotesForGreaterThanVotesAgainst) {
@@ -979,6 +982,9 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
         address action,
         bool executable
     ) internal returns (uint256) {
+        // Store the current quorum value at proposal creation time
+        uint256 quorumValue = governanceParams.quorum;
+        
         Proposal memory proposal = Proposal(
             info,
             block.timestamp,
@@ -988,6 +994,7 @@ contract GovernorResearch is AccessControl, ReentrancyGuard {
             0,
             0,
             0,
+            quorumValue,
             executable
         );
 
